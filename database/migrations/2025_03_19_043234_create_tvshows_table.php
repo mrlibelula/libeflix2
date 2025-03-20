@@ -17,7 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('tmdb_id')->unique();
             $table->string('name');
             $table->string('original_name');
-            $table->string('genre_ids')->default(json_encode([]));
+            $table->string('genres')->default(json_encode([]));
             $table->string('poster_path')->nullable();
             $table->string('backdrop_path')->nullable();
             $table->string('original_language')->nullable();
@@ -26,6 +26,22 @@ return new class extends Migration
             $table->string('first_air_date')->nullable();
             $table->float('vote_average')->nullable();
             $table->integer('vote_count')->nullable();
+            $table->mediumText('created_by')->default(json_encode([]));
+            $table->string('homepage')->nullable();
+            $table->text('languages')->default(json_encode([]));
+            $table->mediumText('networks')->default(json_encode([]));
+            $table->integer('number_of_episodes')->nullable();
+            $table->integer('number_of_seasons')->nullable();
+            $table->mediumText('origin_country')->default(json_encode([]));
+            $table->mediumText('production_companies')->default(json_encode([]));
+            $table->mediumText('production_countries')->default(json_encode([]));
+            $table->mediumText('availableSeasons')->default(json_encode([]));
+            $table->text('spoken_languages')->default(json_encode([]));
+            $table->string('status')->nullable(); 
+            $table->string('tagline')->nullable();
+            $table->string('type')->nullable();
+            $table->mediumText('videos')->default(json_encode([]));
+            $table->mediumText('images')->default(json_encode([]));
             $table->timestamps();
         });
     }
