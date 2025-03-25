@@ -329,7 +329,7 @@ class TvshowService
     }
 
     /**
-     * Fetch a episode from TMDB API
+     * Fetch an episode from TMDB API
      * 
      * @param int $tvshowId
      * @param int $seasonNumber
