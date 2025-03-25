@@ -277,7 +277,7 @@ class TvshowService
     }
 
     /**
-     * Get release year from OpenAI
+     * Get TV show release year from OpenAI
      * 
      * @param string $folderName
      * @return int
