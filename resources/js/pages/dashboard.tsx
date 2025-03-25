@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 
 export default function Dashboard({ tvshows }: { tvshows: Array<any> }) {
@@ -17,29 +17,8 @@ export default function Dashboard({ tvshows }: { tvshows: Array<any> }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="TV Show Dashboard" />
-            <div className="relative min-h-[17rem] xl:min-h-[25rem] overflow-hidden ">
-                <div className="absolute" />
-                <div style={{backgroundImage: "url(https://i.makeagif.com/media/9-23-2024/7dLXIg.gif)", backgroundSize: 'cover', backgroundPosition: 'center'}} className="absolute w-full h-full" />
-                <div className="light-gradient-hero dark:dark-gradient-hero absolute h-full w-full" />
-                <div className="absolute top-0 left-0 w-full h-full flex flex-col items-start justify-center">
-                    <h1 className="text-black dark:text-white text-4xl font-bold px-5 py-3">
-                        The Electric State
-                    </h1>
-                    <p className="text-black dark:text-white px-5 py-3 xl:w-1/2">
-                        The Electric State is a 2025 American science fiction action film written and directed by Scott Derrickson, based on the 2018 novel of the same name by Walter Mosley.
-                    </p>
-                    <div className="flex items-center justify-center gap-x-2 px-5 py-3">
-                        <Button className="mt-4 w-full" tabIndex={1} disabled={false}>
-                            {false && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                            Play
-                        </Button>
-                        <Button variant="outline" className="mt-4 w-full" tabIndex={1} disabled={false}>
-                            {false && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                            More info...
-                        </Button>
-                    </div>
-                </div>
-            </div>
+            {/* hero */}
+             
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-5">
                 <div className="grid auto-rows-min gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {tvshows.map((tvshow) => (
@@ -71,9 +50,11 @@ export default function Dashboard({ tvshows }: { tvshows: Array<any> }) {
                                     <div className=" hidden group-hover:flex justify-center gap-x-1 absolute text-white/60 text-sm bottom-1 left-0 right-0 px-3 py-2.5 transition-all duration-[250ms]">
                                         <span className="text-white">⭐{Math.round(tvshow.vote_average * 10)}%</span>
                                         <span className="text-white/30">•</span>
-                                        <span>{tvshow.seasons_count} Seasons</span>
+                                        <span>{tvshow.seasons_count > 1 ? `${tvshow.seasons_count} Seasons` : `${tvshow.seasons_count} Season`}</span>
                                         <span className="text-white/30">•</span>
-                                        <span className="cursor-pointer uppercase text-emerald-500 dark:text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 transition-all duration-[250ms] font-semibold">Play</span>
+                                        <Link href={`/tvshow/${tvshow.slug}`} className="cursor-pointer uppercase text-emerald-500 dark:text-emerald-400 hover:text-emerald-300 dark:hover:text-emerald-300 transition-all duration-[250ms] font-semibold">
+                                            Play
+                                        </Link>
                                     </div>
                                 </div>
                             </div>

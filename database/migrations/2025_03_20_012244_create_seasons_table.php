@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('seasons', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('tmdb_id')->unique();
-            $table->foreignId('tvshow_id')->constrained('tvshows');
+            $table->foreignId('tvshow_id')->constrained('tvshows')->onDelete('cascade');
             $table->string('name');
             $table->string('overview')->nullable();
             $table->string('poster_path')->nullable();

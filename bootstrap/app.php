@@ -23,5 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Use Laravel 11 exceptions configuration
+        $exceptions->dontFlash([
+            'current_password',
+            'password',
+            'password_confirmation',
+        ]);
     })->create();

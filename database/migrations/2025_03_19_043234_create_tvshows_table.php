@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('tvshows', function (Blueprint $table) {
             $table->id();
+            $table->string('slug')->unique();
             $table->string('folder_name');
             $table->unsignedBigInteger('tmdb_id')->unique();
             $table->string('name');
@@ -35,13 +36,14 @@ return new class extends Migration
             $table->mediumText('origin_country')->default(json_encode([]));
             $table->mediumText('production_companies')->default(json_encode([]));
             $table->mediumText('production_countries')->default(json_encode([]));
-            $table->mediumText('availableSeasons')->default(json_encode([]));
+            $table->mediumText('available_seasons')->default(json_encode([]));
             $table->text('spoken_languages')->default(json_encode([]));
             $table->string('status')->nullable(); 
             $table->string('tagline')->nullable();
             $table->string('type')->nullable();
             $table->mediumText('videos')->default(json_encode([]));
             $table->mediumText('images')->default(json_encode([]));
+            $table->integer('selected_logo')->default(0);
             $table->timestamps();
         });
     }

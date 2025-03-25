@@ -4,18 +4,20 @@ namespace App\Models;
 
 use App\Services\TvshowService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Tvshow extends Model
 {
     protected $guarded = [];
     protected $appends = ['logo'];
 
-    public function seasons()
+    public function seasons(): HasMany
     {
         return $this->hasMany(Season::class, 'tvshow_id');
     }
 
-    public function episodes()
+    public function episodes(): HasManyThrough
     {
         return $this->hasManyThrough(Episode::class, Season::class, 'tvshow_id', 'season_id');
     }
