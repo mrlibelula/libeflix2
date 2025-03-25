@@ -301,7 +301,7 @@ class TvshowService
             $content = $response->choices[0]->message->content;
             $json = json_decode($content, true);
             echo "OpenAI responded with release year: {$json['releaseYear']}\n";
-            return $json['releaseYear'];
+            return (int)$json['releaseYear'];
         } catch (\OpenAI\Exceptions\ErrorException $ee) {
             echo "\033[31mError getting release year from OpenAI: {$ee->getMessage()}\033[0m\n";
             info($ee->getMessage());
