@@ -25,7 +25,7 @@ class TvshowService
     }
 
     /**
-     * Import all tvshows from the storage folder from TMDB API
+     * Import tvshows from TMDB API
      * 
      * @return bool
      */
