@@ -12,7 +12,7 @@ export function LikeCircleButton({ className, isLiked = false, ...props }: LikeC
         <button
             type="button"
             className={cn(
-                "p-1 rounded-full border-2 border-black dark:border-neutral-400 hover:border-neutral-500 dark:hover:border-neutral-300 transition-all duration-150",
+                "p-1 rounded-full backdrop-blur border-2 border-black dark:border-neutral-400 hover:border-neutral-500 dark:hover:border-neutral-300 transition-all duration-150",
                 isLiked && "bg-primary border-primary hover:border-primary/80 dark:border-primary dark:hover:border-primary/80",
                 className
             )}

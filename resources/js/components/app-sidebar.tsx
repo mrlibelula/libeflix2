@@ -4,19 +4,24 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Code2, Cpu, Folder, Music, Video, Videotape } from 'lucide-react';
+import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'TV Shows',
+        title: 'Dashboard',
         href: '/dashboard',
+        icon: LayoutDashboard,
+    },
+    {
+        title: 'TV Shows',
+        href: '/tvshows',
         icon: Video,
     },
     {
         title: 'Movies',
         href: '/movies',
-        icon: Videotape,
+        icon: Film,
     },
     {
         title: 'Tunes',
@@ -24,9 +29,34 @@ const mainNavItems: NavItem[] = [
         icon: Music,
     },
     {
+        title: 'Watch Later',
+        href: '/watch-later',
+        icon: Clock,
+    },
+    {
+        title: 'Popular',
+        href: '/popular',
+        icon: TrendingUp,
+    },
+    {
+        title: 'Top',
+        href: '/top',
+        icon: ListFilter,
+    },
+    {
+        title: 'Vintage Games',
+        href: '/vintage-games',
+        icon: Gamepad2,
+    },
+    {
+        title: 'History',
+        href: '/history',
+        icon: History,
+    },
+    {
         title: 'Control Panel',
         href: '/cpanel',
-        icon: Cpu,
+        icon: SlidersHorizontal,
     },
 ];
 

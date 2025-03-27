@@ -238,12 +238,13 @@ class TvshowService
     public static function addTvshow(string $folderName, int $releaseYear = 0, int $selectedLogo = 0): bool
     {
         // check if folder exists
-        if (Storage::disk('tvshows')->exists($folderName)) {
+        $tvshowsDisk = Storage::disk('tvshows');
+        if ($tvshowsDisk->exists($folderName)) {
             throw new \Exception('TV show folder "' . $folderName . '" already exists');
         }
 
         // create folder
-        Storage::disk('tvshows')->makeDirectory($folderName);
+        $tvshowsDisk->makeDirectory($folderName);
 
         // get release year from OpenAI if not provided
         if ($releaseYear === 0) {
@@ -425,10 +426,11 @@ class TvshowService
         }
 
         // update metadata.json file
-        $metadata = json_decode(Storage::disk('tvshows')->get($directory . '/metadata.json'), true);
+        $tvshowsDisk = Storage::disk('tvshows');
+        $metadata = json_decode($tvshowsDisk->get($directory . '/metadata.json'), true);
         $metadata['releaseYear'] = $releaseYear;
         $metadata['selected_logo'] = $selectedLogo;
-        Storage::disk('tvshows')->put($directory . '/metadata.json', json_encode($metadata));
+        $tvshowsDisk->put($directory . '/metadata.json', json_encode($metadata));
         return true;
     }
 
