@@ -11,6 +11,17 @@ class Tvshow extends Model
 {
     protected $guarded = [];
     protected $appends = ['logo'];
+    protected $casts = [
+        'genres' => 'array',
+        'created_by' => 'array',
+        'languages' => 'array',
+        'networks' => 'array',
+        'production_companies' => 'array',
+        'production_countries' => 'array',
+        'available_seasons' => 'array',
+        'spoken_languages' => 'array',
+        'videos' => 'array',
+    ];
 
     public function seasons(): HasMany
     {

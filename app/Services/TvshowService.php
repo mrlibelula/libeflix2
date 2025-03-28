@@ -511,5 +511,19 @@ class TvshowService
         $tvshow->save();
         return true;
     }
-    
+
+    /**
+     * Returns all genres with appended slugs
+     * 
+     * @param Tvshow $tvshow
+     * @return array
+     */
+    public static function genresWithSlugs(Tvshow $tvshow): array
+    {
+        $tvshow->genres = array_map(function ($genre) {
+            $genre['slug'] = Str::slug($genre['name']);
+            return $genre;
+        }, $tvshow->genres);
+        return $tvshow->genres;
+    }
 }
