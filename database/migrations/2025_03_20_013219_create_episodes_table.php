@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('name')->nullable();
             $table->string('overview')->nullable();
             $table->string('air_date')->nullable();
-            $table->mediumText('crew')->default(json_encode([]));
-            $table->mediumText('guest_stars')->default(json_encode([]));
+            $table->mediumText('crew')->default(json_encode([])); // dropped
+            $table->mediumText('guest_stars')->default(json_encode([])); // dropped
             $table->integer('episode_number')->nullable();
             $table->string('production_code')->nullable();
             $table->integer('runtime')->nullable();

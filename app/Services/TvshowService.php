@@ -86,6 +86,12 @@ class TvshowService
                     $additionalTvshowData = self::fetchAdditionalTvshowData($fetchTvshow['id']);
                     echo "Retrieved additional data: {$additionalTvshowData['number_of_seasons']} " . ($additionalTvshowData['number_of_seasons'] === 1 ? 'season' : 'seasons') . ", {$additionalTvshowData['number_of_episodes']} " . ($additionalTvshowData['number_of_episodes'] === 1 ? 'episode' : 'episodes') . "\n";
 
+                    // fetch tvshow cast
+                    echo "Fetching TV show cast from TMDB...\n";
+                    $tvshowCast = self::getTvshowCast($fetchTvshow['id']);
+                    $castCount = count($tvshowCast['cast'] ?? []);
+                    echo "Retrieved {$castCount} cast members for: \"{$fetchTvshow['name']}\"\n";
+
                     // create tvshow local model
                     echo "Creating TV show record in database...\n";
                     // verify unique slug
@@ -111,6 +117,7 @@ class TvshowService
                         'vote_count' => $fetchTvshow['vote_count'],
 
                         'created_by' => json_encode($additionalTvshowData['created_by']),
+                        'cast' => json_encode($tvshowCast['cast']),
                         'homepage' => $additionalTvshowData['homepage'],
                         'languages' => json_encode($additionalTvshowData['languages']),
                         'networks' => json_encode($additionalTvshowData['networks']),
@@ -166,8 +173,6 @@ class TvshowService
                                 'name' => $episodeData['name'],
                                 'overview' => $episodeData['overview'],
                                 'air_date' => $episodeData['air_date'],
-                                'crew' => json_encode($episodeData['crew']),
-                                'guest_stars' => json_encode($episodeData['guest_stars']),
                                 'episode_number' => $episodeData['episode_number'],
                                 'production_code' => $episodeData['production_code'],
                                 'runtime' => $episodeData['runtime'],
@@ -372,6 +377,20 @@ class TvshowService
     }
 
     /**
+     * Fetch a tvshow cast from TMDB API
+     * 
+     * @param int $tmdbTvshowId
+     * @return array
+     */
+    private static function getTvshowCast(int $tmdbTvshowId): array
+    {
+        self::initializeProps();
+        $client = new Client();
+        $response = $client->request('GET', self::$baseUrl . '/tv/' . $tmdbTvshowId . '/credits?' . self::$apiKey);
+        return json_decode($response->getBody(), true);
+    }
+
+    /**
      * Fetch a tvshow from TMDB API
      * 
      * @param string $name
@@ -525,5 +544,68 @@ class TvshowService
             return $genre;
         }, $tvshow->genres);
         return $tvshow->genres;
+    }
+
+    /**
+     * Convert vote average to stars
+     * Scale: 0-10 maps to 0-5 stars
+     * Returns in half-star increments: 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5
+     * Always returns at least one decimal place (e.g., 4.0, 3.5)
+     * Based on vote count, the rating is reduced by 10% if less than 10 votes
+     * Since its an MVP project, no Bayesian average is applied
+     * 
+     * @param float $voteAverage
+     * @param int $voteCount
+     * @return float
+     */
+    public static function voteAvarageToStars(float $voteAverage, int $voteCount = 0): float
+    {
+        // Convert the 0-10 vote average to a 0-5 star rating
+        $starRating = $voteAverage / 2;
+
+        // Round to the nearest 0.5 increment
+        $starRating = round($starRating * 2) / 2;
+
+        // Optional: Apply weighting based on vote count (if necessary)
+        if ($voteCount < 10) {
+            $starRating *= 0.9; // Reduce rating slightly if votes are too few
+            $starRating = max(0, round($starRating * 2) / 2); // Keep within valid range
+        }
+
+        return $starRating;
+    }
+
+    /**
+     * Get all tvshow credits (unique cast, crew and guest stars)
+     * 
+     * @param Tvshow $tvshow
+     * @return array
+     */
+    public static function getTvshowCredits(Tvshow $tvshow): array
+    {
+        // make unique cast, crew and guest stars lists for tvshow
+        $episodes = collect($tvshow->episodes);
+        $cast = collect($episodes->pluck('credits.cast')->flatten(1))->unique('id')->toArray();
+        $crew = collect($episodes->pluck('credits.crew')->flatten(1))->unique('id')->toArray();
+        $guestStars = collect($episodes->pluck('credits.guest_stars')->flatten(1))->unique('id')->toArray();
+        // append profilePathUrl to each credit or fallback to default image
+        $cast = array_map(function ($credit) {
+            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $cast);
+        $crew = array_map(function ($credit) {
+            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $crew);
+        $guestStars = array_map(function ($credit) {
+            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $guestStars);
+
+        return [
+            'cast' => $cast,
+            'crew' => $crew,
+            'guestStars' => $guestStars,
+        ];
     }
 }

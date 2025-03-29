@@ -1,6 +1,7 @@
 import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { LikeCircleButton } from '@/components/ui/like-circle-button';
 import { Button } from '@/components/ui/button';
+import { StarRating } from '@/components/ui/star-rating';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -8,7 +9,7 @@ import { LoaderCircle, Play } from 'lucide-react';
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
 import { useState, useEffect, useRef } from 'react';
 import type { CarouselApi } from "@/components/ui/carousel";
-
+import { CreditPoster } from '@/components/ui/credit-poster';
 export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }: { tvshow: any, backdropUrl: string, selectedSeasonNumber?: number }) {
   const [selectedSeason, setSelectedSeason] = useState<any>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
@@ -63,13 +64,14 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${tvshow.name}`} />
       {/* hero */}
-      <div className="relative flex flex-col gap-4 min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
+      <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
         <div style={{ backgroundImage: `url(${backdropUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} className="w-full h-[calc(100vh-5.5rem)] filter grayscale" />
         <div className="absolute light-gradient-hero dark:dark-gradient-hero h-[calc(100vh-5.5rem)] w-full" />
         <div className="flex flex-col xl:flex-row w-full absolute">
-          <div className="p-4 md:p-10 xl:p-20 top-0 left-0 w-full flex flex-col items-start justify-start ">
-            <div className="flex flex-col xl:flex-row w-full gap-x-12 items-start justify-between">
-              <div className="flex flex-col gap-y-4 items-start w-full xl:w-[50%]">
+          <div className="w-full flex flex-col items-start justify-start ">
+            <div className="flex flex-col 2xl:flex-row w-full items-start justify-between gap-x-4 p-10">
+              {/* left panel */}
+              <div className="flex flex-col gap-y-4 items-start w-full 2xl:w-[50%]">
                 {/* hero title */}
                 <div className="text-black dark:text-white text-4xl font-bold px-5 py-3">
                   {
@@ -96,57 +98,129 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                   <LikeCircleButton isLiked={false} />
                 </div>
 
+                {/* genres */}
+                <div className="px-5 py-3 flex flex-wrap gap-x-3 gap-y-1 text-base">
+                  {tvshow.genres.map((genre: any) => (
+                    <Link key={genre.id} href={`/genre/${genre.slug}`} className="text-neutral-700 dark:text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors duration-150 rounded-md">
+                      #{genre.slug}
+                    </Link>
+                  ))}
+                </div>
+
                 {/* hero details */}
-                <div className="flex items-center justify-center gap-x-3 px-5 py-3 mt-6 w-full animate-fadeIn">
+                <div className="flex items-center justify-center gap-x-3 px-5 py-3 w-full animate-fadeIn">
                   <div className="flex items-center gap-x-8 w-full">
                     <div className="flex flex-col xl:flex-row text-base w-full sm:text-lg xl:text-xl justify-center gap-x-20 gap-y-6 xl:gap-y-0">
                       {/* details and overview */}
-                      <div className="flex flex-col gap-x-3 gap-y-3 w-full">
-                        <div className="flex items-center gap-x-4 leading-tight">
-                          <div>{tvshow.first_air_date.substring(0, 4)}</div>
-                          <div className=" text-nowrap">{tvshow.number_of_seasons} {tvshow.number_of_seasons > 1 ? 'seasons' : 'season'}</div>
-                          <div className="border border-neutral-800 dark:border-neutral-300 rounded-md px-1.5 py-0.5 backdrop-blur">HD</div>
-                          <div className=" text-nowrap">{tvshow.number_of_episodes} episodes</div>
+                      <div className="flex flex-col gap-x-3 w-full">
+                        <div className="flex items-center gap-x-4 leading-tight"> 
+                          {tvshow.networks?.length > 0 && tvshow.networks[0].logoPathUrl && (
+                            <div className="w-[4rem] mr-2">
+                              <img src={tvshow.networks[0].logoPathUrl} alt={tvshow.networks[0].name} className="dark:invert" />
+                            </div>
+                          )}
+                          <div>
+                            {tvshow.first_air_date.substring(0, 4)}
+                          </div>
+                          <div className=" text-nowrap">
+                            {tvshow.number_of_seasons} {tvshow.number_of_seasons > 1 ? 'seasons' : 'season'}
+                          </div>
+                          <div className="italic text-sm border border-neutral-800 dark:border-neutral-600 rounded-sm px-1.5 py-0.5 backdrop-blur opacity-60 font-bold tracking-wider">
+                            HD
+                          </div>
+                          <div className=" text-nowrap">
+                            {tvshow.number_of_episodes} episodes
+                          </div>
+                          <div className="hidden lg:block">
+                            <StarRating rating={tvshow.voteAverageStars} size={5} />
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-base">
-                          {tvshow.genres.map((genre: any) => (
-                            <Link key={genre.id} href={`/genre/${genre.slug}`} className="text-neutral-700 dark:text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors duration-150 rounded-md">
-                              #{genre.slug}
-                            </Link>
-                          ))}
+
+                        <div className="lg:hidden flex items-center gap-x-2 mt-10">
+                          Rating: <StarRating rating={tvshow.voteAverageStars} size={5} />
                         </div>
+                        
                         <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
                           {tvshow.overview}
                         </div>
-                        {/* created by */}
-                        <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                          <div className="font-semibold mb-8">
-                            Created by
+
+                        {/* cast ribbon */}
+                        {Object.entries(tvshow.credits.cast).length > 0 && (
+                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                            <div className="font-semibold mb-8">
+                              Cast
+                            </div>
+                            
+                            <Ribbon 
+                              align="start" 
+                              dragFree={true}
+                            >
+                              {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any]) => (
+                                <RibbonItem key={cast.id || key}>
+                                  <CreditPoster 
+                                    imageUrl={cast.profilePathUrl} 
+                                    name={cast.name}
+                                    characterName={cast.character} 
+                                  />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
                           </div>
-                          <Ribbon 
-                            align="start" 
-                            dragFree={true}
-                          >
-                            {tvshow.created_by.map((creator: any, index: number) => (
-                              <RibbonItem key={index}>
-                                <div 
-                                  className="mx-auto w-[7rem] h-[10rem] bg-cover bg-center rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-opacity duration-150" 
-                                  style={{ backgroundImage: `url(${creator.profile_path})` }}
-                                />
-                                <div className="mt-6 text-sm mb-4 rounded-md text-center w-full text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100 transition-colors duration-150">
-                                  {creator.name}
-                                </div>
-                              </RibbonItem>
-                            ))}
-                          </Ribbon>
-                        </div>
+                        )}
+
+                        {/* guest stars ribbon */}
+                        {tvshow.credits.guestStars && Object.entries(tvshow.credits.guestStars).length > 0 && (
+                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                            <div className="font-semibold mb-8">
+                              Guest Stars
+                            </div>
+                            
+                            <Ribbon 
+                              align="start" 
+                              dragFree={true}
+                            >
+                              {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any]) => (
+                                <RibbonItem key={guestStar.id || key}>
+                                  <CreditPoster 
+                                    imageUrl={guestStar.profilePathUrl} 
+                                    name={guestStar.name}
+                                    characterName={guestStar.character} 
+                                  />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        )}
+
+                        {/* created by ribbon */}
+                        {tvshow.created_by && tvshow.created_by.length > 0 && (
+                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                            <div className="font-semibold mb-8">
+                              Created by
+                            </div>
+                            <Ribbon 
+                              align="start" 
+                              dragFree={true}
+                            >
+                              {tvshow.created_by.map((creator: any, index: number) => (
+                                <RibbonItem key={index}>
+                                  <CreditPoster 
+                                    imageUrl={creator.profile_path} 
+                                    name={creator.name} />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        )}
+
                       </div>
 
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="w-full xl:w-[50%]">
+              {/* right panel */}
+              <div className="w-full 2xl:w-[50%]">
                 {/* seasons carousel */}
                 <div className="px-5 py-3 mt-10 w-full animate-fadeIn">
                   <div className="relative">
@@ -162,10 +236,10 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           className="cursor-pointer"
                         >
                           <div 
-                            className={`mx-auto w-[10rem] h-[15rem] bg-cover bg-center rounded-md border-2 ${selectedSeason.season_number === season.season_number ? 'border-white dark:border-rose-500' : 'border-white dark:border-black'} overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`} 
+                            className={`mx-auto w-[10rem] h-[15rem] bg-cover bg-center rounded-md border-2 ${selectedSeason.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`} 
                             style={{ backgroundImage: `url(${season.posterPathUrl})` }}
                           />
-                          <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason.season_number === season.season_number ? 'bg-rose-700 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100'} transition-colors duration-150`}>
+                          <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100'} transition-colors duration-150`}>
                             {season.name}
                           </div>
                         </RibbonItem>
@@ -177,28 +251,38 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                 <div className="px-5 py-3 mt-4 w-full animate-fadeIn">
                   <div className="flex items-center justify-between gap-x-4">
                     <div className="text-[1.2rem] font-bold">
-                      {selectedSeason.name} - Episodes
+                      {selectedSeason.name} - Episodes ({selectedSeason.episodes.length})
                     </div>
-                    
+                    {selectedSeason.air_date && selectedSeason.air_date !== '' && (
+                      <div className="text-sm italic text-neutral-700 dark:text-neutral-300">
+                        {new Date(selectedSeason.air_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).replace(/(\d)(st|nd|rd|th)/, '$1<sup>$2</sup>')}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-6 text-base text-neutral-700 dark:text-neutral-300">
                     {selectedSeason.overview}
                   </div>
                   <div className="mt-8">
-                    <ul className="">
-                      {selectedSeason.episodes.map((episode: any) => {
+                    <ul>
+                      {selectedSeason.episodes.map((episode: any, index: number, array: any[]) => {
+                        const isLastItem = index === array.length - 1;
                         return (
-                          <li key={episode.id} className="flex items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 border-b border-neutral-800 dark:border-neutral-700 border-dotted">
+                          <li key={episode.id} className={`flex flex-col lg:flex-row items-start gap-y-3 lg:gap-y-0 lg:items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 ${!isLastItem ? 'border-b border-neutral-800 dark:border-neutral-700 border-dotted' : ''}`}>
                             <div className="text-2xl text-center w-[2.5rem]">
                               {episode.episode_number}
                             </div>
-                            <div className="aspect-video h-[3.5rem] lg:h-[5rem] rounded-md">
+                            <div className="aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md">
                               <img className="w-full h-full object-cover rounded-md" src={`${episode.stillUrl}`} alt={episode.name} />
                             </div>
                             <div className="w-full flex flex-col gap-y-1 lg:gap-y-2">
-                              <div className="flex items-center gap-x-2 justify-between">
-                                <div className=" font-semibold">
-                                  {episode.name}
+                              <div className="flex flex-col lg:flex-row items-start gap-y-1 lg:gap-y-0 lg:items-center gap-x-2 justify-between">
+                                <div className="flex flex-col 3xl:flex-row items-start 3xl:items-center w-full justify-between gap-x-2 font-semibold leading-tight">
+                                  <div>
+                                    {episode.name}
+                                  </div>
+                                  <div className="mt-1 3xl:mt-0 text-sm text-neutral-700 dark:text-neutral-400">
+                                    <StarRating rating={episode.voteAverageStars} size={3} />
+                                  </div>
                                 </div>
                                 {episode.runtime && episode.runtime > 0 && (
                                   <div className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
@@ -206,7 +290,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                                   </div>
                                 )}
                               </div>
-                              <div className="text-sm text-neutral-700 dark:text-neutral-400">
+                              <div className="mt-2 text-sm text-neutral-700 dark:text-neutral-400 leading-tight">
                                 {episode.overviewStrLimit150}
                               </div>
                             </div>

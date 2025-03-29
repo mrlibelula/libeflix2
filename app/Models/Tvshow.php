@@ -14,6 +14,7 @@ class Tvshow extends Model
     protected $casts = [
         'genres' => 'array',
         'created_by' => 'array',
+        'cast' => 'array',
         'languages' => 'array',
         'networks' => 'array',
         'production_companies' => 'array',

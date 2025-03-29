@@ -56,7 +56,7 @@ class DashboardController extends Controller
                 $episode->overviewStrLimit250 = Str::limit($episode->overview, 250);
                 
                 // Add still image URL if it exists
-                $episode->stillUrl = $episode->still_path ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path : env('DEFAULT_STILL_IMAGE_URL');
+                $episode->stillUrl = $episode->still_path ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
             });
             return $season;
         });
@@ -66,9 +66,28 @@ class DashboardController extends Controller
 
         // Append the creator profile path to the creator list
         $tvshow->created_by = array_map(function ($creator) {
-            $creator['profile_path'] = $creator['profile_path'] ? env('TMDB_IMAGE_BASE_URL_300') . $creator['profile_path'] : env('DEFAULT_POSTER_IMAGE_URL');
+            $creator['profile_path'] = $creator['profile_path'] ? env('TMDB_IMAGE_BASE_URL_300') . $creator['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
             return $creator;
         }, $tvshow->created_by);
+
+        // Append network's logo path to the network list
+        $tvshow->networks = array_map(function ($network) {
+            $network['logoPathUrl'] = $network['logo_path'] ? env('TMDB_IMAGE_BASE_URL_300') . $network['logo_path'] : null;
+            return $network;
+        }, $tvshow->networks);
+
+        // Append vote avarage to stars method to each episode
+        $tvshow->seasons->each(function ($season) {
+            $season->episodes->each(function ($episode) {
+                $episode->voteAverageStars = TvshowService::voteAvarageToStars($episode->vote_average, $episode->vote_count);
+            });
+        });
+
+        // Append voteAvarageStars to the TV show
+        $tvshow->voteAverageStars = TvshowService::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
+
+        // Append credits to the TV show
+        $tvshow->credits = TvshowService::getTvshowCredits($tvshow);
 
         return Inertia::render('tvshow', [
             'tvshow' => $tvshow,

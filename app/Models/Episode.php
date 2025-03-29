@@ -10,6 +10,9 @@ class Episode extends Model
 {
     protected $guarded = [];
     protected $appends = ['stillUrl'];
+    protected $casts = [
+        'credits' => 'array',
+    ];
 
     public function season(): BelongsTo
     {
@@ -24,7 +27,7 @@ class Episode extends Model
     public function getStillUrlAttribute(): string
     {
         if (!$this->still_path) {
-            return env('DEFAULT_POSTER_IMAGE_URL');
+            return env('DEFAULT_EPISODE_STILL_IMAGE_URL');
         }
 
         return env('TMDB_IMAGE_BASE_URL_300') . $this->still_path;
