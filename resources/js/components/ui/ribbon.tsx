@@ -105,17 +105,29 @@ export function Ribbon({
   )
 }
 
+// Define a simpler interface for RibbonItem props
+interface RibbonItemProps {
+  children: React.ReactNode;
+  className?: string;
+  onClick?: () => void;
+}
+
 /**
  * A wrapper for CarouselItem with default styling for the Ribbon component
  */
 export function RibbonItem({
   children,
   className,
-  ...props
-}: React.ComponentProps<typeof CarouselItem>) {
+  onClick,
+}: RibbonItemProps) {
   return (
-    <CarouselItem className={`group basis-auto ${className || ""}`} {...props}>
-      {children}
+    <CarouselItem 
+      className={`group basis-auto ${className || ""}`}
+      onClick={onClick}
+    >
+      <div style={{ minHeight: '150px', minWidth: '100px' }}>
+        {children}
+      </div>
     </CarouselItem>
-  )
+  );
 } 

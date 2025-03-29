@@ -24,7 +24,7 @@ export default function Dashboard({ tvshows }: { tvshows: Array<any> }) {
           {tvshows.map((tvshow) => (
             <div className="relative group rounded-xl overflow-hidden shadow-lg shadow-neutral-600 dark:shadow-black transition-all duration-[250ms]" key={tvshow.id}>
               <div className="relative cursor-default w-full rounded-xl aspect-video overflow-hidden opacity-[93%] dark:opacity-[80%] hover:opacity-100 hover:dark:opacity-100 transition-all duration-[250ms]">
-                <img src={tvshow.backdrop_path ? imgUrl + tvshow.backdrop_path : imgUrl + tvshow.poster_path} alt={tvshow.name}
+                <img loading="lazy" src={tvshow.backdrop_path ? imgUrl + tvshow.backdrop_path : imgUrl + tvshow.poster_path} alt={tvshow.name}
                   className="absolute w-full h-full object-cover" />
                 <div className="dark-gradient absolute inset-0 size-full" />
                 {/* <div className="hidden group-hover:flex absolute top-0 left-0 w-full h-full items-center justify-center transition-all duration-[250ms]">

@@ -10,16 +10,26 @@ import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
 import { useState, useEffect, useRef } from 'react';
 import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
+import { LazyImage } from '@/components/ui/lazy-image';
+
 export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }: { tvshow: any, backdropUrl: string, selectedSeasonNumber?: number }) {
   const [selectedSeason, setSelectedSeason] = useState<any>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const isInitialMount = useRef(true);
 
   useEffect(() => {
-    // Use the selectedSeasonNumber from props or default to the first season
-    const initialSeason = selectedSeasonNumber 
-      ? tvshow.seasons.find((s: any) => s.season_number === selectedSeasonNumber) 
-      : tvshow.seasons[0];
+    // Find the requested season or default to first season if not found
+    let initialSeason;
+    
+    if (selectedSeasonNumber) {
+      initialSeason = tvshow.seasons.find((s: any) => s.season_number === selectedSeasonNumber);
+      // If the requested season doesn't exist, fall back to the first season
+      if (!initialSeason && tvshow.seasons.length > 0) {
+        initialSeason = tvshow.seasons[0];
+      }
+    } else if (tvshow.seasons.length > 0) {
+      initialSeason = tvshow.seasons[0];
+    }
     
     setSelectedSeason(initialSeason);
   }, [tvshow, selectedSeasonNumber]);
@@ -30,7 +40,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
     // Only scroll on initial mount, not when user clicks on seasons
     if (isInitialMount.current) {
       const selectedIndex = tvshow.seasons.findIndex(
-        (season: any) => season.season_number === selectedSeason.season_number
+        (season: any) => season.season_number === selectedSeason?.season_number
       );
       
       if (selectedIndex !== -1) {
@@ -52,7 +62,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
-      title: `${tvshow.name} - TV Show`,
+      title: `${tvshow.name} ▸ Season ${selectedSeason?.season_number || 'Unknown'} ▸ TV Show`,
       href: '/tvshow',
     },
   ];
@@ -62,7 +72,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title={`${tvshow.name}`} />
+      <Head title={`${tvshow.name} ▸ S${selectedSeason.season_number.toString().padStart(2, '0')} ▸ TV Show`} />
       {/* hero */}
       <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
         <div style={{ backgroundImage: `url(${backdropUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} className="w-full h-[calc(100vh-5.5rem)] filter grayscale" />
@@ -155,15 +165,21 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               align="start" 
                               dragFree={true}
                             >
-                              {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any]) => (
-                                <RibbonItem key={cast.id || key}>
-                                  <CreditPoster 
-                                    imageUrl={cast.profilePathUrl} 
-                                    name={cast.name}
-                                    characterName={cast.character} 
-                                  />
-                                </RibbonItem>
-                              ))}
+                              {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any], index) => {
+                                // Prioritize the first 8 cast members for better initial load
+                                const isPriority = index < 8;
+                                
+                                return (
+                                  <RibbonItem key={cast.id || key}>
+                                    <CreditPoster 
+                                      imageUrl={cast.profilePathUrl} 
+                                      name={cast.name}
+                                      characterName={cast.character} 
+                                      priority={isPriority}
+                                    />
+                                  </RibbonItem>
+                                );
+                              })}
                             </Ribbon>
                           </div>
                         )}
@@ -179,15 +195,21 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               align="start" 
                               dragFree={true}
                             >
-                              {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any]) => (
-                                <RibbonItem key={guestStar.id || key}>
-                                  <CreditPoster 
-                                    imageUrl={guestStar.profilePathUrl} 
-                                    name={guestStar.name}
-                                    characterName={guestStar.character} 
-                                  />
-                                </RibbonItem>
-                              ))}
+                              {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any], index) => {
+                                // Prioritize the first 8 guest stars for better initial load
+                                const isPriority = index < 8;
+                                
+                                return (
+                                  <RibbonItem key={guestStar.id || key}>
+                                    <CreditPoster 
+                                      imageUrl={guestStar.profilePathUrl} 
+                                      name={guestStar.name}
+                                      characterName={guestStar.character} 
+                                      priority={isPriority}
+                                    />
+                                  </RibbonItem>
+                                );
+                              })}
                             </Ribbon>
                           </div>
                         )}
@@ -202,13 +224,20 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               align="start" 
                               dragFree={true}
                             >
-                              {tvshow.created_by.map((creator: any, index: number) => (
-                                <RibbonItem key={index}>
-                                  <CreditPoster 
-                                    imageUrl={creator.profile_path} 
-                                    name={creator.name} />
-                                </RibbonItem>
-                              ))}
+                              {tvshow.created_by.map((creator: any, index: number) => {
+                                // Show all creators with priority - usually there are only a few
+                                const isPriority = true;
+                                
+                                return (
+                                  <RibbonItem key={index}>
+                                    <CreditPoster 
+                                      imageUrl={creator.profile_path} 
+                                      name={creator.name}
+                                      priority={isPriority}
+                                    />
+                                  </RibbonItem>
+                                );
+                              })}
                             </Ribbon>
                           </div>
                         )}
@@ -229,21 +258,30 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                       dragFree={true}
                       onApiInitialized={setCarouselApi}
                     >
-                      {tvshow.seasons.map((season: any, index: number) => (
-                        <RibbonItem 
-                          key={index} 
-                          onClick={() => handleSeasonSelect(season)} 
-                          className="cursor-pointer"
-                        >
-                          <div 
-                            className={`mx-auto w-[10rem] h-[15rem] bg-cover bg-center rounded-md border-2 ${selectedSeason.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`} 
-                            style={{ backgroundImage: `url(${season.posterPathUrl})` }}
-                          />
-                          <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100'} transition-colors duration-150`}>
-                            {season.name}
-                          </div>
-                        </RibbonItem>
-                      ))}
+                      {tvshow.seasons.map((season: any, index: number) => {
+                        // Prioritize the first 8 seasons to ensure smooth initial load
+                        const isPriority = index < 8;
+                        
+                        return (
+                          <RibbonItem 
+                            key={index} 
+                            onClick={() => handleSeasonSelect(season)} 
+                            className="cursor-pointer"
+                          >
+                            <div className={`border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`}>
+                              <LazyImage 
+                                src={season.posterPathUrl}
+                                alt={season.name}
+                                className="w-[10rem] h-[15rem] object-cover"
+                                priority={isPriority}
+                              />
+                            </div>
+                            <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason?.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100'} transition-colors duration-150`}>
+                              {season.name}
+                            </div>
+                          </RibbonItem>
+                        );
+                      })}
                     </Ribbon>
                   </div>
                 </div>
@@ -266,13 +304,21 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                     <ul>
                       {selectedSeason.episodes.map((episode: any, index: number, array: any[]) => {
                         const isLastItem = index === array.length - 1;
+                        // Prioritize more episodes at the beginning (first 5)
+                        const isPriority = index < 5;
+                        
                         return (
                           <li key={episode.id} className={`flex flex-col lg:flex-row items-start gap-y-3 lg:gap-y-0 lg:items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 ${!isLastItem ? 'border-b border-neutral-800 dark:border-neutral-700 border-dotted' : ''}`}>
                             <div className="text-2xl text-center w-[2.5rem]">
                               {episode.episode_number}
                             </div>
-                            <div className="aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md">
-                              <img className="w-full h-full object-cover rounded-md" src={`${episode.stillUrl}`} alt={episode.name} />
+                            <div className="aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden">
+                              <LazyImage 
+                                src={`${episode.stillUrl}`}
+                                alt={episode.name}
+                                className="w-full h-full object-cover"
+                                priority={isPriority}
+                              />
                             </div>
                             <div className="w-full flex flex-col gap-y-1 lg:gap-y-2">
                               <div className="flex flex-col lg:flex-row items-start gap-y-1 lg:gap-y-0 lg:items-center gap-x-2 justify-between">
@@ -297,7 +343,6 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           </li>
                         );
                       })}
-                      
                     </ul>
                   </div>
                 </div>
