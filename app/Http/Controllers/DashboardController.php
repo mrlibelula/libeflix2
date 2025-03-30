@@ -44,18 +44,11 @@ class DashboardController extends Controller
         $selectedSeasonNumber = $request->input('season', 0);
 
         // Append the season poster URL to the season's posterPathUrl property
-        // and string limit each episode's overview to
-        // overviewStrLimit50, overviewStrLimit100, overviewStrLimit150, overviewStrLimit200, overviewStrLimit250
+        // and string limit each episode's overview
         $tvshow->seasons = $tvshow->seasons->map(function ($season) {
             $season->posterPathUrl = $season->poster_path ? env('TMDB_IMAGE_BASE_URL_300') . $season->poster_path : env('DEFAULT_POSTER_IMAGE_URL');
+            // Add still image URL
             $season->episodes->each(function ($episode) {
-                $episode->overviewStrLimit50 = Str::limit($episode->overview, 50);
-                $episode->overviewStrLimit100 = Str::limit($episode->overview, 100);
-                $episode->overviewStrLimit150 = Str::limit($episode->overview, 150);
-                $episode->overviewStrLimit200 = Str::limit($episode->overview, 200);
-                $episode->overviewStrLimit250 = Str::limit($episode->overview, 250);
-                
-                // Add still image URL if it exists
                 $episode->stillUrl = $episode->still_path ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
             });
             return $season;

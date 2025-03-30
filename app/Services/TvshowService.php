@@ -579,28 +579,37 @@ class TvshowService
      * Get all tvshow credits (unique cast, crew and guest stars)
      * 
      * @param Tvshow $tvshow
+     * @param bool $withCast
+     * @param bool $withCrew
+     * @param bool $withGuestStars
      * @return array
      */
-    public static function getTvshowCredits(Tvshow $tvshow): array
+    public static function getTvshowCredits(Tvshow $tvshow, bool $withCast = true, bool $withCrew = false, bool $withGuestStars = true): array
     {
         // make unique cast, crew and guest stars lists for tvshow
         $episodes = collect($tvshow->episodes);
-        $cast = collect($episodes->pluck('credits.cast')->flatten(1))->unique('id')->toArray();
-        $crew = collect($episodes->pluck('credits.crew')->flatten(1))->unique('id')->toArray();
-        $guestStars = collect($episodes->pluck('credits.guest_stars')->flatten(1))->unique('id')->toArray();
+        $cast = $withCast ? collect($episodes->pluck('credits.cast')->flatten(1))->unique('id')->toArray() : [];
+        $crew = $withCrew ? collect($episodes->pluck('credits.crew')->flatten(1))->unique('id')->toArray() : [];
+        $guestStars = $withGuestStars ? collect($episodes->pluck('credits.guest_stars')->flatten(1))->unique('id')->toArray() : [];
         // append profilePathUrl to each credit or fallback to default image
-        $cast = array_map(function ($credit) {
-            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
-            return $credit;
-        }, $cast);
-        $crew = array_map(function ($credit) {
-            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
-            return $credit;
-        }, $crew);
-        $guestStars = array_map(function ($credit) {
-            $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
-            return $credit;
-        }, $guestStars);
+        if ($withCast) {
+            $cast = array_map(function ($credit) {
+                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $credit;
+            }, $cast);
+        }
+        if ($withCrew) {
+            $crew = array_map(function ($credit) {
+                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $credit;
+            }, $crew);
+        }
+        if ($withGuestStars) {
+            $guestStars = array_map(function ($credit) {
+                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $credit;
+            }, $guestStars);
+        }
 
         return [
             'cast' => $cast,

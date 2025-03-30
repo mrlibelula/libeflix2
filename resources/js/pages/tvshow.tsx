@@ -12,10 +12,18 @@ import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
 import { LazyImage } from '@/components/ui/lazy-image';
 
+// Constants
+const TVSHOW_OVERVIEW_STR_LIMIT = 260;
+const SEASON_OVERVIEW_STR_LIMIT = 200;
+const EPISODE_OVERVIEW_STR_LIMIT = 160;
+
 export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }: { tvshow: any, backdropUrl: string, selectedSeasonNumber?: number }) {
   const [selectedSeason, setSelectedSeason] = useState<any>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const isInitialMount = useRef(true);
+  const [expandedEpisodes, setExpandedEpisodes] = useState<Record<number, boolean>>({});
+  const [expandedTvshowOverview, setExpandedTvshowOverview] = useState(false);
+  const [expandedSeasonOverview, setExpandedSeasonOverview] = useState(false);
 
   useEffect(() => {
     // Find the requested season or default to first season if not found
@@ -151,7 +159,29 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                         </div>
                         
                         <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                          {tvshow.overview}
+                          {tvshow.overview && tvshow.overview.length > TVSHOW_OVERVIEW_STR_LIMIT && !expandedTvshowOverview ? (
+                            <>
+                              {tvshow.overview.substring(0, TVSHOW_OVERVIEW_STR_LIMIT)}... 
+                              <span 
+                                className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                                onClick={() => setExpandedTvshowOverview(true)}
+                              >
+                                more
+                              </span>
+                            </>
+                          ) : tvshow.overview && tvshow.overview.length > TVSHOW_OVERVIEW_STR_LIMIT ? (
+                            <>
+                              {tvshow.overview}
+                              <span 
+                                className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                                onClick={() => setExpandedTvshowOverview(false)}
+                              >
+                                less
+                              </span>
+                            </>
+                          ) : (
+                            tvshow.overview
+                          )}
                         </div>
 
                         {/* cast ribbon */}
@@ -241,7 +271,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             </Ribbon>
                           </div>
                         )}
-
+                        
                       </div>
 
                     </div>
@@ -298,25 +328,47 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                     )}
                   </div>
                   <div className="mt-6 text-base text-neutral-700 dark:text-neutral-300">
-                    {selectedSeason.overview}
+                    {selectedSeason.overview && selectedSeason.overview.length > SEASON_OVERVIEW_STR_LIMIT && !expandedSeasonOverview ? (
+                      <>
+                        {selectedSeason.overview.substring(0, SEASON_OVERVIEW_STR_LIMIT)}... 
+                        <span 
+                          className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                          onClick={() => setExpandedSeasonOverview(true)}
+                        >
+                          more
+                        </span>
+                      </>
+                    ) : selectedSeason.overview && selectedSeason.overview.length > SEASON_OVERVIEW_STR_LIMIT ? (
+                      <>
+                        {selectedSeason.overview}
+                        <span 
+                          className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                          onClick={() => setExpandedSeasonOverview(false)}
+                        >
+                          less
+                        </span>
+                      </>
+                    ) : (
+                      selectedSeason.overview
+                    )}
                   </div>
                   <div className="mt-8">
                     <ul>
+                      {/* (lazy loading) Prioritize more episodes at the beginning (first 5) */}
                       {selectedSeason.episodes.map((episode: any, index: number, array: any[]) => {
                         const isLastItem = index === array.length - 1;
-                        // Prioritize more episodes at the beginning (first 5)
                         const isPriority = index < 5;
                         
                         return (
-                          <li key={episode.id} className={`flex flex-col lg:flex-row items-start gap-y-3 lg:gap-y-0 lg:items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 ${!isLastItem ? 'border-b border-neutral-800 dark:border-neutral-700 border-dotted' : ''}`}>
-                            <div className="text-2xl text-center w-[2.5rem]">
+                          <li key={episode.id} className={`group flex flex-col lg:flex-row items-start gap-y-3 lg:gap-y-0 lg:items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 bg-gradient-to-tr hover:bg-neutral-400/20 dark:hover:bg-neutral-800/30 transition-colors duration-150 ${!isLastItem ? 'border-b border-neutral-800 dark:border-neutral-700 border-dotted' : ''}`}>
+                            <div className="text-2xl text-center w-[2.5rem] group-hover:text-rose-500 dark:group-hover:text-rose-500 transition-colors duration-150">
                               {episode.episode_number}
                             </div>
                             <div className="aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden">
                               <LazyImage 
                                 src={`${episode.stillUrl}`}
                                 alt={episode.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-150"
                                 priority={isPriority}
                               />
                             </div>
@@ -337,7 +389,35 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                                 )}
                               </div>
                               <div className="mt-2 text-sm text-neutral-700 dark:text-neutral-400 leading-tight">
-                                {episode.overviewStrLimit150}
+                                {episode.overview && episode.overview.length > EPISODE_OVERVIEW_STR_LIMIT && !expandedEpisodes[episode.id] ? (
+                                  <>
+                                    {episode.overview.substring(0, EPISODE_OVERVIEW_STR_LIMIT)}... 
+                                    <span 
+                                      className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedEpisodes(prev => ({...prev, [episode.id]: true}));
+                                      }}
+                                    >
+                                      more
+                                    </span>
+                                  </>
+                                ) : episode.overview && episode.overview.length > EPISODE_OVERVIEW_STR_LIMIT ? (
+                                  <>
+                                    {episode.overview}
+                                    <span 
+                                      className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer ml-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedEpisodes(prev => ({...prev, [episode.id]: false}));
+                                      }}
+                                    >
+                                      less
+                                    </span>
+                                  </>
+                                ) : (
+                                  episode.overview
+                                )}
                               </div>
                             </div>
                           </li>
