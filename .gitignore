@@ -22,4 +22,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
-database/database.sqlite
+# Make sure SQLite database is ignored
+/database/database.sqlite
+/database/*.sqlite
