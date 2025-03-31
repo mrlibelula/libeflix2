@@ -51,6 +51,7 @@ class TvshowController extends Controller
             $season->posterPathUrl = $season->poster_path 
                 ? env('TMDB_IMAGE_BASE_URL_300') . $season->poster_path 
                 : env('DEFAULT_POSTER_IMAGE_URL');
+            // Check if season folder exists in storage
             $season->seasonFolderExists = SeasonService::isThereSeasonFolder($season->season_number, $tvshow);
             // Add still image URL and append vote avarage to stars method to each episode
             $season->episodes->each(function ($episode) {
