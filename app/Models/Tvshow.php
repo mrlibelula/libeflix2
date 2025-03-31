@@ -17,11 +17,13 @@ class Tvshow extends Model
         'cast' => 'array',
         'languages' => 'array',
         'networks' => 'array',
+        'origin_country' => 'array',
         'production_companies' => 'array',
         'production_countries' => 'array',
         'available_seasons' => 'array',
         'spoken_languages' => 'array',
         'videos' => 'array',
+        'images' => 'array',
     ];
 
     public function seasons(): HasMany

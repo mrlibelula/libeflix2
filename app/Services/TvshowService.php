@@ -96,7 +96,6 @@ class TvshowService
                     echo "Creating TV show record in database...\n";
                     // verify unique slug
                     $slug = Str::slug($fetchTvshow['name']);
-                    $counter = 1;
                     while (Tvshow::where('slug', $slug)->exists()) {
                         $slug = Str::slug($fetchTvshow['name'] . '-' . $counter);
                         $counter++;
@@ -116,25 +115,25 @@ class TvshowService
                         'vote_average' => $fetchTvshow['vote_average'],
                         'vote_count' => $fetchTvshow['vote_count'],
 
-                        'created_by' => json_encode($additionalTvshowData['created_by']),
-                        'cast' => json_encode($tvshowCast['cast']),
+                        'created_by' => $additionalTvshowData['created_by'],
+                        'cast' => $tvshowCast['cast'],
                         'homepage' => $additionalTvshowData['homepage'],
-                        'languages' => json_encode($additionalTvshowData['languages']),
-                        'networks' => json_encode($additionalTvshowData['networks']),
+                        'languages' => $additionalTvshowData['languages'],
+                        'networks' => $additionalTvshowData['networks'],
                         'number_of_episodes' => $additionalTvshowData['number_of_episodes'],
                         'number_of_seasons' => $additionalTvshowData['number_of_seasons'],
-                        'origin_country' => json_encode($additionalTvshowData['origin_country']),
-                        'production_companies' => json_encode($additionalTvshowData['production_companies']),
-                        'production_countries' => json_encode($additionalTvshowData['production_countries']),
-                        'available_seasons' => json_encode($additionalTvshowData['seasons']),
-                        'spoken_languages' => json_encode($additionalTvshowData['spoken_languages']),
+                        'origin_country' => $additionalTvshowData['origin_country'],
+                        'production_companies' => $additionalTvshowData['production_companies'],
+                        'production_countries' => $additionalTvshowData['production_countries'],
+                        'available_seasons' => $additionalTvshowData['seasons'],
+                        'spoken_languages' => $additionalTvshowData['spoken_languages'],
                         'status' => $additionalTvshowData['status'],
                         'tagline' => $additionalTvshowData['tagline'],
                         'type' => $additionalTvshowData['type'],
-                        'videos' => json_encode($additionalTvshowData['videos']),
-                        'images' => json_encode($additionalTvshowData['images']),
+                        'videos' => $additionalTvshowData['videos'],
+                        'images' => $additionalTvshowData['images'],
                         'selected_logo' => $folderMetadata['selected_logo'] ?? 0,
-                        'genres' => json_encode($additionalTvshowData['genres']),
+                        'genres' => $additionalTvshowData['genres'],
                     ]);
                     $importedTvshows[] = $tvshow;
                     $lastTvshowId = $tvshow->id;
@@ -163,7 +162,7 @@ class TvshowService
                         echo "  Successfully created season record with ID: {$lastSeasonId}\n";
                         
                         // import episodes to each season from tmdb
-                        echo "  Starting import of {$episodeCount} episodes for season {$season} for '{$tvshow->name}'...\n";
+                        echo "  Starting import of {$episodeCount} episodes for season {$season}/{$additionalTvshowData['number_of_seasons']} for '{$tvshow->name}'...\n";
                         for ($episodeNumber = 1; $episodeNumber <= $episodeCount; $episodeNumber++) {
                             echo "    Fetching S{$season}E{$episodeNumber} data for '{$tvshow->name}'...\r";
                             $episodeData = self::fetchEpisode($fetchTvshow['id'], $seasonData['season_number'], $episodeNumber);
@@ -180,7 +179,7 @@ class TvshowService
                                 'still_path' => $episodeData['still_path'],
                                 'vote_average' => $episodeData['vote_average'],
                                 'vote_count' => $episodeData['vote_count'],
-                                'credits' => json_encode($episodeData['credits']),
+                                'credits' => $episodeData['credits'] ?? [],
                             ]);
                             $importedEpisodes[] = $importedEpisode;
                             $lastEpisodeId = $importedEpisode->id;
@@ -251,7 +250,6 @@ class TvshowService
             throw new \Exception('TV show folder "' . $folderName . '" already exists');
         }
 
-        // create folder
         $tvshowsDisk->makeDirectory($folderName);
 
         // get release year from OpenAI if not provided
@@ -485,7 +483,7 @@ class TvshowService
         if (empty($tvshow->images)) {
             return [];
         }
-        return json_decode($tvshow->images, true)[$category];
+        return $tvshow->images[$category];
     }
 
     /**
@@ -568,19 +566,25 @@ class TvshowService
         // append profilePathUrl to each credit or fallback to default image
         if ($withCast) {
             $cast = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                $credit['profilePathUrl'] = $credit['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $credit;
             }, $cast);
         }
         if ($withCrew) {
             $crew = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                $credit['profilePathUrl'] = $credit['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $credit;
             }, $crew);
         }
         if ($withGuestStars) {
             $guestStars = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] : env('DEFAULT_CREDIT_IMAGE_URL');
+                $credit['profilePathUrl'] = $credit['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $credit;
             }, $guestStars);
         }
