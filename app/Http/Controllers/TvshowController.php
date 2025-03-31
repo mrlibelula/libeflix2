@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tvshow;
+use App\Services\SeasonService;
+use App\Services\Tool;
 use App\Services\TvshowService;
-use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class DashboardController extends Controller
+class TvshowController extends Controller
 {
     /**
      * Shows all available tv shows on Storage
@@ -43,13 +45,19 @@ class DashboardController extends Controller
         // Get selected season number from request or use 0 (which will default to first season in React)
         $selectedSeasonNumber = $request->input('season', 0);
 
-        // Append the season poster URL to the season's posterPathUrl property
+        // Append the season poster URL to the season's posterPathUrl property and check if seasonExists in storage, as a folder
         // and string limit each episode's overview
-        $tvshow->seasons = $tvshow->seasons->map(function ($season) {
-            $season->posterPathUrl = $season->poster_path ? env('TMDB_IMAGE_BASE_URL_300') . $season->poster_path : env('DEFAULT_POSTER_IMAGE_URL');
-            // Add still image URL
+        $tvshow->seasons = $tvshow->seasons->map(function ($season) use ($tvshow) {
+            $season->posterPathUrl = $season->poster_path 
+                ? env('TMDB_IMAGE_BASE_URL_300') . $season->poster_path 
+                : env('DEFAULT_POSTER_IMAGE_URL');
+            $season->seasonFolderExists = SeasonService::isThereSeasonFolder($season->season_number, $tvshow);
+            // Add still image URL and append vote avarage to stars method to each episode
             $season->episodes->each(function ($episode) {
-                $episode->stillUrl = $episode->still_path ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
+                $episode->stillUrl = $episode->still_path 
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
+                    : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
+                $episode->voteAverageStars = Tool::voteAvarageToStars($episode->vote_average, $episode->vote_count);
             });
             return $season;
         });
@@ -69,15 +77,8 @@ class DashboardController extends Controller
             return $network;
         }, $tvshow->networks);
 
-        // Append vote avarage to stars method to each episode
-        $tvshow->seasons->each(function ($season) {
-            $season->episodes->each(function ($episode) {
-                $episode->voteAverageStars = TvshowService::voteAvarageToStars($episode->vote_average, $episode->vote_count);
-            });
-        });
-
         // Append voteAvarageStars to the TV show
-        $tvshow->voteAverageStars = TvshowService::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
+        $tvshow->voteAverageStars = Tool::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
 
         // Append credits to the TV show
         $tvshow->credits = TvshowService::getTvshowCredits($tvshow);
@@ -85,7 +86,7 @@ class DashboardController extends Controller
         return Inertia::render('tvshow', [
             'tvshow' => $tvshow,
             'backdropUrl' => TvshowService::getRandomTvshowImages($tvshow, 'backdrops'),
-            'selectedSeasonNumber' => (int) $selectedSeasonNumber,
+            'selectedSeasonNumber' => (int)$selectedSeasonNumber,
         ]);
     }
 }

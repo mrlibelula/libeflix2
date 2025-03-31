@@ -28,7 +28,6 @@ return new class extends Migration
             $table->float('vote_average')->nullable();
             $table->integer('vote_count')->nullable();
             $table->mediumText('credits')->default(json_encode([]));
-            
             $table->timestamps();
         });
     }

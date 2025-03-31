@@ -197,6 +197,9 @@ class TvshowService
                 echo "------------------------\n";
             }
 
+            // check if all mp4 episodes are in storage and update db
+            EpisodeService::checkIfAllEpisodesAreInStorageAndUpdateDb();
+
             $endTime = microtime(true);
             $executionTime = $endTime - $startTime;
             
@@ -547,35 +550,6 @@ class TvshowService
     }
 
     /**
-     * Convert vote average to stars
-     * Scale: 0-10 maps to 0-5 stars
-     * Returns in half-star increments: 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5
-     * Always returns at least one decimal place (e.g., 4.0, 3.5)
-     * Based on vote count, the rating is reduced by 10% if less than 10 votes
-     * Since its an MVP project, no Bayesian average is applied
-     * 
-     * @param float $voteAverage
-     * @param int $voteCount
-     * @return float
-     */
-    public static function voteAvarageToStars(float $voteAverage, int $voteCount = 0): float
-    {
-        // Convert the 0-10 vote average to a 0-5 star rating
-        $starRating = $voteAverage / 2;
-
-        // Round to the nearest 0.5 increment
-        $starRating = round($starRating * 2) / 2;
-
-        // Optional: Apply weighting based on vote count (if necessary)
-        if ($voteCount < 10) {
-            $starRating *= 0.9; // Reduce rating slightly if votes are too few
-            $starRating = max(0, round($starRating * 2) / 2); // Keep within valid range
-        }
-
-        return $starRating;
-    }
-
-    /**
      * Get all tvshow credits (unique cast, crew and guest stars)
      * 
      * @param Tvshow $tvshow
@@ -616,5 +590,73 @@ class TvshowService
             'crew' => $crew,
             'guestStars' => $guestStars,
         ];
+    }
+
+    /**
+     * Get all mp4 files from the tvshows disk
+     * 
+     * @param string $fileExtension File extension to look for (default: mp4)
+     * @param string $disk Storage disk name (default: tvshows)
+     * @param bool $withStats Return statistics about the search (default: false)
+     * @return array|object Array of file paths or object with files and stats
+     */
+    public static function getAllMediaFiles(string $fileExtension = 'mp4', string $disk = 'tvshows', bool $withStats = false): array|object
+    {
+        try {
+            $storage = Storage::disk($disk);
+            $allFiles = [];
+            $stats = [
+                'tvshowCount' => 0,
+                'seasonCount' => 0,
+                'filesByLocation' => [
+                    'tvshowRoot' => 0,
+                    'seasonFolders' => 0
+                ]
+            ];
+            
+            // Get all directories in the root
+            $tvshowFolders = $storage->directories();
+            $stats['tvshowCount'] = count($tvshowFolders);
+            
+            foreach ($tvshowFolders as $folder) {
+                // Get all season directories for this TV show
+                $seasonFolders = $storage->directories($folder);
+                $stats['seasonCount'] += count($seasonFolders);
+                
+                // Also check for files directly in the TV show folder
+                $filesInRoot = $storage->files($folder);
+                foreach ($filesInRoot as $file) {
+                    if (pathinfo($file, PATHINFO_EXTENSION) === $fileExtension) {
+                        $allFiles[] = $file;
+                        $stats['filesByLocation']['tvshowRoot']++;
+                    }
+                }
+                
+                // Check files in each season folder
+                foreach ($seasonFolders as $seasonFolder) {
+                    $files = $storage->files($seasonFolder);
+                    foreach ($files as $file) {
+                        if (pathinfo($file, PATHINFO_EXTENSION) === $fileExtension) {
+                            $allFiles[] = $file;
+                            $stats['filesByLocation']['seasonFolders']++;
+                        }
+                    }
+                }
+            }
+            
+            $stats['totalFiles'] = count($allFiles);
+            
+            if ($withStats) {
+                return (object)[
+                    'files' => $allFiles,
+                    'stats' => $stats
+                ];
+            }
+            
+            return $allFiles;
+        } catch (\Exception $e) {
+            info('Error getting media files: ' . $e->getMessage());
+            return $withStats ? (object)['files' => [], 'stats' => []] : [];
+        }
     }
 }
