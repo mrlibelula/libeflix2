@@ -2,16 +2,16 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TvshowController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', [DashboardController::class, 'index']);
-    Route::get('tvshows', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('tvshow/{slug}', [DashboardController::class, 'show'])->name('tvshow.show');
+    Route::get('dashboard', [TvshowController::class, 'index'])->name('dashboard');
+    Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
+    Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
 });
 
 require __DIR__.'/settings.php';

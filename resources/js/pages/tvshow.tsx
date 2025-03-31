@@ -2,6 +2,7 @@ import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { LikeCircleButton } from '@/components/ui/like-circle-button';
 import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/ui/star-rating';
+import { OutlineButton } from '@/components/ui/outline-button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -104,7 +105,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
 
                 {/* hero actions */}
                 <div className="flex items-center justify-center gap-x-3 px-5 py-3 mt-6 animate-fadeIn">
-                  <Button className="text-xl font-semibold h-[3rem]" tabIndex={1} disabled={false}>
+                  <Button className="text-xl font-semibold h-[3rem] cursor-pointer" tabIndex={1} disabled={false}>
                     <Play className="ml-2 mr-1 h-4 w-4 fill-white dark:fill-black" />
                     Play
                     {false && <LoaderCircle className="h-4 w-4 animate-spin" />}
@@ -282,6 +283,9 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
               <div className="w-full 2xl:w-[50%]">
                 {/* seasons carousel */}
                 <div className="px-5 py-3 mt-10 w-full animate-fadeIn">
+                  <div className="2xl:hidden text-base font-semibold mb-8">
+                    Seasons
+                  </div>
                   <div className="relative">
                     <Ribbon
                       align="start"
@@ -300,9 +304,9 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           >
                             <div className={`border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`}>
                               <LazyImage 
-                                src={season.posterPathUrl}
+                                  src={season.posterPathUrl}
                                 alt={season.name}
-                                className="w-[10rem] h-[15rem] object-cover"
+                                className={`w-[10rem] h-[15rem] object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover:grayscale-0 transition-all duration-150`}
                                 priority={isPriority}
                               />
                             </div>
@@ -317,10 +321,15 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                 </div>
                 {/* episodes */}
                 <div className="px-5 py-3 mt-4 w-full animate-fadeIn">
-                  <div className="flex items-center justify-between gap-x-4">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-x-4">
                     <div className="text-[1.2rem] font-bold">
                       {selectedSeason.name} - Episodes ({selectedSeason.episodes.length})
                     </div>
+                    {/* inform extra mp4 files found on storage for selected season */}
+                    <div className="text-sm text-rose-700 dark:text-rose-400">
+                      On storage: 13 episodes
+                    </div>
+                    {/* inform air date */}
                     {selectedSeason.air_date && selectedSeason.air_date !== '' && (
                       <div className="text-sm italic text-neutral-700 dark:text-neutral-300">
                         {new Date(selectedSeason.air_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).replace(/(\d)(st|nd|rd|th)/, '$1<sup>$2</sup>')}
@@ -352,6 +361,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                       selectedSeason.overview
                     )}
                   </div>
+
                   <div className="mt-8">
                     <ul>
                       {/* (lazy loading) Prioritize more episodes at the beginning (first 5) */}
@@ -364,13 +374,18 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             <div className="text-2xl text-center w-[2.5rem] group-hover:text-rose-500 dark:group-hover:text-rose-500 transition-colors duration-150">
                               {episode.episode_number}
                             </div>
-                            <div className="aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden">
+                            <div className={`aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden relative group ${episode.is_in_storage ? 'cursor-pointer' : ''}`}>
                               <LazyImage 
                                 src={`${episode.stillUrl}`}
                                 alt={episode.name}
-                                className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-150"
+                                className={`w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-150 ${!episode.is_in_storage ? 'grayscale' : ''}`}
                                 priority={isPriority}
                               />
+                              {episode.is_in_storage && (
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-150 bg-black/30">
+                                  <Play className="w-8 h-8 text-white fill-white" />
+                                </div>
+                              )}
                             </div>
                             <div className="w-full flex flex-col gap-y-1 lg:gap-y-2">
                               <div className="flex flex-col lg:flex-row items-start gap-y-1 lg:gap-y-0 lg:items-center gap-x-2 justify-between">
