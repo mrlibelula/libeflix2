@@ -302,11 +302,11 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             onClick={() => handleSeasonSelect(season)} 
                             className="cursor-pointer"
                           >
-                            <div className={`border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`}>
+                            <div className={`w-[10rem] h-[15rem] border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`}>
                               <LazyImage 
-                                  src={season.posterPathUrl}
+                                src={season.posterPathUrl}
                                 alt={season.name}
-                                className={`w-[10rem] h-[15rem] object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover:grayscale-0 transition-all duration-150`}
+                                className={`w-full h-full object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover:grayscale-0 transition-all duration-150`}
                                 priority={isPriority}
                               />
                             </div>
