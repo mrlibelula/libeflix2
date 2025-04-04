@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tvshow;
-use App\Services\SeasonService;
-use App\Services\Tool;
 use App\Services\TvshowService;
+use App\Services\SeasonService;
+use App\Services\EpisodeService;
+use App\Services\Tool;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -59,6 +61,11 @@ class TvshowController extends Controller
                     ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
                     : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
                 $episode->voteAverageStars = Tool::voteAvarageToStars($episode->vote_average, $episode->vote_count);
+                
+                // Pre-encode the file path if it's a string (means it's a valid file path)
+                if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
+                    $episode->encFilePath = Tool::encode($episode->is_in_storage);
+                }
             });
             return $season;
         });
@@ -82,7 +89,43 @@ class TvshowController extends Controller
         $tvshow->voteAverageStars = Tool::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
 
         // Append credits to the TV show
-        $tvshow->credits = TvshowService::getTvshowCredits($tvshow);
+        $tvshow->credits = TvshowService::getTvshowCredits($tvshow, withCrew: true);
+
+        // Encode episodes file paths via is_in_storage and use prop encFilePath as final prop
+        $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
+            // Debug what we're working with
+            Log::debug('Episode data', [
+                'id' => $episode->id,
+                'name' => $episode->name,
+                'is_in_storage_type' => gettype($episode->is_in_storage),
+                'is_in_storage_value' => $episode->is_in_storage,
+            ]);
+            
+            // If is_in_storage contains the file path (fallbacks as a boolean (truthy or falsy)), encode it
+            if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
+                $episode->encFilePath = Tool::encode($episode->is_in_storage);
+                Log::debug('Encoded file path', ['encFilePath' => $episode->encFilePath]);
+            } else {
+                $episode->encFilePath = null;
+                Log::debug('No file path to encode');
+            }
+            
+            return $episode;
+        });
+
+        // Make sure encFilePath is explicitly included in the data structure sent to the frontend
+        // by ensuring it's part of the array version of the data
+        $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
+            // Convert to array to ensure all properties are included
+            $episodeArray = is_array($episode) ? $episode : $episode->toArray();
+            
+            // Explicitly ensure encFilePath is included
+            if (!isset($episodeArray['encFilePath']) && isset($episode->encFilePath)) {
+                $episodeArray['encFilePath'] = $episode->encFilePath;
+            }
+            
+            return $episodeArray;
+        });
 
         return Inertia::render('tvshow', [
             'tvshow' => $tvshow,

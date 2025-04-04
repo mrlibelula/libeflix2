@@ -12,6 +12,20 @@ import { useState, useEffect, useRef } from 'react';
 import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import axios from 'axios';
 
 // Constants
 const TVSHOW_OVERVIEW_STR_LIMIT = 260;
@@ -25,6 +39,10 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
   const [expandedEpisodes, setExpandedEpisodes] = useState<Record<number, boolean>>({});
   const [expandedTvshowOverview, setExpandedTvshowOverview] = useState(false);
   const [expandedSeasonOverview, setExpandedSeasonOverview] = useState(false);
+  const [selectedEpisode, setSelectedEpisode] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Find the requested season or default to first season if not found
@@ -61,6 +79,68 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
     }
   }, [carouselApi, selectedSeason, tvshow.seasons]);
 
+  // Add effect to scroll to video when episode is selected
+  useEffect(() => {
+    if (selectedEpisode && videoContainerRef.current) {
+      setTimeout(() => {
+        videoContainerRef.current?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 200); // Small delay to ensure the video container is rendered
+    }
+  }, [selectedEpisode]);
+
+  // Simple function to handle episode selection
+  const handleEpisodeClick = (episode: any) => {
+    if (!episode.is_in_storage) return;
+    
+    console.log('Episode clicked:', episode);
+    
+    if (episode.encFilePath) {
+      // If we already have the encoded file path, use it directly
+      setSelectedEpisode(episode);
+    } else {
+      // Fall back to the old method only if needed
+      setIsLoading(true);
+      setError(null);
+      
+      fetch('/encode-path', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ filePath: episode.is_in_storage })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Server error: ' + response.status);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.success && data.encFilePath) {
+          setSelectedEpisode({
+            ...episode,
+            encFilePath: data.encFilePath
+          });
+        } else {
+          throw new Error(data.error || 'Failed to encode file path');
+        }
+      })
+      .catch(err => {
+        console.error('Error during episode selection:', err);
+        setError('Could not play episode: ' + (err.message || 'Unknown error'));
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+    }
+  };
+
   const handleSeasonSelect = (season: any) => {
     router.visit(`/tvshow/${tvshow.slug}?season=${season.season_number}`, {
       preserveState: true,
@@ -90,7 +170,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
           <div className="w-full flex flex-col items-start justify-start ">
             <div className="flex flex-col 2xl:flex-row w-full items-start justify-between gap-x-4 p-10">
               {/* left panel */}
-              <div className="flex flex-col gap-y-4 items-start w-full 2xl:w-[50%]">
+              <div className="flex flex-col gap-y-4 items-start w-full 2xl:w-[50%] overflow-hidden">
                 {/* hero title */}
                 <div className="text-black dark:text-white text-4xl font-bold px-5 py-3">
                   {
@@ -108,7 +188,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                   <Button className="text-xl font-semibold h-[3rem] cursor-pointer" tabIndex={1} disabled={false}>
                     <Play className="ml-2 mr-1 h-4 w-4 fill-white dark:fill-black" />
                     Play
-                    {false && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    {false && <LoaderCircle className="h-4 w-4 animate-spin spinner-rose" />}
                     <div className="mr-2" />
                   </Button>
 
@@ -159,6 +239,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           Rating: <StarRating rating={tvshow.voteAverageStars} size={5} />
                         </div>
                         
+                        {/* overview */}
                         <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
                           {tvshow.overview && tvshow.overview.length > TVSHOW_OVERVIEW_STR_LIMIT && !expandedTvshowOverview ? (
                             <>
@@ -185,93 +266,131 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           )}
                         </div>
 
-                        {/* cast ribbon */}
-                        {Object.entries(tvshow.credits.cast).length > 0 && (
-                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                            <div className="font-semibold mb-8">
-                              Cast
-                            </div>
-                            
-                            <Ribbon 
-                              align="start" 
-                              dragFree={true}
-                            >
-                              {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any], index) => {
-                                // Prioritize the first 8 cast members for better initial load
-                                const isPriority = index < 8;
-                                
-                                return (
-                                  <RibbonItem key={cast.id || key}>
-                                    <CreditPoster 
-                                      imageUrl={cast.profilePathUrl} 
-                                      name={cast.name}
-                                      characterName={cast.character} 
-                                      priority={isPriority}
-                                    />
-                                  </RibbonItem>
-                                );
-                              })}
-                            </Ribbon>
-                          </div>
-                        )}
+                        {/* tabs */}
+                        <div className="mt-10">
+                          <Tabs defaultValue="cast" className="w-full">
+                            <TabsList className="w-full">
+                              {tvshow.credits.cast && Object.entries(tvshow.credits.cast).length > 0 && (
+                                <TabsTrigger value="cast">Cast</TabsTrigger>
+                              )}
+                              {tvshow.credits.guestStars && Object.entries(tvshow.credits.guestStars).length > 0 && (
+                                <TabsTrigger value="guest_stars">Guest Stars</TabsTrigger>
+                              )}
+                              <TabsTrigger value="created_by">Creators</TabsTrigger>
+                              {tvshow.credits.crew && Object.entries(tvshow.credits.crew).length > 0 && (
+                                <TabsTrigger value="crew">Crew</TabsTrigger>
+                              )}
+                            </TabsList>
+                            <TabsContent value="cast">
+                              {/* cast ribbon */}
+                              {Object.entries(tvshow.credits.cast).length > 0 && (
+                                <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                                  <Ribbon 
+                                    align="start" 
+                                    dragFree={true}
+                                  >
+                                    {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any], index) => {
+                                      // Prioritize the first 8 cast members for better initial load
+                                      const isPriority = index < 8;
+                                      
+                                      return (
+                                        <RibbonItem key={cast.id || key}>
+                                          <CreditPoster 
+                                            imageUrl={cast.profilePathUrl} 
+                                            name={cast.name}
+                                            characterName={cast.character} 
+                                            priority={isPriority}
+                                          />
+                                        </RibbonItem>
+                                      );
+                                    })}
+                                  </Ribbon>
+                                </div>
+                              )}
+                            </TabsContent>
+                            <TabsContent value="guest_stars">
+                              {/* guest stars ribbon */}
+                              {tvshow.credits.guestStars && Object.entries(tvshow.credits.guestStars).length > 0 && (
+                                <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                                  <Ribbon 
+                                    align="start" 
+                                    dragFree={true}
+                                  >
+                                    {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any], index) => {
+                                      // Prioritize the first 8 guest stars for better initial load
+                                      const isPriority = index < 8;
+                                      
+                                      return (
+                                        <RibbonItem key={guestStar.id || key}>
+                                          <CreditPoster 
+                                            imageUrl={guestStar.profilePathUrl} 
+                                            name={guestStar.name}
+                                            characterName={guestStar.character} 
+                                            priority={isPriority}
+                                          />
+                                        </RibbonItem>
+                                      );
+                                    })}
+                                  </Ribbon>
+                                </div>
+                              )}
+                            </TabsContent>
+                            <TabsContent value="created_by">
+                              {/* created by ribbon */}
+                              {tvshow.created_by && tvshow.created_by.length > 0 && (
+                                <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                                  <Ribbon 
+                                    align="start" 
+                                    dragFree={true}
+                                  >
+                                    {tvshow.created_by.map((creator: any, index: number) => {
+                                      // Show all creators with priority - usually there are only a few
+                                      const isPriority = true;
+                                      
+                                      return (
+                                        <RibbonItem key={index}>
+                                          <CreditPoster 
+                                            imageUrl={creator.profile_path} 
+                                            name={creator.name}
+                                            priority={isPriority}
+                                          />
+                                        </RibbonItem>
+                                      );
+                                    })}
+                                  </Ribbon>
+                                </div>
+                              )}
+                            </TabsContent>
+                            <TabsContent value="crew">
+                              {/* crew ribbon */}
+                              {Object.entries(tvshow.credits.crew).length > 0 && (
+                                <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                                  <Ribbon 
+                                    align="start" 
+                                    dragFree={true}
+                                  >
+                                    {Object.entries(tvshow.credits.crew).map(([key, crew]: [string, any], index) => {
+                                      // Prioritize the first 8 cast members for better initial load
+                                      const isPriority = index < 8;
+                                      
+                                      return (
+                                        <RibbonItem key={crew.id || key}>
+                                          <CreditPoster 
+                                            imageUrl={crew.profilePathUrl} 
+                                            name={crew.name}
+                                            characterName={crew.job} 
+                                            priority={isPriority}
+                                          />
+                                        </RibbonItem>
+                                      );
+                                    })}
+                                  </Ribbon>
+                                </div>
+                              )}
+                            </TabsContent>
+                          </Tabs>
 
-                        {/* guest stars ribbon */}
-                        {tvshow.credits.guestStars && Object.entries(tvshow.credits.guestStars).length > 0 && (
-                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                            <div className="font-semibold mb-8">
-                              Guest Stars
-                            </div>
-                            
-                            <Ribbon 
-                              align="start" 
-                              dragFree={true}
-                            >
-                              {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any], index) => {
-                                // Prioritize the first 8 guest stars for better initial load
-                                const isPriority = index < 8;
-                                
-                                return (
-                                  <RibbonItem key={guestStar.id || key}>
-                                    <CreditPoster 
-                                      imageUrl={guestStar.profilePathUrl} 
-                                      name={guestStar.name}
-                                      characterName={guestStar.character} 
-                                      priority={isPriority}
-                                    />
-                                  </RibbonItem>
-                                );
-                              })}
-                            </Ribbon>
-                          </div>
-                        )}
-
-                        {/* created by ribbon */}
-                        {tvshow.created_by && tvshow.created_by.length > 0 && (
-                          <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                            <div className="font-semibold mb-8">
-                              Created by
-                            </div>
-                            <Ribbon 
-                              align="start" 
-                              dragFree={true}
-                            >
-                              {tvshow.created_by.map((creator: any, index: number) => {
-                                // Show all creators with priority - usually there are only a few
-                                const isPriority = true;
-                                
-                                return (
-                                  <RibbonItem key={index}>
-                                    <CreditPoster 
-                                      imageUrl={creator.profile_path} 
-                                      name={creator.name}
-                                      priority={isPriority}
-                                    />
-                                  </RibbonItem>
-                                );
-                              })}
-                            </Ribbon>
-                          </div>
-                        )}
+                        </div>
                         
                       </div>
 
@@ -280,7 +399,39 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                 </div>
               </div>
               {/* right panel */}
-              <div className="w-full 2xl:w-[50%]">
+              <div className="w-full 2xl:w-[50%] overflow-hidden">
+                {/* play episode */}
+                {isLoading && (
+                  <div className="px-5 py-3 mt-10 animate-fadeIn">
+                    <div className="text-[1.2rem] font-bold mb-4 flex items-center">
+                      <LoaderCircle className="h-6 w-6 animate-spin mr-2" />
+                      Loading Episode...
+                    </div>
+                  </div>
+                )}
+                
+                {error && (
+                  <div className="px-5 py-3 mt-10 animate-fadeIn">
+                    <div className="text-[1.2rem] font-bold mb-4 text-rose-500">
+                      Error: {error}
+                    </div>
+                  </div>
+                )}
+                
+                {selectedEpisode && selectedEpisode.encFilePath && !isLoading && !error && (
+                  <div ref={videoContainerRef} className="px-5 py-3 mt-10 animate-fadeIn">
+                    <div className="text-[1.2rem] font-bold mb-4">
+                      Now Playing: {selectedEpisode.name}
+                    </div>
+                    <video 
+                      src={`${route('tvshow.episode.serve', { encFilePath: selectedEpisode.encFilePath, disk: 'tvshows' })}`}
+                      className="w-full aspect-video rounded-md"
+                      controls
+                      autoPlay
+                    ></video>
+                  </div>
+                )}
+                
                 {/* seasons carousel */}
                 <div className="px-5 py-3 mt-10 w-full animate-fadeIn">
                   <div className="2xl:hidden text-base font-semibold mb-8">
@@ -324,10 +475,6 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-x-4">
                     <div className="text-[1.2rem] font-bold">
                       {selectedSeason.name} - Episodes ({selectedSeason.episodes.length})
-                    </div>
-                    {/* inform extra mp4 files found on storage for selected season */}
-                    <div className="text-sm text-rose-700 dark:text-rose-400">
-                      On storage: 13 episodes
                     </div>
                     {/* inform air date */}
                     {selectedSeason.air_date && selectedSeason.air_date !== '' && (
@@ -374,7 +521,11 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             <div className="text-2xl text-center w-[2.5rem] group-hover:text-rose-500 dark:group-hover:text-rose-500 transition-colors duration-150">
                               {episode.episode_number}
                             </div>
-                            <div className={`aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden relative group ${episode.is_in_storage ? 'cursor-pointer' : ''}`}>
+                            
+                            <div 
+                              className={`aspect-video w-full h-[12rem] lg:w-1/2 lg:h-[7rem] rounded-md overflow-hidden relative group ${episode.is_in_storage ? 'cursor-pointer' : ''}`}
+                              onClick={() => episode.is_in_storage && handleEpisodeClick(episode)}
+                            >
                               <LazyImage 
                                 src={`${episode.stillUrl}`}
                                 alt={episode.name}
@@ -383,14 +534,24 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               />
                               {episode.is_in_storage && (
                                 <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-150 bg-black/30">
-                                  <Play className="w-8 h-8 text-white fill-white" />
+                                  <Play 
+                                    className="w-8 h-8 text-white fill-white" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEpisodeClick(episode);
+                                    }}
+                                  />
                                 </div>
                               )}
                             </div>
+
                             <div className="w-full flex flex-col gap-y-1 lg:gap-y-2">
                               <div className="flex flex-col lg:flex-row items-start gap-y-1 lg:gap-y-0 lg:items-center gap-x-2 justify-between">
                                 <div className="flex flex-col 3xl:flex-row items-start 3xl:items-center w-full justify-between gap-x-2 font-semibold leading-tight">
-                                  <div>
+                                  <div 
+                                    className={episode.is_in_storage ? 'cursor-pointer' : ''}
+                                    onClick={() => episode.is_in_storage && handleEpisodeClick(episode)}
+                                  >
                                     {episode.name}
                                   </div>
                                   <div className="mt-1 3xl:mt-0 text-sm text-neutral-700 dark:text-neutral-400">

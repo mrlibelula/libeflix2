@@ -563,31 +563,51 @@ class TvshowService
         $cast = $withCast ? collect($episodes->pluck('credits.cast')->flatten(1))->unique('id')->toArray() : [];
         $crew = $withCrew ? collect($episodes->pluck('credits.crew')->flatten(1))->unique('id')->toArray() : [];
         $guestStars = $withGuestStars ? collect($episodes->pluck('credits.guest_stars')->flatten(1))->unique('id')->toArray() : [];
+        
+        // Filter out null values
+        $cast = array_filter($cast, function($item) { return !is_null($item); });
+        $crew = array_filter($crew, function($item) { return !is_null($item); });
+        $guestStars = array_filter($guestStars, function($item) { return !is_null($item); });
+        
         // append profilePathUrl to each credit or fallback to default image
         if ($withCast) {
             $cast = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] 
-                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
-                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                if (!is_null($credit)) {
+                    $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                        ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                        : env('DEFAULT_CREDIT_IMAGE_URL');
+                }
                 return $credit;
             }, $cast);
         }
         if ($withCrew) {
             $crew = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] 
-                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
-                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                if (!is_null($credit)) {
+                    $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                        ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                        : env('DEFAULT_CREDIT_IMAGE_URL');
+                }
                 return $credit;
             }, $crew);
         }
         if ($withGuestStars) {
             $guestStars = array_map(function ($credit) {
-                $credit['profilePathUrl'] = $credit['profile_path'] 
-                    ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
-                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                if (!is_null($credit)) {
+                    $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                        ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                        : env('DEFAULT_CREDIT_IMAGE_URL');
+                }
                 return $credit;
             }, $guestStars);
         }
+
+        // order $crew list placing "production" department at the top of the list
+        $crew = array_filter($crew, function ($credit) {
+            return !is_null($credit) && isset($credit['department']) && strtolower($credit['department']) === 'production';
+        });
+        $crew = array_merge($crew, array_filter($crew, function ($credit) {
+            return !is_null($credit) && isset($credit['department']) && strtolower($credit['department']) !== 'production';
+        }));
 
         return [
             'cast' => $cast,

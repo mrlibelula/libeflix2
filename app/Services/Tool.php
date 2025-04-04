@@ -44,4 +44,49 @@ class Tool
         if (empty($array)) return null;
         return $array[array_rand($array)];
     }
+
+    /**
+     * base64 URL encode
+     *
+     * @param string $data
+     * @return string
+     */
+    public static function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * base64 URL decode
+     *
+     * @param string $data
+     * @return string
+     */
+    public static function base64UrlDecode(string $data): string
+    {
+        // return base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
+        return base64_decode(strtr($data, '-_', '+/') . str_repeat('=', 3 - (3 + strlen($data)) % 4));
+    }
+
+    /**
+     * Encrypt encode (enc methods available: 'base_64' or 'laravel')
+     *
+     * @param string $data, bool $method = 'base_64'
+     * @return string
+     */
+    public static function encode(string $data, string $method = 'base_64'): string
+    {
+        return $method === 'laravel' ? encrypt($data) : self::base64UrlEncode($data);
+    }
+
+    /**
+     * Encrypt decode (decode methods available 'base_64' or 'laravel')
+     *
+     * @param string $data, bool $method = 'base_64'
+     * @return string
+     */
+    public static function decode(string $data, string $method = 'base_64'): string
+    {
+        return $method === 'laravel' ? decrypt($data) : self::base64UrlDecode($data);
+    }
 }

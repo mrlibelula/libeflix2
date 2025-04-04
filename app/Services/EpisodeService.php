@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Episode;
 use App\Models\Tvshow;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class EpisodeService
 {

@@ -241,3 +241,8 @@
     animation: zoomIn 0.7s ease-out forwards;
   }
 }
+
+/* Custom spinner color */
+.spinner-rose {
+  color: #ff2056;
+}
