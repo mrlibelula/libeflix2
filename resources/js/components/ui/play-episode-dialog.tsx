@@ -394,9 +394,16 @@ export function PlayEpisodeDialog({
 
   // Add keyboard controls for video navigation
   useEffect(() => {
+    // Focus the container when dialog opens
+    if (dialogOpen && containerRef.current) {
+      containerRef.current.focus();
+    }
+    
     // Create a ref for the dialog content element
     const dialogContentRef = containerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
-    
+
+    // Since we're handling key events at the dialog root level,
+    // we only need this for events that might bubble up to the window
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip if user is typing in an input element
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -406,51 +413,26 @@ export function PlayEpisodeDialog({
       // Only handle keyboard events when the dialog is open
       if (!dialogOpen) return;
       
-      // Only process key events that originate from within the dialog
-      // Check if the event target is within the dialog content
-      const dialogElement = dialogContentRef || e.target instanceof Node && containerRef.current?.contains(e.target as Node);
-      if (!dialogElement) return;
-
-      // Stop propagation to prevent affecting elements behind the dialog
-      e.stopPropagation();
-
-      switch (e.key) {
-        case 'ArrowLeft':
-          // Seek backward 5 seconds
+      // Only process key events that originate from outside the dialog, 
+      // but we want to capture them anyway to prevent affecting background elements
+      const isInDialog = dialogContentRef?.contains(e.target as Node) || 
+                         (e.target instanceof Node && containerRef.current?.contains(e.target as Node));
+      
+      // For events originating outside dialog but while dialog is open,
+      // prevent them from affecting background elements
+      if (!isInDialog && dialogOpen) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F') {
+          e.stopPropagation();
           e.preventDefault();
-          handleStepBack();
-          break;
-        case 'ArrowRight':
-          // Seek forward 5 seconds
-          e.preventDefault();
-          handleStepForward();
-          break;
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-        case ' ':
-          // Space bar to toggle play/pause
-          e.preventDefault(); // Prevent scrolling the page
-          togglePlay();
-          break;
+        }
       }
     };
 
-    // Add the event listener to the dialog element if possible, otherwise use window
-    if (dialogContentRef) {
-      dialogContentRef.addEventListener('keydown', handleKeyDown as EventListener);
-    } else {
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    // We still need this to catch any events that might bubble up to window
+    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
     
     return () => {
-      if (dialogContentRef) {
-        dialogContentRef.removeEventListener('keydown', handleKeyDown as EventListener);
-      } else {
-        window.removeEventListener('keydown', handleKeyDown);
-      }
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [dialogOpen, handleStepBack, handleStepForward, togglePlay]);
 
@@ -555,13 +537,45 @@ export function PlayEpisodeDialog({
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent 
         className="sm:max-w-[800px] p-0 overflow-hidden"
-        onPointerDownOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => {
+          // Prevent closing on outside clicks
+          e.preventDefault();
+          
+          // Ensure the dialog maintains focus when clicking outside
+          if (containerRef.current) {
+            containerRef.current.focus();
+          }
+        }}
+        onKeyDown={(e) => {
+          // Process keyboard events at the dialog root level
+          if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F')) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            switch (e.key) {
+              case 'ArrowLeft':
+                handleStepBack();
+                break;
+              case 'ArrowRight':
+                handleStepForward();
+                break;
+              case 'f':
+              case 'F':
+                toggleFullscreen();
+                break;
+              case ' ':
+                togglePlay();
+                break;
+            }
+          }
+        }}
       >
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
           <div 
             ref={containerRef} 
-            className="relative w-full aspect-video bg-black"
+            className="relative w-full aspect-video bg-black outline-none"
+            tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen ? 'default' : 'none', // Hide cursor when inactive in fullscreen
               ...(isFullscreen && {
