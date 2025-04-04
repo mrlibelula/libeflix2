@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2 } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward } from 'lucide-react';
 import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
@@ -21,6 +21,10 @@ type PlayEpisodeDialogProps = {
   onComplete?: () => void;
   autoPlay?: boolean;
   quality?: 'auto' | 'low' | 'medium' | 'high';
+  onNextEpisode?: () => void;
+  onPreviousEpisode?: () => void;
+  hasNextEpisode?: boolean;
+  hasPreviousEpisode?: boolean;
 };
 
 export function PlayEpisodeDialog({
@@ -31,7 +35,11 @@ export function PlayEpisodeDialog({
   onError,
   onComplete,
   autoPlay = true,
-  quality = 'auto'
+  quality = 'auto',
+  onNextEpisode = () => {},
+  onPreviousEpisode = () => {},
+  hasNextEpisode = false,
+  hasPreviousEpisode = false
 }: PlayEpisodeDialogProps) {
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
@@ -69,12 +77,17 @@ export function PlayEpisodeDialog({
   // Simulate loading completion after 2 seconds
   useEffect(() => {
     if (isOpen) {
+      // Reset timer states when opening a new episode
+      setProgress(0);
+      setCurrentTime(0);
+      setDuration(0);
+      
       const timer = setTimeout(() => {
         setIsLoading(false);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, episode?.encFilePath]); // Add encFilePath to dependencies to reset when episode changes
 
   useEffect(() => {
     if (videoRef.current) {
@@ -100,41 +113,87 @@ export function PlayEpisodeDialog({
     }
   }, [volume]);
 
-  // Add event listener for progress update
+  // Let's fix the progress bar and timer display
+  // This effect needs to run when the video is loaded and when the episode changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const updateProgress = () => {
-      if (video.duration) {
-        setProgress((video.currentTime / video.duration) * 100);
+    // Reset states when loading a new episode
+    setProgress(0);
+    setCurrentTime(0);
+    setDuration(0);
+
+    // Create separate handler functions for each event
+    const handleTimeUpdate = () => {
+      // Only update if we have a valid duration
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        const progressValue = (video.currentTime / video.duration) * 100;
+        setProgress(progressValue);
         setCurrentTime(video.currentTime);
       }
     };
 
-    video.addEventListener('timeupdate', updateProgress);
-    
-    // Set duration when metadata is loaded
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        // Force update current time as well
+        setCurrentTime(video.currentTime);
+      }
     };
-    
+
+    const handleDurationChange = () => {
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
+    };
+
+    // Add event listeners
+    video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('durationchange', handleDurationChange);
     
-    return () => {
-      video.removeEventListener('timeupdate', updateProgress);
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    };
-  }, []);
-  
-  // Add handler to update progress when user drags the progress bar
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newProgress = parseInt(e.target.value);
-    setProgress(newProgress);
-    
-    if (videoRef.current && videoRef.current.duration) {
-      videoRef.current.currentTime = (newProgress / 100) * videoRef.current.duration;
+    // Force a check immediately if video is already loaded
+    if (video.readyState >= 1) {
+      handleLoadedMetadata();
+      handleTimeUpdate();
     }
+
+    return () => {
+      // Clean up event listeners
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('durationchange', handleDurationChange);
+    };
+  }, [episode?.encFilePath]); // Only re-run when the episode changes
+
+  // Make sure our video event listeners are added after the video loads
+  useEffect(() => {
+    if (!isLoading && videoRef.current) {
+      const video = videoRef.current;
+      // Try to get duration right after loading is complete
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
+    }
+  }, [isLoading]);
+
+  // Fix the progress bar handler to be more reliable
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!videoRef.current || !videoRef.current.duration) return;
+    
+    // Parse the value as a float for precision
+    const newProgress = parseFloat(e.target.value);
+    
+    // Calculate the exact time position
+    const newTime = (newProgress / 100) * videoRef.current.duration;
+    
+    // Update video position
+    videoRef.current.currentTime = newTime;
+    
+    // Update state manually to avoid waiting for timeupdate event
+    setProgress(newProgress);
+    setCurrentTime(newTime);
   };
 
   const handleError = (err: Error) => {
@@ -148,6 +207,25 @@ export function PlayEpisodeDialog({
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
+  };
+
+  // Step backward 5 seconds
+  const handleStepBack = () => {
+    if (!videoRef.current) return;
+    
+    const newTime = Math.max(0, videoRef.current.currentTime - 5);
+    videoRef.current.currentTime = newTime;
+  };
+
+  // Step forward 5 seconds
+  const handleStepForward = () => {
+    if (!videoRef.current) return;
+    
+    const newTime = Math.min(
+      videoRef.current.duration || 0, 
+      videoRef.current.currentTime + 5
+    );
+    videoRef.current.currentTime = newTime;
   };
 
   // Simple fullscreen implementation with cross-browser support
@@ -237,10 +315,22 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Fix formatTime to handle invalid values better
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    if (!seconds || isNaN(seconds) || seconds === Infinity || seconds < 0) {
+      return '0:00';
+    }
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    
+    // Only show hours if the video is longer than an hour
+    if (hours > 0) {
+      return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+    
+    return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   // Handle visibility change to fix audio/video sync
@@ -279,6 +369,44 @@ export function PlayEpisodeDialog({
     };
   }, [isPlaying, wasPlaying]);
 
+  // Handle navigation to previous episode
+  const handlePreviousEpisode = () => {
+    if (hasPreviousEpisode && onPreviousEpisode) {
+      onPreviousEpisode();
+    }
+  };
+
+  // Handle navigation to next episode
+  const handleNextEpisode = () => {
+    if (hasNextEpisode && onNextEpisode) {
+      onNextEpisode();
+    }
+  };
+
+  // Add auto-advance to next episode when current one ends
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleVideoEnded = () => {
+      // First call onComplete callback if provided
+      if (onComplete) {
+        onComplete();
+      }
+      
+      // Then navigate to next episode if available
+      if (hasNextEpisode && onNextEpisode) {
+        onNextEpisode();
+      }
+    };
+
+    video.addEventListener('ended', handleVideoEnded);
+    
+    return () => {
+      video.removeEventListener('ended', handleVideoEnded);
+    };
+  }, [onComplete, hasNextEpisode, onNextEpisode]);
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -286,11 +414,6 @@ export function PlayEpisodeDialog({
           className="sm:max-w-[800px] h-[500px] flex flex-col items-center justify-center"
           onPointerDownOutside={(e) => e.preventDefault()}
         >
-          {/* Let the native DialogClose handle closing */}
-          <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
-            <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded"/>
-            <span className="sr-only">Close</span>
-          </DialogClose>
           <DialogHeader className="w-full text-center">
             <DialogTitle className="text-rose-500">Playback Error</DialogTitle>
             <DialogDescription>
@@ -316,11 +439,6 @@ export function PlayEpisodeDialog({
         className="sm:max-w-[800px] p-0 overflow-hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
       >
-        {/* Let the native DialogClose handle closing */}
-        <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 z-10">
-          <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded"/>
-          <span className="sr-only">Close</span>
-        </DialogClose>
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
           <div 
@@ -355,7 +473,25 @@ export function PlayEpisodeDialog({
                       autoPlay={isPlaying}
                       muted={isMuted}
                       playsInline
+                      preload="metadata"
                       onLoadedData={() => setIsLoading(false)}
+                      onLoadedMetadata={(e) => {
+                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          setDuration(e.currentTarget.duration);
+                        }
+                      }}
+                      onDurationChange={(e) => {
+                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          setDuration(e.currentTarget.duration);
+                        }
+                      }}
+                      onTimeUpdate={(e) => {
+                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          const progressValue = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                          setProgress(progressValue);
+                          setCurrentTime(e.currentTarget.currentTime);
+                        }
+                      }}
                       onEnded={() => onComplete?.()}
                       onError={(e) => handleError(new Error('Video playback error'))}
                     ></video>
@@ -369,18 +505,34 @@ export function PlayEpisodeDialog({
                 </div>
                 
                 {/* Video controls overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end">
-                  <div className="p-4 text-white">
-                    <div className="mb-2">
-                      {/* progress bar */}
-                      <input 
-                        type="range" 
-                        className="w-full h-1 bg-neutral-600 rounded-full accent-rose-500" 
-                        value={progress} 
-                        onChange={handleProgressChange} 
-                        min="0" 
-                        max="100" 
-                      />
+                <div className="absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end">
+                  <div className="p-4 text-neutral-900 dark:text-neutral-100">
+                    <div className="mb-3 relative">
+                      {/* Progress bar with track and indicator */}
+                      <div className="w-full h-2 bg-neutral-600 rounded-full relative">
+                        {/* Progress indicator */}
+                        <div 
+                          className="absolute top-0 left-0 h-2 bg-rose-500 rounded-full pointer-events-none" 
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                        
+                        {/* Circle indicator */}
+                        <div 
+                          className="absolute top-0 h-4 w-4 bg-white rounded-full shadow-sm pointer-events-none transform -translate-y-1/4" 
+                          style={{ left: `calc(${progress}% - 2px)` }}
+                        ></div>
+                        
+                        {/* The actual range input */}
+                        <input 
+                          type="range" 
+                          className="absolute top-0 left-0 w-full h-4 opacity-0 cursor-pointer -mt-1 transition-all duration-150" 
+                          value={progress.toString()} 
+                          onChange={handleProgressChange} 
+                          min="0" 
+                          max="100" 
+                          step="0.01"
+                        />
+                      </div>
                     </div>
                     
                     <div className="flex items-center justify-between">
@@ -398,18 +550,35 @@ export function PlayEpisodeDialog({
                           )}
                         </button>
 
-                        {/* skip back button */}
-                        <SkipBack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        {/* skip to previous item in playlist */}
+                        <button 
+                          onClick={handlePreviousEpisode} 
+                          disabled={!hasPreviousEpisode}
+                          className={`${!hasPreviousEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                        >
+                          <SkipBack className="w-5 h-5" />
+                        </button>
                         
-                        {/* rewind button */}
-                        <Rewind className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                        {/* fast forward button */}
-                        <FastForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        {/* step back 5 seconds button */}
+                        <button onClick={handleStepBack}>
+                          <StepBack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        </button>
+                        
+                        {/* step forward 5 seconds button */}
+                        <button onClick={handleStepForward}>
+                          <StepForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        </button>
 
-                        {/* skip forward button */}
-                        <SkipForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        {/* skip to next item in playlist */}
+                        <button 
+                          onClick={handleNextEpisode} 
+                          disabled={!hasNextEpisode}
+                          className={`${!hasNextEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                        >
+                          <SkipForward className="w-5 h-5" />
+                        </button>
                         
-                        {/* timestamp */}
+                        {/* Timer moved back to left controls */}
                         <div className="text-sm">
                           {formatTime(currentTime)} / {formatTime(duration)}
                         </div>
