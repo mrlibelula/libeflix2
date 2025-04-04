@@ -173,7 +173,6 @@ export function PlayEpisodeDialog({
         <DialogContent 
           className="sm:max-w-[800px] h-[500px] flex flex-col items-center justify-center"
           onPointerDownOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
         >
           {/* Let the native DialogClose handle closing */}
           <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
@@ -204,7 +203,6 @@ export function PlayEpisodeDialog({
       <DialogContent 
         className={`sm:max-w-[800px] p-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 max-w-none rounded-none' : ''}`}
         onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()} // Also prevent closing with Escape key
       >
         {/* Let the native DialogClose handle closing */}
         <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
