@@ -6,9 +6,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward, XIcon } from 'lucide-react';
 import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
@@ -42,6 +43,26 @@ export function PlayEpisodeDialog({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(isOpen);
+
+  // Custom handler to handle manual closing via the X button
+  const handleClose = () => {
+    setDialogOpen(false);
+    onOpenChange?.(false);
+  };
+  
+  // Handler that completely prevents closing by outside clicks
+  const handleOpenChange = (open: boolean) => {
+    // Allow closing when the X button is clicked (this is fired after DialogClose onClick)
+    setDialogOpen(open);
+    // Propagate the change to parent
+    onOpenChange?.(open);
+  };
+
+  // Update dialogOpen when isOpen prop changes
+  useEffect(() => {
+    setDialogOpen(isOpen);
+  }, [isOpen]);
 
   // Simulate loading completion after 2 seconds
   useEffect(() => {
@@ -148,8 +169,17 @@ export function PlayEpisodeDialog({
 
   if (error) {
     return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[800px] h-[500px] flex flex-col items-center justify-center">
+      <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent 
+          className="sm:max-w-[800px] h-[500px] flex flex-col items-center justify-center"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          {/* Let the native DialogClose handle closing */}
+          <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
+            <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded"/>
+            <span className="sr-only">Close</span>
+          </DialogClose>
           <DialogHeader className="w-full text-center">
             <DialogTitle className="text-rose-500">Playback Error</DialogTitle>
             <DialogDescription>
@@ -160,7 +190,9 @@ export function PlayEpisodeDialog({
             {error.message}
           </div>
           <DialogFooter>
-            <Button onClick={() => onOpenChange?.(false)}>Close</Button>
+            <Button asChild>
+              <DialogClose>Close</DialogClose>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -168,8 +200,17 @@ export function PlayEpisodeDialog({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className={`sm:max-w-[800px] p-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 max-w-none rounded-none' : ''}`}>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+      <DialogContent 
+        className={`sm:max-w-[800px] p-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 max-w-none rounded-none' : ''}`}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()} // Also prevent closing with Escape key
+      >
+        {/* Let the native DialogClose handle closing */}
+        <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
+          <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded"/>
+          <span className="sr-only">Close</span>
+        </DialogClose>
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
           <div className="relative w-full aspect-video bg-black">

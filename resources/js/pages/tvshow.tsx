@@ -369,7 +369,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                   </div>
                 )}
                 
-                {/* Dialog for playing episodes */}
+                {/* Modal for playing episodes */}
                 {selectedEpisode && (
                   <PlayEpisodeDialog 
                     episode={selectedEpisode} 
@@ -378,8 +378,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                     onOpenChange={(open) => {
                       setIsDialogOpen(open);
                       if (!open) {
-                        // Optional: Clear the selected episode when dialog closes
-                        // setSelectedEpisode(null);
+                        // Clear the selected episode when dialog closes
+                        setSelectedEpisode(null);
                       }
                     }}
                     onError={(err) => setError(err.message)}
