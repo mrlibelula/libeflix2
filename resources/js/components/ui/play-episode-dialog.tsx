@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward } from 'lucide-react';
+import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
   episode: any;
@@ -38,6 +39,9 @@ export function PlayEpisodeDialog({
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(80);
   const [error, setError] = useState<Error | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   // Simulate loading completion after 2 seconds
   useEffect(() => {
@@ -48,6 +52,67 @@ export function PlayEpisodeDialog({
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.play().catch(err => {
+          handleError(new Error('Failed to play video: ' + err.message));
+        });
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume / 100;
+    }
+  }, [volume]);
+
+  // Add event listener for progress update
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateProgress = () => {
+      if (video.duration) {
+        setProgress((video.currentTime / video.duration) * 100);
+        setCurrentTime(video.currentTime);
+      }
+    };
+
+    video.addEventListener('timeupdate', updateProgress);
+    
+    // Set duration when metadata is loaded
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+    };
+    
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    
+    return () => {
+      video.removeEventListener('timeupdate', updateProgress);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    };
+  }, []);
+  
+  // Add handler to update progress when user drags the progress bar
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newProgress = parseInt(e.target.value);
+    setProgress(newProgress);
+    
+    if (videoRef.current && videoRef.current.duration) {
+      videoRef.current.currentTime = (newProgress / 100) * videoRef.current.duration;
+    }
+  };
 
   const handleError = (err: Error) => {
     setError(err);
@@ -117,12 +182,26 @@ export function PlayEpisodeDialog({
               <>
                 {/* Video element would go here */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
-                  <img 
-                    src={episode.stillUrl} 
-                    alt={episode.name} 
-                    className="w-full h-full aspect-video object-cover object-center"
-                  />
-                  {/* This would be replaced with an actual video player */}
+                  {episode.encFilePath ? (
+                    <video 
+                      ref={videoRef}
+                      src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
+                      className="w-full h-full object-cover"
+                      controls={false}
+                      autoPlay={isPlaying}
+                      muted={isMuted}
+                      playsInline
+                      onLoadedData={() => setIsLoading(false)}
+                      onEnded={() => onComplete?.()}
+                      onError={(e) => handleError(new Error('Video playback error'))}
+                    ></video>
+                  ) : (
+                    <img 
+                      src={episode.stillUrl} 
+                      alt={episode.name} 
+                      className="w-full h-full aspect-video object-cover object-center"
+                    />
+                  )}
                 </div>
                 
                 {/* Video controls overlay */}
@@ -134,7 +213,7 @@ export function PlayEpisodeDialog({
                         type="range" 
                         className="w-full h-1 bg-neutral-600 rounded-full accent-rose-500" 
                         value={progress} 
-                        onChange={(e) => setProgress(parseInt(e.target.value))} 
+                        onChange={handleProgressChange} 
                         min="0" 
                         max="100" 
                       />
@@ -168,7 +247,7 @@ export function PlayEpisodeDialog({
                         
                         {/* timestamp */}
                         <div className="text-sm">
-                          {formatTime(progress * 60 / 100)} / {formatTime(episode.runtime * 60)}
+                          {formatTime(currentTime)} / {formatTime(duration)}
                         </div>
                       </div>
                       

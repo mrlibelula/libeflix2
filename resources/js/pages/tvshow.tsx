@@ -2,7 +2,6 @@ import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { LikeCircleButton } from '@/components/ui/like-circle-button';
 import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/ui/star-rating';
-import { OutlineButton } from '@/components/ui/outline-button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -13,6 +12,7 @@ import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PlayEpisodeDialog } from '@/components/ui/play-episode-dialog';
 
 import {
   Dialog,
@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import axios from 'axios';
 
 // Constants
 const TVSHOW_OVERVIEW_STR_LIMIT = 260;
@@ -42,7 +41,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
   const [selectedEpisode, setSelectedEpisode] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     // Find the requested season or default to first season if not found
@@ -79,18 +78,6 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
     }
   }, [carouselApi, selectedSeason, tvshow.seasons]);
 
-  // Add effect to scroll to video when episode is selected
-  useEffect(() => {
-    if (selectedEpisode && videoContainerRef.current) {
-      setTimeout(() => {
-        videoContainerRef.current?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }, 200); // Small delay to ensure the video container is rendered
-    }
-  }, [selectedEpisode]);
-
   // Simple function to handle episode selection
   const handleEpisodeClick = (episode: any) => {
     if (!episode.is_in_storage) return;
@@ -98,44 +85,10 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
     if (episode.encFilePath) {
       // If we already have the encoded file path, use it directly
       setSelectedEpisode(episode);
+      setIsDialogOpen(true);
     } else {
-      // Fall back to the old method only if needed
-      setIsLoading(true);
-      setError(null);
-      
-      fetch('/encode-path', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({ filePath: episode.is_in_storage })
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Server error: ' + response.status);
-        }
-        return response.json();
-      })
-      .then(data => {
-        if (data.success && data.encFilePath) {
-          setSelectedEpisode({
-            ...episode,
-            encFilePath: data.encFilePath
-          });
-        } else {
-          throw new Error(data.error || 'Failed to encode file path');
-        }
-      })
-      .catch(err => {
-        console.error('Error during episode selection:', err);
-        setError('Could not play episode: ' + (err.message || 'Unknown error'));
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+      // Show error that the episode can't be played
+      setError('Cannot play episode: No encoded file path available');
     }
   };
 
@@ -416,18 +369,21 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                   </div>
                 )}
                 
-                {selectedEpisode && selectedEpisode.encFilePath && !isLoading && !error && (
-                  <div ref={videoContainerRef} className="px-5 py-3 mt-10 animate-fadeIn">
-                    <div className="text-[1.2rem] font-bold mb-4">
-                      Now Playing: {selectedEpisode.name}
-                    </div>
-                    <video 
-                      src={`${route('tvshow.episode.serve', { encFilePath: selectedEpisode.encFilePath, disk: 'tvshows' })}`}
-                      className="w-full aspect-video rounded-md"
-                      controls
-                      autoPlay
-                    ></video>
-                  </div>
+                {/* Dialog for playing episodes */}
+                {selectedEpisode && (
+                  <PlayEpisodeDialog 
+                    episode={selectedEpisode} 
+                    tvshowName={tvshow.name}
+                    isOpen={isDialogOpen}
+                    onOpenChange={(open) => {
+                      setIsDialogOpen(open);
+                      if (!open) {
+                        // Optional: Clear the selected episode when dialog closes
+                        // setSelectedEpisode(null);
+                      }
+                    }}
+                    onError={(err) => setError(err.message)}
+                  />
                 )}
                 
                 {/* seasons carousel */}
