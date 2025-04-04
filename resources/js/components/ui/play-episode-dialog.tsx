@@ -696,7 +696,7 @@ export function PlayEpisodeDialog({
                         </button>
                         
                         {/* Timer moved back to left controls */}
-                        <div className="text-sm">
+                        <div className="hidden sm:block text-sm ">
                           {formatTime(currentTime)} / {formatTime(duration)}
                         </div>
                       </div>
