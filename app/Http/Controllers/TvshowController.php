@@ -7,7 +7,6 @@ use App\Services\TvshowService;
 use App\Services\SeasonService;
 use App\Services\Tool;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -91,22 +90,10 @@ class TvshowController extends Controller
 
         // Encode episodes file paths via is_in_storage and use prop encFilePath as final prop
         $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
-            // Debug what we're working with
-            Log::debug('Episode data', [
-                'id' => $episode->id,
-                'name' => $episode->name,
-                'is_in_storage_type' => gettype($episode->is_in_storage),
-                'is_in_storage_value' => $episode->is_in_storage,
-            ]);
-            
             // If is_in_storage contains the file path (fallbacks as a boolean (truthy or falsy)), encode it
-            if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
-                $episode->encFilePath = Tool::encode($episode->is_in_storage);
-                Log::debug('Encoded file path', ['encFilePath' => $episode->encFilePath]);
-            } else {
-                $episode->encFilePath = null;
-                Log::debug('No file path to encode');
-            }
+            $episode->encFilePath = (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) 
+                ? Tool::encode($episode->is_in_storage) 
+                : null;
             
             return $episode;
         });

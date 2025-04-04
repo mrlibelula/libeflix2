@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward, XIcon } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, Rewind, FastForward, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2 } from 'lucide-react';
 import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
@@ -44,6 +44,8 @@ export function PlayEpisodeDialog({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(isOpen);
+  const [wasPlaying, setWasPlaying] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -148,9 +150,83 @@ export function PlayEpisodeDialog({
     setIsMuted(!isMuted);
   };
 
+  // Simple fullscreen implementation with cross-browser support
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
+    // Only apply fullscreen to the video container element
+    const videoContainer = containerRef.current;
+    if (!videoContainer) return;
+    
+    try {
+      if (!document.fullscreenElement && 
+          !(document as any).webkitFullscreenElement &&
+          !(document as any).mozFullScreenElement) {
+        // Request fullscreen on the container (with browser prefixes)
+        if (videoContainer.requestFullscreen) {
+          videoContainer.requestFullscreen();
+        } else if ((videoContainer as any).webkitRequestFullscreen) { // Safari & Chrome
+          (videoContainer as any).webkitRequestFullscreen();
+        } else if ((videoContainer as any).mozRequestFullScreen) { // Firefox
+          (videoContainer as any).mozRequestFullScreen();
+        } else if ((videoContainer as any).msRequestFullscreen) { // IE/Edge
+          (videoContainer as any).msRequestFullscreen();
+        }
+      } else {
+        // Exit fullscreen (with browser prefixes)
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) { // Safari & Chrome
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) { // Firefox
+          (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) { // IE/Edge
+          (document as any).msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error('Fullscreen API error:', err);
+    }
   };
+
+  // Listen for fullscreen changes to update our state
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      // Simply track if we're in fullscreen mode
+      setIsFullscreen(
+        !!document.fullscreenElement || 
+        !!(document as any).webkitFullscreenElement ||
+        !!(document as any).mozFullScreenElement ||
+        !!(document as any).msFullscreenElement
+      );
+    };
+
+    // Add fullscreen change event listener with browser prefixes
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Add keyboard shortcut for fullscreen (F key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setVolume(parseInt(e.target.value));
@@ -166,6 +242,42 @@ export function PlayEpisodeDialog({
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  // Handle visibility change to fix audio/video sync
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (document.hidden) {
+        // User is leaving the page, store current playing state
+        setWasPlaying(isPlaying);
+        if (isPlaying) {
+          video.pause();
+        }
+      } else {
+        // User is returning to the page
+        if (wasPlaying) {
+          // Reset video's current time to fix sync issues
+          const currentPos = video.currentTime;
+          video.currentTime = currentPos;
+          
+          // Small delay before playing to ensure synchronization
+          setTimeout(() => {
+            video.play().catch(err => {
+              handleError(new Error('Failed to resume video: ' + err.message));
+            });
+          }, 50);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPlaying, wasPlaying]);
 
   if (error) {
     return (
@@ -201,17 +313,29 @@ export function PlayEpisodeDialog({
   return (
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent 
-        className={`sm:max-w-[800px] p-0 overflow-hidden ${isFullscreen ? 'fixed inset-0 max-w-none rounded-none' : ''}`}
+        className="sm:max-w-[800px] p-0 overflow-hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         {/* Let the native DialogClose handle closing */}
-        <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
+        <DialogClose className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 z-10">
           <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded"/>
           <span className="sr-only">Close</span>
         </DialogClose>
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
-          <div className="relative w-full aspect-video bg-black">
+          <div 
+            ref={containerRef} 
+            className="relative w-full aspect-video bg-black"
+            style={{
+              // When in fullscreen, the browser applies its own styles,
+              // but we can add a few extra properties to ensure good display
+              ...(isFullscreen && {
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              })
+            }}
+          >
             {isLoading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-y-4">
                 <LoaderCircle className="h-12 w-12 animate-spin spinner-rose" />
@@ -219,13 +343,14 @@ export function PlayEpisodeDialog({
               </div>
             ) : (
               <>
-                {/* Video element would go here */}
+                {/* Video element */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
                   {episode.encFilePath ? (
                     <video 
                       ref={videoRef}
                       src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
                       className="w-full h-full object-cover"
+                      style={isFullscreen ? { objectFit: 'contain' } : {}}
                       controls={false}
                       autoPlay={isPlaying}
                       muted={isMuted}
@@ -331,15 +456,29 @@ export function PlayEpisodeDialog({
           <div className="p-6">
             <DialogHeader>
               <DialogTitle>
-                <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
-                  {tvshowName}
-                </div>
-                <div className="text-xl">
-                  {episode.name}
+                <div className="flex justify-between items-start w-full">
+                  <div>
+                    <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
+                      {tvshowName}
+                    </div>
+                    <div className="text-xl">
+                      {episode.name}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-x-4">
+                    {/* repeat episode (repeat 1) */}
+                    <Repeat1 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                    {/* repeat playlist */}
+                    <Repeat className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                    {/* repeat entire tvshow episodes (all available seasons) */}
+                    <Repeat2 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                  </div>
                 </div>
               </DialogTitle>
               <DialogDescription>
-                Season {episode.season_number} · Episode {episode.episode_number} · {episode.runtime}m
+                <span className="flex justify-start items-center gap-x-2 w-full">
+                    <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
+                </span>
               </DialogDescription>
             </DialogHeader>
             
