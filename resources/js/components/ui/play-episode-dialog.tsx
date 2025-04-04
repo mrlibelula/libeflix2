@@ -416,27 +416,26 @@ export function PlayEpisodeDialog({
     };
   }, [onComplete, hasNextEpisode, onNextEpisode]);
 
-  // Update the user activity handler to always hide controls after inactivity
+  // Implement YouTube-like behavior for controls visibility
   const handleUserActivity = useCallback(() => {
-    console.log("User activity detected");
     
-    // Mark user as active and show controls
-    setUserActive(true);
-    setControlsVisible(true);
+    // Only show controls when in fullscreen OR when hovering the video
+    if (isFullscreen || isHoveringVideo) {
+      setUserActive(true);
+      setControlsVisible(true);
+    }
     
     // Clear any existing timeout
     if (userActivityTimeout.current) {
       clearTimeout(userActivityTimeout.current);
     }
     
-    // Set timeout to mark user as inactive after 3 seconds
-    // We always hide controls after inactivity now, regardless of where the mouse is
+    // Always set timeout to hide controls after inactivity
     userActivityTimeout.current = setTimeout(() => {
-      console.log("Hiding controls after inactivity");
       setUserActive(false);
       setControlsVisible(false);
     }, 3000);
-  }, []);
+  }, [isFullscreen, isHoveringVideo]);
 
   // Add an effect for dialog entry/exit
   useEffect(() => {
@@ -445,7 +444,7 @@ export function PlayEpisodeDialog({
       setUserActive(true);
       setControlsVisible(true);
       
-      // Start the timer to hide controls
+      // Start timer to hide controls after initial display
       if (userActivityTimeout.current) {
         clearTimeout(userActivityTimeout.current);
       }
@@ -463,10 +462,6 @@ export function PlayEpisodeDialog({
       }
     };
   }, [dialogOpen]);
-
-  // Modify the existing DialogContent in the return statement
-  // The changes need to be made around line 550-560
-  // Update only the DialogContent props to include mouse events
 
   if (error) {
     return (
@@ -499,22 +494,6 @@ export function PlayEpisodeDialog({
       <DialogContent 
         className="sm:max-w-[800px] p-0 overflow-hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
-        onMouseEnter={() => {
-          setIsHoveringDialog(true);
-          handleUserActivity();
-        }}
-        onMouseLeave={() => {
-          setIsHoveringDialog(false);
-          // Start the hide timer when mouse leaves dialog
-          if (userActivityTimeout.current) {
-            clearTimeout(userActivityTimeout.current);
-          }
-          
-          userActivityTimeout.current = setTimeout(() => {
-            setUserActive(false);
-            setControlsVisible(false);
-          }, 3000);
-        }}
       >
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
@@ -535,7 +514,7 @@ export function PlayEpisodeDialog({
                 return;
               }
               
-              // If controls not visible, show them first
+              // If controls aren't visible, show them first
               if (!controlsVisible) {
                 handleUserActivity();
               } else {
@@ -549,16 +528,8 @@ export function PlayEpisodeDialog({
             }}
             onMouseLeave={() => {
               setIsHoveringVideo(false);
-              
-              // Always restart the timer to hide controls when leaving the video
-              if (userActivityTimeout.current) {
-                clearTimeout(userActivityTimeout.current);
-              }
-              
-              userActivityTimeout.current = setTimeout(() => {
-                setUserActive(false);
-                setControlsVisible(false);
-              }, 3000);
+              // Don't clear the timeout - let controls hide after inactivity even when mouse leaves
+              // But don't immediately hide controls either
             }}
           >
             {isLoading ? (
@@ -796,24 +767,6 @@ export function PlayEpisodeDialog({
                 </span>
               </DialogDescription>
             </DialogHeader>
-            
-            {/* <div className="mt-4 text-sm text-neutral-700 dark:text-neutral-300">
-              {episode.overview}
-            </div> */}
-            
-            {/* <DialogFooter className="mt-6">
-              <div className="flex items-center gap-x-4">
-                <div className="flex-1 text-sm text-neutral-500 dark:text-neutral-400">
-                  {quality === 'auto' ? 'Auto Quality' : `${quality.charAt(0).toUpperCase() + quality.slice(1)} Quality`}
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => onOpenChange?.(false)}
-                >
-                  Close
-                </Button>
-              </div>
-            </DialogFooter> */}
           </div>
         </div>
       </DialogContent>
