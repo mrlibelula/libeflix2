@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,13 @@ export function PlayEpisodeDialog({
   const [dialogOpen, setDialogOpen] = useState(isOpen);
   const [wasPlaying, setWasPlaying] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const [isMouseOverVideo, setIsMouseOverVideo] = useState(false);
+  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [userActive, setUserActive] = useState(true);
+  const userActivityTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -407,6 +414,73 @@ export function PlayEpisodeDialog({
     };
   }, [onComplete, hasNextEpisode, onNextEpisode]);
 
+  // Simplify the fullscreen effect to focus only on state management
+  useEffect(() => {
+    console.log("Fullscreen state changed:", isFullscreen);
+    
+    // When entering/exiting fullscreen
+    if (isFullscreen) {
+      // Initial state: active user, visible controls
+      setUserActive(true);
+      setControlsVisible(true);
+      
+      // Initial timeout to hide controls after entering fullscreen
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+      }
+      
+      userActivityTimeout.current = setTimeout(() => {
+        console.log("Initial hide after fullscreen");
+        setUserActive(false);
+        setControlsVisible(false);
+      }, 3000);
+    } else {
+      // When not in fullscreen, always show controls
+      console.log("Exiting fullscreen, showing controls");
+      setUserActive(true);
+      setControlsVisible(true);
+      
+      // Clear any pending timeout
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+        userActivityTimeout.current = null;
+      }
+    }
+    
+    // Clean up function
+    return () => {
+      console.log("Cleaning up timeouts");
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+        userActivityTimeout.current = null;
+      }
+    };
+  }, [isFullscreen]);
+
+  // Re-add the user activity handler function
+  const handleUserActivity = useCallback(() => {
+    console.log("User activity detected");
+    
+    // Mark user as active and show controls
+    setUserActive(true);
+    setControlsVisible(true);
+    
+    // Clear any existing timeout
+    if (userActivityTimeout.current) {
+      clearTimeout(userActivityTimeout.current);
+    }
+    
+    // Set timeout to mark user as inactive after 3 seconds
+    userActivityTimeout.current = setTimeout(() => {
+      // Only hide controls in fullscreen mode
+      if (isFullscreen) {
+        console.log("Hiding controls after inactivity");
+        setUserActive(false);
+        setControlsVisible(false);
+      }
+    }, 3000);
+  }, [isFullscreen]);
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -445,14 +519,27 @@ export function PlayEpisodeDialog({
             ref={containerRef} 
             className="relative w-full aspect-video bg-black"
             style={{
-              // When in fullscreen, the browser applies its own styles,
-              // but we can add a few extra properties to ensure good display
+              cursor: userActive || !isFullscreen ? 'default' : 'none', // Hide cursor when inactive in fullscreen
               ...(isFullscreen && {
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain'
               })
             }}
+            onClick={(e) => {
+              // Check if click is on controls
+              if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
+                return;
+              }
+              
+              // If controls not visible, show them first
+              if (!controlsVisible) {
+                handleUserActivity();
+              } else {
+                togglePlay();
+              }
+            }}
+            onMouseMove={isFullscreen ? handleUserActivity : undefined}
           >
             {isLoading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-y-4">
@@ -494,6 +581,14 @@ export function PlayEpisodeDialog({
                       }}
                       onEnded={() => onComplete?.()}
                       onError={(e) => handleError(new Error('Video playback error'))}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!controlsVisible) {
+                          handleUserActivity();
+                        } else {
+                          togglePlay();
+                        }
+                      }}
                     ></video>
                   ) : (
                     <img 
@@ -505,7 +600,40 @@ export function PlayEpisodeDialog({
                 </div>
                 
                 {/* Video controls overlay */}
-                <div className="absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end">
+                <div 
+                  ref={controlsRef}
+                  className={`absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] to-transparent transition-opacity duration-300 flex flex-col justify-end ${
+                    controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  onMouseEnter={() => {
+                    // Always show controls when hovering over them
+                    setControlsVisible(true);
+                    setUserActive(true);
+                    
+                    // Clear any hide timeout
+                    if (userActivityTimeout.current) {
+                      clearTimeout(userActivityTimeout.current);
+                    }
+                  }}
+                  onMouseMove={(e) => {
+                    // Prevent event propagation to avoid duplicate handlers
+                    e.stopPropagation();
+                    handleUserActivity();
+                  }}
+                  onMouseLeave={() => {
+                    // Restart the timer when mouse leaves controls area
+                    if (isFullscreen) {
+                      if (userActivityTimeout.current) {
+                        clearTimeout(userActivityTimeout.current);
+                      }
+                      
+                      userActivityTimeout.current = setTimeout(() => {
+                        setUserActive(false);
+                        setControlsVisible(false);
+                      }, 3000);
+                    }
+                  }}
+                >
                   <div className="p-4 text-neutral-900 dark:text-neutral-100">
                     <div className="mb-3 relative">
                       {/* Progress bar with track and indicator */}
