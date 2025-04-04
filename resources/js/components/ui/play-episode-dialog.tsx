@@ -61,6 +61,8 @@ export function PlayEpisodeDialog({
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [userActive, setUserActive] = useState(true);
   const userActivityTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [isHoveringVideo, setIsHoveringVideo] = useState(false);
+  const [isHoveringDialog, setIsHoveringDialog] = useState(false);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -414,50 +416,7 @@ export function PlayEpisodeDialog({
     };
   }, [onComplete, hasNextEpisode, onNextEpisode]);
 
-  // Simplify the fullscreen effect to focus only on state management
-  useEffect(() => {
-    console.log("Fullscreen state changed:", isFullscreen);
-    
-    // When entering/exiting fullscreen
-    if (isFullscreen) {
-      // Initial state: active user, visible controls
-      setUserActive(true);
-      setControlsVisible(true);
-      
-      // Initial timeout to hide controls after entering fullscreen
-      if (userActivityTimeout.current) {
-        clearTimeout(userActivityTimeout.current);
-      }
-      
-      userActivityTimeout.current = setTimeout(() => {
-        console.log("Initial hide after fullscreen");
-        setUserActive(false);
-        setControlsVisible(false);
-      }, 3000);
-    } else {
-      // When not in fullscreen, always show controls
-      console.log("Exiting fullscreen, showing controls");
-      setUserActive(true);
-      setControlsVisible(true);
-      
-      // Clear any pending timeout
-      if (userActivityTimeout.current) {
-        clearTimeout(userActivityTimeout.current);
-        userActivityTimeout.current = null;
-      }
-    }
-    
-    // Clean up function
-    return () => {
-      console.log("Cleaning up timeouts");
-      if (userActivityTimeout.current) {
-        clearTimeout(userActivityTimeout.current);
-        userActivityTimeout.current = null;
-      }
-    };
-  }, [isFullscreen]);
-
-  // Re-add the user activity handler function
+  // Update the user activity handler to always hide controls after inactivity
   const handleUserActivity = useCallback(() => {
     console.log("User activity detected");
     
@@ -471,15 +430,43 @@ export function PlayEpisodeDialog({
     }
     
     // Set timeout to mark user as inactive after 3 seconds
+    // We always hide controls after inactivity now, regardless of where the mouse is
     userActivityTimeout.current = setTimeout(() => {
-      // Only hide controls in fullscreen mode
-      if (isFullscreen) {
-        console.log("Hiding controls after inactivity");
+      console.log("Hiding controls after inactivity");
+      setUserActive(false);
+      setControlsVisible(false);
+    }, 3000);
+  }, []);
+
+  // Add an effect for dialog entry/exit
+  useEffect(() => {
+    // When dialog is open, show controls initially
+    if (dialogOpen) {
+      setUserActive(true);
+      setControlsVisible(true);
+      
+      // Start the timer to hide controls
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+      }
+      
+      userActivityTimeout.current = setTimeout(() => {
         setUserActive(false);
         setControlsVisible(false);
+      }, 3000);
+    }
+    
+    return () => {
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+        userActivityTimeout.current = null;
       }
-    }, 3000);
-  }, [isFullscreen]);
+    };
+  }, [dialogOpen]);
+
+  // Modify the existing DialogContent in the return statement
+  // The changes need to be made around line 550-560
+  // Update only the DialogContent props to include mouse events
 
   if (error) {
     return (
@@ -512,6 +499,22 @@ export function PlayEpisodeDialog({
       <DialogContent 
         className="sm:max-w-[800px] p-0 overflow-hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
+        onMouseEnter={() => {
+          setIsHoveringDialog(true);
+          handleUserActivity();
+        }}
+        onMouseLeave={() => {
+          setIsHoveringDialog(false);
+          // Start the hide timer when mouse leaves dialog
+          if (userActivityTimeout.current) {
+            clearTimeout(userActivityTimeout.current);
+          }
+          
+          userActivityTimeout.current = setTimeout(() => {
+            setUserActive(false);
+            setControlsVisible(false);
+          }, 3000);
+        }}
       >
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
@@ -539,7 +542,24 @@ export function PlayEpisodeDialog({
                 togglePlay();
               }
             }}
-            onMouseMove={isFullscreen ? handleUserActivity : undefined}
+            onMouseMove={handleUserActivity}
+            onMouseEnter={() => {
+              setIsHoveringVideo(true);
+              handleUserActivity();
+            }}
+            onMouseLeave={() => {
+              setIsHoveringVideo(false);
+              
+              // Always restart the timer to hide controls when leaving the video
+              if (userActivityTimeout.current) {
+                clearTimeout(userActivityTimeout.current);
+              }
+              
+              userActivityTimeout.current = setTimeout(() => {
+                setUserActive(false);
+                setControlsVisible(false);
+              }, 3000);
+            }}
           >
             {isLoading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-y-4">
@@ -621,17 +641,15 @@ export function PlayEpisodeDialog({
                     handleUserActivity();
                   }}
                   onMouseLeave={() => {
-                    // Restart the timer when mouse leaves controls area
-                    if (isFullscreen) {
-                      if (userActivityTimeout.current) {
-                        clearTimeout(userActivityTimeout.current);
-                      }
-                      
-                      userActivityTimeout.current = setTimeout(() => {
-                        setUserActive(false);
-                        setControlsVisible(false);
-                      }, 3000);
+                    // Always restart the timer when mouse leaves controls area
+                    if (userActivityTimeout.current) {
+                      clearTimeout(userActivityTimeout.current);
                     }
+                    
+                    userActivityTimeout.current = setTimeout(() => {
+                      setUserActive(false);
+                      setControlsVisible(false);
+                    }, 3000);
                   }}
                 >
                   <div className="p-4 text-neutral-900 dark:text-neutral-100">
