@@ -392,6 +392,45 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Add keyboard controls for video navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input element
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Only handle keyboard events when the dialog is open
+      if (!dialogOpen) return;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          // Seek backward 5 seconds
+          handleStepBack();
+          break;
+        case 'ArrowRight':
+          // Seek forward 5 seconds
+          handleStepForward();
+          break;
+        case 'f':
+        case 'F':
+          toggleFullscreen();
+          break;
+        case ' ':
+          // Space bar to toggle play/pause
+          e.preventDefault(); // Prevent scrolling the page
+          togglePlay();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [dialogOpen, handleStepBack, handleStepForward, togglePlay]);
+
   // Add auto-advance to next episode when current one ends
   useEffect(() => {
     const video = videoRef.current;
@@ -648,6 +687,17 @@ export function PlayEpisodeDialog({
                           min="0" 
                           max="100" 
                           step="0.01"
+                          onKeyDown={(e) => {
+                            // Override default arrow key behavior to jump by 5 seconds
+                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                              e.preventDefault();
+                              if (e.key === 'ArrowLeft') {
+                                handleStepBack();
+                              } else {
+                                handleStepForward();
+                              }
+                            }
+                          }}
                         />
                       </div>
                     </div>
@@ -696,7 +746,7 @@ export function PlayEpisodeDialog({
                         </button>
                         
                         {/* Timer moved back to left controls */}
-                        <div className="hidden sm:block text-sm ">
+                        <div className="hidden sm:block text-sm">
                           {formatTime(currentTime)} / {formatTime(duration)}
                         </div>
                       </div>
