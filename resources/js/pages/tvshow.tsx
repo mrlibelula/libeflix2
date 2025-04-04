@@ -95,8 +95,6 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
   const handleEpisodeClick = (episode: any) => {
     if (!episode.is_in_storage) return;
     
-    console.log('Episode clicked:', episode);
-    
     if (episode.encFilePath) {
       // If we already have the encoded file path, use it directly
       setSelectedEpisode(episode);
