@@ -394,6 +394,9 @@ export function PlayEpisodeDialog({
 
   // Add keyboard controls for video navigation
   useEffect(() => {
+    // Create a ref for the dialog content element
+    const dialogContentRef = containerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
+    
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip if user is typing in an input element
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -402,18 +405,29 @@ export function PlayEpisodeDialog({
 
       // Only handle keyboard events when the dialog is open
       if (!dialogOpen) return;
+      
+      // Only process key events that originate from within the dialog
+      // Check if the event target is within the dialog content
+      const dialogElement = dialogContentRef || e.target instanceof Node && containerRef.current?.contains(e.target as Node);
+      if (!dialogElement) return;
+
+      // Stop propagation to prevent affecting elements behind the dialog
+      e.stopPropagation();
 
       switch (e.key) {
         case 'ArrowLeft':
           // Seek backward 5 seconds
+          e.preventDefault();
           handleStepBack();
           break;
         case 'ArrowRight':
           // Seek forward 5 seconds
+          e.preventDefault();
           handleStepForward();
           break;
         case 'f':
         case 'F':
+          e.preventDefault();
           toggleFullscreen();
           break;
         case ' ':
@@ -424,10 +438,19 @@ export function PlayEpisodeDialog({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    // Add the event listener to the dialog element if possible, otherwise use window
+    if (dialogContentRef) {
+      dialogContentRef.addEventListener('keydown', handleKeyDown as EventListener);
+    } else {
+      window.addEventListener('keydown', handleKeyDown);
+    }
     
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      if (dialogContentRef) {
+        dialogContentRef.removeEventListener('keydown', handleKeyDown as EventListener);
+      } else {
+        window.removeEventListener('keydown', handleKeyDown);
+      }
     };
   }, [dialogOpen, handleStepBack, handleStepForward, togglePlay]);
 
