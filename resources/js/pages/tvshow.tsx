@@ -383,6 +383,26 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                       }
                     }}
                     onError={(err) => setError(err.message)}
+                    hasNextEpisode={selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id) < selectedSeason.episodes.length - 1}
+                    hasPreviousEpisode={selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id) > 0}
+                    onNextEpisode={() => {
+                      const currentIndex = selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id);
+                      if (currentIndex < selectedSeason.episodes.length - 1) {
+                        const nextEpisode = selectedSeason.episodes[currentIndex + 1];
+                        if (nextEpisode.is_in_storage && nextEpisode.encFilePath) {
+                          setSelectedEpisode(nextEpisode);
+                        }
+                      }
+                    }}
+                    onPreviousEpisode={() => {
+                      const currentIndex = selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id);
+                      if (currentIndex > 0) {
+                        const prevEpisode = selectedSeason.episodes[currentIndex - 1];
+                        if (prevEpisode.is_in_storage && prevEpisode.encFilePath) {
+                          setSelectedEpisode(prevEpisode);
+                        }
+                      }
+                    }}
                   />
                 )}
                 

@@ -421,7 +421,7 @@ export function PlayEpisodeDialog({
       // For events originating outside dialog but while dialog is open,
       // prevent them from affecting background elements
       if (!isInDialog && dialogOpen) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F') {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || e.key === 'p' || e.key === 'P') {
           e.stopPropagation();
           e.preventDefault();
         }
@@ -434,7 +434,7 @@ export function PlayEpisodeDialog({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [dialogOpen, handleStepBack, handleStepForward, togglePlay]);
+  }, [dialogOpen, handleStepBack, handleStepForward, togglePlay, handleNextEpisode, handlePreviousEpisode]);
 
   // Add auto-advance to next episode when current one ends
   useEffect(() => {
@@ -548,7 +548,7 @@ export function PlayEpisodeDialog({
         }}
         onKeyDown={(e) => {
           // Process keyboard events at the dialog root level
-          if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F')) {
+          if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || e.key === 'p' || e.key === 'P')) {
             e.stopPropagation();
             e.preventDefault();
             
@@ -565,6 +565,14 @@ export function PlayEpisodeDialog({
                 break;
               case ' ':
                 togglePlay();
+                break;
+              case 'n':
+              case 'N':
+                handleNextEpisode();
+                break;
+              case 'p':
+              case 'P':
+                handlePreviousEpisode();
                 break;
             }
           }
@@ -754,7 +762,7 @@ export function PlayEpisodeDialog({
                           )}
                         </button>
 
-                        {/* skip to previous item in playlist */}
+                        {/* skip to previous episode */}
                         <button 
                           onClick={handlePreviousEpisode} 
                           disabled={!hasPreviousEpisode}
@@ -773,7 +781,7 @@ export function PlayEpisodeDialog({
                           <StepForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
                         </button>
 
-                        {/* skip to next item in playlist */}
+                        {/* skip to next episode */}
                         <button 
                           onClick={handleNextEpisode} 
                           disabled={!hasNextEpisode}
