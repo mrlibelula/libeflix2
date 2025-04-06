@@ -64,6 +64,27 @@ function DialogContent({
         <div className="absolute top-5 right-5 flex gap-2">
           <button 
             className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded"
+            onClick={() => {
+              const videoElement = document.querySelector('video');
+              if (videoElement && document.pictureInPictureElement !== videoElement) {
+                videoElement.requestPictureInPicture()
+                  .then(() => {
+                    // Ensure video continues playing in PiP mode
+                    if (videoElement.paused) {
+                      videoElement.play().catch(error => {
+                        console.error("Picture-in-Picture play failed:", error);
+                      });
+                    }
+                  })
+                  .catch(error => {
+                    console.error("Picture-in-Picture failed:", error);
+                  });
+              } else if (document.pictureInPictureElement) {
+                document.exitPictureInPicture().catch(error => {
+                  console.error("Exiting Picture-in-Picture failed:", error);
+                });
+              }
+            }}
           >
             <PictureInPicture2 className="w-4 h-4"/>
             <span className="sr-only">Picture in Picture</span>

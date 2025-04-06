@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2 } from 'lucide-react';
 import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
@@ -63,6 +63,8 @@ export function PlayEpisodeDialog({
   const userActivityTimeout = useRef<NodeJS.Timeout | null>(null);
   const [isHoveringVideo, setIsHoveringVideo] = useState(false);
   const [isHoveringDialog, setIsHoveringDialog] = useState(false);
+  const [isPipSupported, setIsPipSupported] = useState(false);
+  const [isPipActive, setIsPipActive] = useState(false);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -348,15 +350,20 @@ export function PlayEpisodeDialog({
       const video = videoRef.current;
       if (!video) return;
 
+      // Check if we're in Picture-in-Picture mode
+      const isInPipMode = document.pictureInPictureElement === video;
+
       if (document.hidden) {
         // User is leaving the page, store current playing state
         setWasPlaying(isPlaying);
-        if (isPlaying) {
+        
+        // Don't pause if we're in PiP mode
+        if (isPlaying && !isInPipMode) {
           video.pause();
         }
       } else {
         // User is returning to the page
-        if (wasPlaying) {
+        if (wasPlaying && !isInPipMode) { // Only resume if not in PiP (PiP should already be playing)
           // Reset video's current time to fix sync issues
           const currentPos = video.currentTime;
           video.currentTime = currentPos;
@@ -421,7 +428,9 @@ export function PlayEpisodeDialog({
       // For events originating outside dialog but while dialog is open,
       // prevent them from affecting background elements
       if (!isInDialog && dialogOpen) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || e.key === 'p' || e.key === 'P') {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || 
+            e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
+            e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B') {
           e.stopPropagation();
           e.preventDefault();
         }
@@ -507,6 +516,180 @@ export function PlayEpisodeDialog({
     };
   }, [dialogOpen]);
 
+  // Check for Picture-in-Picture support
+  useEffect(() => {
+    // Check if PiP is supported by the browser
+    const checkPipSupport = () => {
+      const video = document.createElement('video');
+      setIsPipSupported(
+        document.pictureInPictureEnabled || 
+        (typeof video.requestPictureInPicture === 'function')
+      );
+    };
+    
+    checkPipSupport();
+  }, []);
+
+  // Monitor PiP state changes
+  useEffect(() => {
+    if (!isPipSupported) return;
+    
+    const handlePipChange = () => {
+      setIsPipActive(document.pictureInPictureElement === videoRef.current);
+    };
+    
+    document.addEventListener('enterpictureinpicture', handlePipChange);
+    document.addEventListener('leavepictureinpicture', handlePipChange);
+    
+    return () => {
+      document.removeEventListener('enterpictureinpicture', handlePipChange);
+      document.removeEventListener('leavepictureinpicture', handlePipChange);
+    };
+  }, [isPipSupported]);
+    
+  // Toggle Picture-in-Picture
+  const togglePictureInPicture = () => {
+    if (!videoRef.current || !isPipSupported) return;
+    
+    try {
+      if (document.pictureInPictureElement !== videoRef.current) {
+        videoRef.current.requestPictureInPicture()
+          .then(() => {
+            // Ensure the video is playing in PiP mode
+            if (videoRef.current && videoRef.current.paused) {
+              videoRef.current.play().catch(err => {
+                console.error('PiP play error:', err);
+              });
+            }
+          })
+          .catch(err => {
+            console.error('PiP error:', err);
+            handleError(new Error('Failed to enter Picture-in-Picture mode: ' + err.message));
+          });
+      } else {
+        document.exitPictureInPicture().catch(err => {
+          console.error('Exit PiP error:', err);
+          handleError(new Error('Failed to exit Picture-in-Picture mode: ' + err.message));
+        });
+      }
+    } catch (err) {
+      console.error('PiP toggle error:', err);
+      handleError(new Error('Picture-in-Picture mode is not supported in this browser'));
+    }
+  };
+
+  // Add auto Picture-in-Picture when user navigates away from the page
+  useEffect(() => {
+    if (!isPipSupported || !videoRef.current) return;
+    
+    const handleVisibilityChange = () => {
+      // Only trigger PiP if video is playing and dialog is open
+      if (document.hidden && isPlaying && dialogOpen && videoRef.current) {
+        // Save the current playing state before going into PiP
+        setWasPlaying(true);
+        
+        // Only enter PiP if we're not already in it
+        if (document.pictureInPictureElement !== videoRef.current) {
+          videoRef.current.requestPictureInPicture()
+            .then(() => {
+              // Ensure video continues playing in PiP mode
+              if (videoRef.current && videoRef.current.paused) {
+                videoRef.current.play().catch(err => {
+                  console.log('Auto PiP play failed:', err);
+                });
+              }
+            })
+            .catch(err => {
+              console.log('Auto PiP failed:', err);
+              // Don't show error to user for this case
+            });
+        }
+      } else if (!document.hidden && document.pictureInPictureElement === videoRef.current) {
+        // When returning to the page, exit PiP if it was auto-entered
+        document.exitPictureInPicture().catch(err => {
+          console.log('Auto exit PiP failed:', err);
+        });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPipSupported, isPlaying, dialogOpen]);
+
+  // Add keyboard shortcut for Picture-in-Picture (p key)
+  useEffect(() => {
+    if (!isPipSupported) return;
+    
+    const handlePipKeyDown = (e: KeyboardEvent) => {
+      // Only handle if dialog is open
+      if (!dialogOpen) return;
+      
+      if (e.key === 'p' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        togglePictureInPicture();
+      }
+    };
+
+    window.addEventListener('keydown', handlePipKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handlePipKeyDown);
+    };
+  }, [dialogOpen, isPipSupported]);
+  
+  // Automatically exit PiP when dialog closes
+  useEffect(() => {
+    if (!dialogOpen && document.pictureInPictureElement === videoRef.current) {
+      document.exitPictureInPicture().catch(err => {
+        console.log('Exit PiP on dialog close failed:', err);
+      });
+    }
+  }, [dialogOpen]);
+
+  // Handle keyboard events at the dialog root level
+  const handleDialogKeyDown = (e: React.KeyboardEvent) => {
+    // Process keyboard events at the dialog root level
+    if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || 
+                       e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
+                       e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B')) {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          handleStepBack();
+          break;
+        case 'ArrowRight':
+          handleStepForward();
+          break;
+        case 'f':
+        case 'F':
+          toggleFullscreen();
+          break;
+        case ' ':
+          togglePlay();
+          break;
+        case 'n':
+        case 'N':
+          handleNextEpisode();
+          break;
+        case 'b':
+        case 'B':
+          handlePreviousEpisode();
+          break;
+        case 'p':
+        case 'P':
+          if (isPipSupported) {
+            togglePictureInPicture();
+          }
+          break;
+      }
+    }
+  };
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -546,37 +729,7 @@ export function PlayEpisodeDialog({
             containerRef.current.focus();
           }
         }}
-        onKeyDown={(e) => {
-          // Process keyboard events at the dialog root level
-          if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || e.key === 'p' || e.key === 'P')) {
-            e.stopPropagation();
-            e.preventDefault();
-            
-            switch (e.key) {
-              case 'ArrowLeft':
-                handleStepBack();
-                break;
-              case 'ArrowRight':
-                handleStepForward();
-                break;
-              case 'f':
-              case 'F':
-                toggleFullscreen();
-                break;
-              case ' ':
-                togglePlay();
-                break;
-              case 'n':
-              case 'N':
-                handleNextEpisode();
-                break;
-              case 'p':
-              case 'P':
-                handlePreviousEpisode();
-                break;
-            }
-          }
-        }}
+        onKeyDown={handleDialogKeyDown}
       >
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
@@ -767,6 +920,7 @@ export function PlayEpisodeDialog({
                           onClick={handlePreviousEpisode} 
                           disabled={!hasPreviousEpisode}
                           className={`${!hasPreviousEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                          title={`Previous Episode (B)`}
                         >
                           <SkipBack className="w-5 h-5" />
                         </button>
@@ -786,6 +940,7 @@ export function PlayEpisodeDialog({
                           onClick={handleNextEpisode} 
                           disabled={!hasNextEpisode}
                           className={`${!hasNextEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                          title={`Next Episode (N)`}
                         >
                           <SkipForward className="w-5 h-5" />
                         </button>
@@ -816,6 +971,17 @@ export function PlayEpisodeDialog({
                             max="100" 
                           />
                         </div>
+                        
+                        {/* PiP button */}
+                        {isPipSupported && (
+                          <button 
+                            onClick={togglePictureInPicture}
+                            title={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture (p)"}
+                            aria-label={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture"}
+                          >
+                            <PictureInPicture2 className={`w-5 h-5 transition-colors duration-150 ${isPipActive ? 'text-rose-500' : 'hover:text-rose-500'}`} />
+                          </button>
+                        )}
                         
                         {/* fullscreen button */}
                         <button onClick={toggleFullscreen}>
