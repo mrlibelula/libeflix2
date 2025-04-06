@@ -1031,7 +1031,7 @@ export function PlayEpisodeDialog({
                         </div>
                         
                         {/* PiP button */}
-                        {isPipSupported && (
+                        {/* {isPipSupported && (
                           <button 
                             onClick={togglePictureInPicture}
                             title={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture (p)"}
@@ -1039,7 +1039,7 @@ export function PlayEpisodeDialog({
                           >
                             <PictureInPicture2 className={`w-5 h-5 transition-colors duration-150 ${isPipActive ? 'text-rose-500' : 'hover:text-rose-500'}`} />
                           </button>
-                        )}
+                        )} */}
                         
                         {/* fullscreen button */}
                         <button onClick={toggleFullscreen}>
