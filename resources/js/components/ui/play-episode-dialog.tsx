@@ -47,6 +47,7 @@ export function PlayEpisodeDialog({
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(80);
+  const [previousVolume, setPreviousVolume] = useState(80);
   const [error, setError] = useState<Error | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -245,6 +246,15 @@ export function PlayEpisodeDialog({
   };
 
   const toggleMute = () => {
+    if (!isMuted) {
+      // Save current volume before muting
+      setPreviousVolume(volume);
+      // Set volume to 0 when muting
+      setVolume(0);
+    } else {
+      // Restore previous volume when unmuting
+      setVolume(previousVolume > 0 ? previousVolume : 80); // Fallback to 80 if previous was 0
+    }
     setIsMuted(!isMuted);
   };
 
@@ -346,11 +356,20 @@ export function PlayEpisodeDialog({
   }, []);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseInt(e.target.value));
-    if (parseInt(e.target.value) === 0) {
-      setIsMuted(true);
+    const newVolume = parseInt(e.target.value);
+    setVolume(newVolume);
+    
+    if (newVolume === 0) {
+      // When volume reaches 0, consider it as muted
+      if (!isMuted) {
+        setIsMuted(true);
+      }
     } else {
-      setIsMuted(false);
+      // When volume is greater than 0, update previous volume and unmute
+      setPreviousVolume(newVolume);
+      if (isMuted) {
+        setIsMuted(false);
+      }
     }
   };
 
@@ -712,7 +731,8 @@ export function PlayEpisodeDialog({
     // Process keyboard events at the dialog root level
     if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ' || 
                        e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
-                       e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B')) {
+                       e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B' ||
+                       e.key === 'm' || e.key === 'M') ) {
       e.stopPropagation();
       e.preventDefault();
       
@@ -750,16 +770,25 @@ export function PlayEpisodeDialog({
             togglePictureInPicture();
           }
           break;
+        case 'm':
+        case 'M':
+          toggleMute();
+          break;
       }
     }
   };
 
   // Function to increase volume
   const increaseVolume = () => {
-    const newVolume = Math.min(100, volume + 5);
-    setVolume(newVolume);
-    if (newVolume > 0 && isMuted) {
+    if (isMuted) {
+      // When increasing volume while muted, restore previous volume
+      setVolume(previousVolume > 0 ? previousVolume : 5);
       setIsMuted(false);
+    } else {
+      // Normal volume increase
+      const newVolume = Math.min(100, volume + 5);
+      setVolume(newVolume);
+      setPreviousVolume(newVolume);
     }
   };
 
@@ -767,8 +796,13 @@ export function PlayEpisodeDialog({
   const decreaseVolume = () => {
     const newVolume = Math.max(0, volume - 5);
     setVolume(newVolume);
+    
     if (newVolume === 0) {
+      // When volume reaches 0, mute
       setIsMuted(true);
+    } else {
+      // Update previous volume when not muted
+      setPreviousVolume(newVolume);
     }
   };
 
