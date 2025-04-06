@@ -25,6 +25,8 @@ type PlayEpisodeDialogProps = {
   onPreviousEpisode?: () => void;
   hasNextEpisode?: boolean;
   hasPreviousEpisode?: boolean;
+  initialRepeatMode?: 'none' | 'one' | 'season' | 'tvshow';
+  onRepeatModeChange?: (mode: 'none' | 'one' | 'season' | 'tvshow') => void;
 };
 
 export function PlayEpisodeDialog({
@@ -39,7 +41,9 @@ export function PlayEpisodeDialog({
   onNextEpisode = () => {},
   onPreviousEpisode = () => {},
   hasNextEpisode = false,
-  hasPreviousEpisode = false
+  hasPreviousEpisode = false,
+  initialRepeatMode = 'none',
+  onRepeatModeChange
 }: PlayEpisodeDialogProps) {
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
@@ -66,6 +70,16 @@ export function PlayEpisodeDialog({
   const [isHoveringDialog, setIsHoveringDialog] = useState(false);
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
+  const [repeatOne, setRepeatOne] = useState(false);
+  const [repeatSeason, setRepeatSeason] = useState(false);
+  const [repeatTvshow, setRepeatTvshow] = useState(false);
+
+  // Initialize repeat mode states based on initialRepeatMode prop
+  useEffect(() => {
+    setRepeatOne(initialRepeatMode === 'one');
+    setRepeatSeason(initialRepeatMode === 'season');
+    setRepeatTvshow(initialRepeatMode === 'tvshow');
+  }, [initialRepeatMode]);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -833,6 +847,52 @@ export function PlayEpisodeDialog({
     };
   }, [dialogOpen, volume, isMuted]);
 
+  // Toggle repeat modes with exclusive selection
+  const toggleRepeatOne = () => {
+    const newRepeatOne = !repeatOne;
+    setRepeatOne(newRepeatOne);
+    
+    if (newRepeatOne) {
+      // Turn off others
+      setRepeatSeason(false);
+      setRepeatTvshow(false);
+      onRepeatModeChange?.('one');
+    } else {
+      // All modes are now off
+      onRepeatModeChange?.('none');
+    }
+  };
+
+  const toggleRepeatSeason = () => {
+    const newRepeatSeason = !repeatSeason;
+    setRepeatSeason(newRepeatSeason);
+    
+    if (newRepeatSeason) {
+      // Turn off others
+      setRepeatOne(false);
+      setRepeatTvshow(false);
+      onRepeatModeChange?.('season');
+    } else {
+      // All modes are now off
+      onRepeatModeChange?.('none');
+    }
+  };
+
+  const toggleRepeatTvshow = () => {
+    const newRepeatTvshow = !repeatTvshow;
+    setRepeatTvshow(newRepeatTvshow);
+    
+    if (newRepeatTvshow) {
+      // Turn off others
+      setRepeatOne(false);
+      setRepeatSeason(false);
+      onRepeatModeChange?.('tvshow');
+    } else {
+      // All modes are now off
+      onRepeatModeChange?.('none');
+    }
+  };
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -1156,12 +1216,42 @@ export function PlayEpisodeDialog({
                     </div>
                   </div>
                   <div className="flex items-center gap-x-4">
-                    {/* repeat episode (repeat 1) */}
-                    <Repeat1 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                    {/* repeat playlist */}
-                    <Repeat className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                    {/* repeat entire tvshow episodes (all available seasons) */}
-                    <Repeat2 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                    {/* repeat episode (loop episode) */}
+                    <button
+                      className="focus:outline-none"
+                      onClick={toggleRepeatOne}
+                      title="Repeat current episode"
+                    >
+                      <Repeat1 
+                        className={`w-5 h-5 transition-colors duration-150 ${
+                          repeatOne ? 'text-rose-500' : 'hover:text-rose-500'
+                        }`}
+                      />
+                    </button>
+                    {/* repeat season playlist (loop season) */}
+                    <button
+                      className="focus:outline-none"
+                      onClick={toggleRepeatSeason}
+                      title="Repeat current season"
+                    >
+                      <Repeat 
+                        className={`w-5 h-5 transition-colors duration-150 ${
+                          repeatSeason ? 'text-rose-500' : 'hover:text-rose-500'
+                        }`}
+                      />
+                    </button>
+                    {/* repeat entire tvshow episodes (loop all seasons) */}
+                    <button
+                      className="focus:outline-none"
+                      onClick={toggleRepeatTvshow}
+                      title="Repeat entire TV show"
+                    >
+                      <Repeat2 
+                        className={`w-5 h-5 transition-colors duration-150 ${
+                          repeatTvshow ? 'text-rose-500' : 'hover:text-rose-500'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
               </DialogTitle>
