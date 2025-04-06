@@ -43,6 +43,7 @@ class TvshowService
             $importedTvshows = [];
             $importedSeasons = [];
             $importedEpisodes = [];
+            $notFoundTvshows = []; // Track TV shows not found in TMDB
             $storage = Storage::disk('tvshows');
             $storageTvshows = $storage->directories();
             
@@ -190,6 +191,11 @@ class TvshowService
                     echo "Completed processing TV show {$counter}/{$totalTvshows}: {$tvshow->name}\n";
                 } else {
                     echo "\033[31mCould not find TV show '{$folderMetadata['name']}' ({$folderMetadata['releaseYear']}) on TMDB. Skipping.\033[0m\n";
+                    // Add to the list of not found TV shows
+                    $notFoundTvshows[] = [
+                        'name' => $folderMetadata['name'],
+                        'year' => $folderMetadata['releaseYear'],
+                    ];
                 }
                 
                 $counter++;
@@ -212,6 +218,15 @@ class TvshowService
             echo "         Imported " . count($importedTvshows) . " TV " . (count($importedTvshows) === 1 ? 'show' : 'shows') . "\n";
             echo "         Imported " . count($importedSeasons) . " " . (count($importedSeasons) === 1 ? 'season' : 'seasons') . "\n";
             echo "         Imported " . count($importedEpisodes) . " " . (count($importedEpisodes) === 1 ? 'episode' : 'episodes') . "\n";
+            
+            // Display TV shows not found in TMDB
+            if (count($notFoundTvshows) > 0) {
+                echo "\033[31m         " . count($notFoundTvshows) . " TV " . (count($notFoundTvshows) === 1 ? 'show' : 'shows') . " not found in TMDB:\033[0m\n";
+                foreach ($notFoundTvshows as $notFoundTvshow) {
+                    echo "\033[31m         - '{$notFoundTvshow['name']}' ({$notFoundTvshow['year']})\033[0m\n";
+                }
+            }
+            
             echo "Imported in: " . sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds) . " (H:M:S)\n";
             
             return true;
@@ -323,15 +338,23 @@ class TvshowService
 
     /**
      * Remove a tvshow and all its associated seasons and episodes from db
-     * Folders and files in storage are not deleted
+     * Folders and files in storage are not deleted (might contain mp4 files)
      * 
      * @param Tvshow $tvshow
      * @return bool
      */
     public static function removeTvshow(Tvshow $tvshow): bool
     {
-        $tvshow->delete(); // cascade deletes all seasons and episodes
-        echo "\033[32mFolders and files in \"" . $tvshow->folder_name . "\" were kept\033[0m\n";
+        // cascade deletes all seasons and episodes
+        $tvshow->delete();
+        // check if the tvshow folder exists in storage
+        $tvshowsDisk = Storage::disk('tvshows');
+        if ($tvshowsDisk->exists($tvshow->folder_name)) {
+            echo "\033[32mTvshow folder \"" . $tvshow->folder_name . "\" was kept\033[0m\n";
+        } else {
+            echo "\033[32mTvshow folder was not found in storage\033[0m\n";
+        }
+        
         return true;
     }
 
