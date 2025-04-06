@@ -456,8 +456,8 @@ export function PlayEpisodeDialog({
       // For events originating outside dialog but while dialog is open,
       // prevent them from affecting background elements
       if (!isInDialog && dialogOpen) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || 
-            e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
+            e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
             e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B') {
           e.stopPropagation();
           e.preventDefault();
@@ -710,7 +710,7 @@ export function PlayEpisodeDialog({
   // Handle keyboard events at the dialog root level
   const handleDialogKeyDown = (e: React.KeyboardEvent) => {
     // Process keyboard events at the dialog root level
-    if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' || 
+    if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ' || 
                        e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
                        e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B')) {
       e.stopPropagation();
@@ -722,6 +722,12 @@ export function PlayEpisodeDialog({
           break;
         case 'ArrowRight':
           handleStepForward();
+          break;
+        case 'ArrowUp':
+          increaseVolume();
+          break;
+        case 'ArrowDown':
+          decreaseVolume();
           break;
         case 'f':
         case 'F':
@@ -747,6 +753,51 @@ export function PlayEpisodeDialog({
       }
     }
   };
+
+  // Function to increase volume
+  const increaseVolume = () => {
+    const newVolume = Math.min(100, volume + 5);
+    setVolume(newVolume);
+    if (newVolume > 0 && isMuted) {
+      setIsMuted(false);
+    }
+  };
+
+  // Function to decrease volume
+  const decreaseVolume = () => {
+    const newVolume = Math.max(0, volume - 5);
+    setVolume(newVolume);
+    if (newVolume === 0) {
+      setIsMuted(true);
+    }
+  };
+
+  // Add keyboard shortcut for volume control (up/down arrow keys)
+  useEffect(() => {
+    const handleVolumeKeyDown = (e: KeyboardEvent) => {
+      // Only handle if dialog is open
+      if (!dialogOpen) return;
+      
+      // Prevent default behavior (scrolling)
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && 
+           // Skip if user is typing in an input element
+           !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        
+        if (e.key === 'ArrowUp') {
+          increaseVolume();
+        } else if (e.key === 'ArrowDown') {
+          decreaseVolume();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleVolumeKeyDown, true); // Use capture phase
+    
+    return () => {
+      window.removeEventListener('keydown', handleVolumeKeyDown, true);
+    };
+  }, [dialogOpen, volume, isMuted]);
 
   if (error) {
     return (
