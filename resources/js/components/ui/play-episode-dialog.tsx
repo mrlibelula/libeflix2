@@ -68,6 +68,18 @@ export function PlayEpisodeDialog({
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
+    // Exit PiP if active
+    if (document.pictureInPictureElement === videoRef.current) {
+      document.exitPictureInPicture().catch(err => {
+        console.log('Exit PiP on manual close failed:', err);
+      });
+    }
+    
+    // Stop playback
+    if (videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
+    
     setDialogOpen(false);
     onOpenChange?.(false);
   };
@@ -76,6 +88,22 @@ export function PlayEpisodeDialog({
   const handleOpenChange = (open: boolean) => {
     // Allow closing when the X button is clicked (this is fired after DialogClose onClick)
     setDialogOpen(open);
+    
+    // When dialog is being closed, make sure to exit PiP mode and stop playback
+    if (!open) {
+      // Exit PiP if active
+      if (document.pictureInPictureElement === videoRef.current) {
+        document.exitPictureInPicture().catch(err => {
+          console.log('Exit PiP on dialog close failed:', err);
+        });
+      }
+      
+      // Pause video playback
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+    }
+    
     // Propagate the change to parent
     onOpenChange?.(open);
   };
@@ -640,12 +668,42 @@ export function PlayEpisodeDialog({
     };
   }, [dialogOpen, isPipSupported]);
   
+  // Add a cleanup effect to ensure video and PiP are properly terminated
+  useEffect(() => {
+    // This effect runs when dialogOpen changes or when component unmounts
+    return () => {
+      // If dialog is closed or component is unmounting
+      if (!dialogOpen && videoRef.current) {
+        // Exit PiP if active
+        if (document.pictureInPictureElement === videoRef.current) {
+          try {
+            document.exitPictureInPicture().catch(err => {
+              console.log('Exit PiP on cleanup failed:', err);
+            });
+          } catch (err) {
+            console.log('PiP cleanup error:', err);
+          }
+        }
+        
+        // Stop playback
+        if (!videoRef.current.paused) {
+          videoRef.current.pause();
+        }
+      }
+    };
+  }, [dialogOpen]);
+  
   // Automatically exit PiP when dialog closes
   useEffect(() => {
     if (!dialogOpen && document.pictureInPictureElement === videoRef.current) {
       document.exitPictureInPicture().catch(err => {
         console.log('Exit PiP on dialog close failed:', err);
       });
+      
+      // Also stop video playback
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
     }
   }, [dialogOpen]);
 
@@ -778,7 +836,7 @@ export function PlayEpisodeDialog({
               <>
                 {/* Video element */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
-                  {episode.encFilePath ? (
+                  {episode.encFilePath && dialogOpen ? (
                     <video 
                       ref={videoRef}
                       src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
