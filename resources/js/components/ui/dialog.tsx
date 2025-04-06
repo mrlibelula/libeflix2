@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { XIcon } from "lucide-react"
+import { PictureInPicture2, XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -61,10 +61,18 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-5 right-5 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5">
-          <XIcon className="bg-neutral-100/50 dark:bg-neutral-800/50 rounded w-5 h-5"/>
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        <div className="absolute top-5 right-5 flex gap-2">
+          <button 
+            className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded"
+          >
+            <PictureInPicture2 className="w-4 h-4"/>
+            <span className="sr-only">Picture in Picture</span>
+          </button>
+          <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded">
+            <XIcon className="w-4 h-4"/>
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </div>
       </DialogPrimitive.Content>
     </DialogPortal>
   )
