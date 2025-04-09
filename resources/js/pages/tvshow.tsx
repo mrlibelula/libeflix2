@@ -403,6 +403,52 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                         }
                       }
                     }}
+                    onFirstEpisodeOfSeason={() => {
+                      // Get the first episode with valid file path in the current season
+                      const firstPlayableEpisode = selectedSeason.episodes.find((e: any) => 
+                        e.is_in_storage && e.encFilePath
+                      );
+                      
+                      if (firstPlayableEpisode) {
+                        setSelectedEpisode(firstPlayableEpisode);
+                      }
+                    }}
+                    onFirstEpisodeOfTVShow={() => {
+                      // First try to get the first episode of the first season
+                      const firstSeason = tvshow.seasons.find((s: any) => 
+                        s.season_number > 0 && s.seasonFolderExists
+                      );
+                      
+                      if (firstSeason) {
+                        // If we're already on first season, just go to first episode
+                        if (firstSeason.season_number === selectedSeason.season_number) {
+                          const firstPlayableEpisode = selectedSeason.episodes.find((e: any) => 
+                            e.is_in_storage && e.encFilePath
+                          );
+                          
+                          if (firstPlayableEpisode) {
+                            setSelectedEpisode(firstPlayableEpisode);
+                          }
+                        } else {
+                          // Otherwise switch to first season
+                          handleSeasonSelect(firstSeason);
+                          
+                          // Find first playable episode in that season
+                          const firstPlayableEpisode = firstSeason.episodes?.find((e: any) => 
+                            e.is_in_storage && e.encFilePath
+                          );
+                          
+                          if (firstPlayableEpisode) {
+                            // Small timeout to ensure season change completes first
+                            setTimeout(() => {
+                              setSelectedEpisode(firstPlayableEpisode);
+                              setIsDialogOpen(true);
+                            }, 100);
+                          }
+                        }
+                      }
+                    }}
+                    initialRepeatMode="season"
                   />
                 )}
                 

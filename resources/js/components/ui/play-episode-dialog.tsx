@@ -27,6 +27,8 @@ type PlayEpisodeDialogProps = {
   hasPreviousEpisode?: boolean;
   initialRepeatMode?: 'none' | 'one' | 'season' | 'tvshow';
   onRepeatModeChange?: (mode: 'none' | 'one' | 'season' | 'tvshow') => void;
+  onFirstEpisodeOfSeason?: () => void;
+  onFirstEpisodeOfTVShow?: () => void;
 };
 
 export function PlayEpisodeDialog({
@@ -42,8 +44,10 @@ export function PlayEpisodeDialog({
   onPreviousEpisode = () => {},
   hasNextEpisode = false,
   hasPreviousEpisode = false,
-  initialRepeatMode = 'none',
-  onRepeatModeChange
+  initialRepeatMode = 'tvshow',
+  onRepeatModeChange,
+  onFirstEpisodeOfSeason = () => {},
+  onFirstEpisodeOfTVShow = () => {}
 }: PlayEpisodeDialogProps) {
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
@@ -73,6 +77,8 @@ export function PlayEpisodeDialog({
   const [repeatOne, setRepeatOne] = useState(false);
   const [repeatSeason, setRepeatSeason] = useState(false);
   const [repeatTvshow, setRepeatTvshow] = useState(false);
+  const [showLoopNotification, setShowLoopNotification] = useState(false);
+  const [showNextEpisodeNotification, setShowNextEpisodeNotification] = useState(false);
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -512,15 +518,64 @@ export function PlayEpisodeDialog({
     if (!video) return;
 
     const handleVideoEnded = () => {
-      // First call onComplete callback if provided
-      if (onComplete) {
-        onComplete();
+      // Check which repeat mode is active
+      if (repeatOne) {
+        // REPEAT ONE: Loop the current episode
+        console.log('Repeating current episode');
+        video.currentTime = 0;
+        video.play().catch(err => {
+          console.error('Failed to replay episode:', err);
+        });
+        
+        // Show notification
+        setShowLoopNotification(true);
+        setTimeout(() => {
+          setShowLoopNotification(false);
+        }, 2000);
+        
+        return;
       }
       
-      // Then navigate to next episode if available
-      if (hasNextEpisode && onNextEpisode) {
-        onNextEpisode();
+      // Check if there's a next episode
+      if (hasNextEpisode) {
+        // Normal flow - go to next episode
+        console.log('Going to next episode');
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
+        }, 1500);
+        return;
       }
+      
+      // If we're here, there's no next episode
+      console.log('No next episode available');
+      
+      // If repeatSeason is active, go to first episode of season
+      if (repeatSeason) {
+        console.log('No next episode but repeatSeason active - going to first episode of season');
+        setShowLoopNotification(true);
+        setTimeout(() => {
+          setShowLoopNotification(false);
+        }, 2000);
+        onFirstEpisodeOfSeason();
+        return;
+      }
+      
+      // If repeatTvshow is active, go to first episode of show
+      if (repeatTvshow) {
+        console.log('No next episode but repeatTvshow active - going to first episode of show');
+        setShowLoopNotification(true);
+        setTimeout(() => {
+          setShowLoopNotification(false);
+        }, 2000);
+        onFirstEpisodeOfTVShow();
+        return;
+      }
+      
+      // If we reached here, playback is complete
+      console.log('Playback complete');
+      onComplete?.();
     };
 
     video.addEventListener('ended', handleVideoEnded);
@@ -528,7 +583,16 @@ export function PlayEpisodeDialog({
     return () => {
       video.removeEventListener('ended', handleVideoEnded);
     };
-  }, [onComplete, hasNextEpisode, onNextEpisode]);
+  }, [
+    repeatOne, 
+    repeatSeason, 
+    repeatTvshow, 
+    hasNextEpisode,
+    onNextEpisode,
+    onFirstEpisodeOfSeason,
+    onFirstEpisodeOfTVShow,
+    onComplete
+  ]);
 
   // Implement YouTube-like behavior for controls visibility
   const handleUserActivity = useCallback(() => {
@@ -893,6 +957,25 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Add useEffect to log important props changes
+  useEffect(() => {
+    console.log('Repeat mode settings:', {
+      repeatOne,
+      repeatSeason,
+      repeatTvshow,
+      hasNextEpisode,
+      hasPreviousEpisode,
+      initialRepeatMode
+    });
+  }, [
+    repeatOne, 
+    repeatSeason, 
+    repeatTvshow, 
+    hasNextEpisode,
+    hasPreviousEpisode,
+    initialRepeatMode
+  ]);
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -934,6 +1017,19 @@ export function PlayEpisodeDialog({
         }}
         onKeyDown={handleDialogKeyDown}
       >
+        {/* Debug information - hidden but useful for debugging */}
+        <div className="sr-only" id="debug-info" data-repeat-one={repeatOne.toString()} data-repeat-season={repeatSeason.toString()} data-repeat-tvshow={repeatTvshow.toString()} data-has-next-episode={hasNextEpisode.toString()} data-episode-name={episode.name} data-episode-number={episode.episode_number} data-season-number={episode.season_number}>
+          Debug info
+        </div>
+        
+        {/* Optional visual debug indicator - remove in production */}
+        {process.env.NODE_ENV === 'development' && (repeatSeason || repeatTvshow) && (
+          <div className="absolute top-0 right-0 z-50 bg-black bg-opacity-70 text-white text-xs p-2">
+            <div>Repeat mode: {repeatOne ? 'One' : repeatSeason ? 'Season' : repeatTvshow ? 'TV Show' : 'None'}</div>
+            <div>Has next episode: {hasNextEpisode ? 'Yes' : 'No'}</div>
+          </div>
+        )}
+        
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
           <div 
@@ -982,45 +1078,77 @@ export function PlayEpisodeDialog({
                 {/* Video element */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
                   {episode.encFilePath && dialogOpen ? (
-                    <video 
-                      ref={videoRef}
-                      src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
-                      className="w-full h-full object-cover"
-                      style={isFullscreen ? { objectFit: 'contain' } : {}}
-                      controls={false}
-                      autoPlay={isPlaying}
-                      muted={isMuted}
-                      playsInline
-                      preload="metadata"
-                      onLoadedData={() => setIsLoading(false)}
-                      onLoadedMetadata={(e) => {
-                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
-                          setDuration(e.currentTarget.duration);
-                        }
-                      }}
-                      onDurationChange={(e) => {
-                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
-                          setDuration(e.currentTarget.duration);
-                        }
-                      }}
-                      onTimeUpdate={(e) => {
-                        if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
-                          const progressValue = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
-                          setProgress(progressValue);
-                          setCurrentTime(e.currentTarget.currentTime);
-                        }
-                      }}
-                      onEnded={() => onComplete?.()}
-                      onError={(e) => handleError(new Error('Video playback error'))}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!controlsVisible) {
-                          handleUserActivity();
-                        } else {
-                          togglePlay();
-                        }
-                      }}
-                    ></video>
+                    <>
+                      <video 
+                        ref={videoRef}
+                        src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
+                        className="w-full h-full object-cover"
+                        style={isFullscreen ? { objectFit: 'contain' } : {}}
+                        controls={false}
+                        autoPlay={isPlaying}
+                        muted={isMuted}
+                        playsInline
+                        preload="metadata"
+                        onLoadedData={() => setIsLoading(false)}
+                        onLoadedMetadata={(e) => {
+                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                            setDuration(e.currentTarget.duration);
+                          }
+                        }}
+                        onDurationChange={(e) => {
+                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                            setDuration(e.currentTarget.duration);
+                          }
+                        }}
+                        onTimeUpdate={(e) => {
+                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                            const progressValue = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                            setProgress(progressValue);
+                            setCurrentTime(e.currentTarget.currentTime);
+                          }
+                        }}
+                        onEnded={() => {/* Handled by our custom event listener */}}
+                        onError={(e) => handleError(new Error('Video playback error'))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!controlsVisible) {
+                            handleUserActivity();
+                          } else {
+                            togglePlay();
+                          }
+                        }}
+                      ></video>
+                      
+                      {/* Loop notification */}
+                      {showLoopNotification && (
+                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md text-sm flex items-center">
+                          {repeatOne ? (
+                            <>
+                              <Repeat1 className="w-4 h-4 mr-2 text-rose-500" />
+                              <span>Repeating episode</span>
+                            </>
+                          ) : repeatSeason ? (
+                            <>
+                              <Repeat className="w-4 h-4 mr-2 text-rose-500" />
+                              <span>Starting season over</span>
+                            </>
+                          ) : repeatTvshow ? (
+                            <>
+                              <Repeat2 className="w-4 h-4 mr-2 text-rose-500" />
+                              <span>Starting TV show over</span>
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                      
+                      {/* Next episode notification */}
+                      {showNextEpisodeNotification && hasNextEpisode && (
+                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md text-sm flex items-center">
+                          <SkipForward className="w-4 h-4 mr-2 text-rose-500" />
+                          <span>Playing next episode</span>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <img 
                       src={episode.stillUrl} 
@@ -1216,6 +1344,14 @@ export function PlayEpisodeDialog({
                     </div>
                   </div>
                   <div className="flex items-center gap-x-4">
+                    {/* Repeat mode indicator */}
+                    {(repeatOne || repeatSeason || repeatTvshow) && (
+                      <span className="text-xs text-rose-500 ml-2">
+                        {repeatOne && "Repeating episode"}
+                        {repeatSeason && "Repeating season"}
+                        {repeatTvshow && "Repeating series"}
+                      </span>
+                    )}
                     {/* repeat episode (loop episode) */}
                     <button
                       className="focus:outline-none"
