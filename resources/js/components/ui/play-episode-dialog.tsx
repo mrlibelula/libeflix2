@@ -548,28 +548,36 @@ export function PlayEpisodeDialog({
         return;
       }
       
-      // If we're here, there's no next episode
-      console.log('No next episode available');
+      // If we're here, there's no next episode in the current season
+      console.log('No next episode available in current season');
       
-      // If repeatSeason is active, go to first episode of season
+      // If repeatSeason is active, go to first episode of current season
       if (repeatSeason) {
-        console.log('No next episode but repeatSeason active - going to first episode of season');
+        console.log('Repeating season - going to first episode of season');
         setShowLoopNotification(true);
+        
+        // First show notification, then navigate after a delay
         setTimeout(() => {
           setShowLoopNotification(false);
+          // Call the function to go to first episode of season
+          onFirstEpisodeOfSeason();
         }, 2000);
-        onFirstEpisodeOfSeason();
+        
         return;
       }
       
-      // If repeatTvshow is active, go to first episode of show
+      // If repeatTvshow is active, go to first episode of first season (Season 1, Episode 1)
       if (repeatTvshow) {
-        console.log('No next episode but repeatTvshow active - going to first episode of show');
+        console.log('Repeating TV show - going to first episode of first season');
         setShowLoopNotification(true);
+        
+        // First show notification, then navigate after a delay
         setTimeout(() => {
           setShowLoopNotification(false);
+          // Call the function to go to first episode of show
+          onFirstEpisodeOfTVShow();
         }, 2000);
-        onFirstEpisodeOfTVShow();
+        
         return;
       }
       
@@ -1135,7 +1143,7 @@ export function PlayEpisodeDialog({
                           ) : repeatTvshow ? (
                             <>
                               <Repeat2 className="w-4 h-4 mr-2 text-rose-500" />
-                              <span>Starting TV show over</span>
+                              <span>Starting series from Season 1</span>
                             </>
                           ) : null}
                         </div>
@@ -1349,7 +1357,7 @@ export function PlayEpisodeDialog({
                       <span className="text-xs text-rose-500 ml-2">
                         {repeatOne && "Repeating episode"}
                         {repeatSeason && "Repeating season"}
-                        {repeatTvshow && "Repeating series"}
+                        {repeatTvshow && "Repeating entire series"}
                       </span>
                     )}
                     {/* repeat episode (loop episode) */}

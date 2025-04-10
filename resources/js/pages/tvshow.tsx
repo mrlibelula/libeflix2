@@ -414,10 +414,21 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                       }
                     }}
                     onFirstEpisodeOfTVShow={() => {
-                      // First try to get the first episode of the first season
-                      const firstSeason = tvshow.seasons.find((s: any) => 
-                        s.season_number > 0 && s.seasonFolderExists
+                      // Try to get Season 1 specifically
+                      let firstSeason = tvshow.seasons.find((s: any) => 
+                        s.season_number === 1 && s.seasonFolderExists
                       );
+                      
+                      // If Season 1 isn't available, get the earliest available season
+                      if (!firstSeason) {
+                        const availableSeasons = tvshow.seasons
+                          .filter((s: any) => s.season_number > 0 && s.seasonFolderExists)
+                          .sort((a: any, b: any) => a.season_number - b.season_number);
+                          
+                        if (availableSeasons.length > 0) {
+                          firstSeason = availableSeasons[0];
+                        }
+                      }
                       
                       if (firstSeason) {
                         // If we're already on first season, just go to first episode
@@ -448,7 +459,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                         }
                       }
                     }}
-                    initialRepeatMode="season"
+                    initialRepeatMode="tvshow"
                   />
                 )}
                 
