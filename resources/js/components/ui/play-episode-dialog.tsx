@@ -91,8 +91,8 @@ export function PlayEpisodeDialog({
   const handleClose = () => {
     // Exit PiP if active
     if (document.pictureInPictureElement === videoRef.current) {
-      document.exitPictureInPicture().catch(err => {
-        console.log('Exit PiP on manual close failed:', err);
+      document.exitPictureInPicture().catch(() => {
+        // Silent error handling
       });
     }
     
@@ -114,8 +114,8 @@ export function PlayEpisodeDialog({
     if (!open) {
       // Exit PiP if active
       if (document.pictureInPictureElement === videoRef.current) {
-        document.exitPictureInPicture().catch(err => {
-          console.log('Exit PiP on dialog close failed:', err);
+        document.exitPictureInPicture().catch(() => {
+          // Silent error handling
         });
       }
       
@@ -512,96 +512,6 @@ export function PlayEpisodeDialog({
     };
   }, [dialogOpen, handleStepBack, handleStepForward, togglePlay, handleNextEpisode, handlePreviousEpisode]);
 
-  // Add auto-advance to next episode when current one ends
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleVideoEnded = () => {
-      // Check which repeat mode is active
-      if (repeatOne) {
-        // REPEAT ONE: Loop the current episode
-        console.log('Repeating current episode');
-        video.currentTime = 0;
-        video.play().catch(err => {
-          console.error('Failed to replay episode:', err);
-        });
-        
-        // Show notification
-        setShowLoopNotification(true);
-        setTimeout(() => {
-          setShowLoopNotification(false);
-        }, 2000);
-        
-        return;
-      }
-      
-      // Check if there's a next episode
-      if (hasNextEpisode) {
-        // Normal flow - go to next episode
-        console.log('Going to next episode');
-        setShowNextEpisodeNotification(true);
-        setTimeout(() => {
-          setShowNextEpisodeNotification(false);
-          onNextEpisode();
-        }, 1500);
-        return;
-      }
-      
-      // If we're here, there's no next episode in the current season
-      console.log('No next episode available in current season');
-      
-      // If repeatSeason is active, go to first episode of current season
-      if (repeatSeason) {
-        console.log('Repeating season - going to first episode of season');
-        setShowLoopNotification(true);
-        
-        // First show notification, then navigate after a delay
-        setTimeout(() => {
-          setShowLoopNotification(false);
-          // Call the function to go to first episode of season
-          onFirstEpisodeOfSeason();
-        }, 2000);
-        
-        return;
-      }
-      
-      // If repeatTvshow is active, go to first episode of first season (Season 1, Episode 1)
-      if (repeatTvshow) {
-        console.log('Repeating TV show - going to first episode of first season');
-        setShowLoopNotification(true);
-        
-        // First show notification, then navigate after a delay
-        setTimeout(() => {
-          setShowLoopNotification(false);
-          // Call the function to go to first episode of show
-          onFirstEpisodeOfTVShow();
-        }, 2000);
-        
-        return;
-      }
-      
-      // If we reached here, playback is complete
-      console.log('Playback complete');
-      onComplete?.();
-    };
-
-    video.addEventListener('ended', handleVideoEnded);
-    
-    return () => {
-      video.removeEventListener('ended', handleVideoEnded);
-    };
-  }, [
-    repeatOne, 
-    repeatSeason, 
-    repeatTvshow, 
-    hasNextEpisode,
-    onNextEpisode,
-    onFirstEpisodeOfSeason,
-    onFirstEpisodeOfTVShow,
-    onComplete
-  ]);
-
   // Implement YouTube-like behavior for controls visibility
   const handleUserActivity = useCallback(() => {
     
@@ -680,37 +590,6 @@ export function PlayEpisodeDialog({
     };
   }, [isPipSupported]);
     
-  // Toggle Picture-in-Picture
-  const togglePictureInPicture = () => {
-    if (!videoRef.current || !isPipSupported) return;
-    
-    try {
-      if (document.pictureInPictureElement !== videoRef.current) {
-        videoRef.current.requestPictureInPicture()
-          .then(() => {
-            // Ensure the video is playing in PiP mode
-            if (videoRef.current && videoRef.current.paused) {
-              videoRef.current.play().catch(err => {
-                console.error('PiP play error:', err);
-              });
-            }
-          })
-          .catch(err => {
-            console.error('PiP error:', err);
-            handleError(new Error('Failed to enter Picture-in-Picture mode: ' + err.message));
-          });
-      } else {
-        document.exitPictureInPicture().catch(err => {
-          console.error('Exit PiP error:', err);
-          handleError(new Error('Failed to exit Picture-in-Picture mode: ' + err.message));
-        });
-      }
-    } catch (err) {
-      console.error('PiP toggle error:', err);
-      handleError(new Error('Picture-in-Picture mode is not supported in this browser'));
-    }
-  };
-
   // Add auto Picture-in-Picture when user navigates away from the page
   useEffect(() => {
     if (!isPipSupported || !videoRef.current) return;
@@ -727,20 +606,19 @@ export function PlayEpisodeDialog({
             .then(() => {
               // Ensure video continues playing in PiP mode
               if (videoRef.current && videoRef.current.paused) {
-                videoRef.current.play().catch(err => {
-                  console.log('Auto PiP play failed:', err);
+                videoRef.current.play().catch(() => {
+                  // Silent error handling
                 });
               }
             })
-            .catch(err => {
-              console.log('Auto PiP failed:', err);
-              // Don't show error to user for this case
+            .catch(() => {
+              // Silent error handling
             });
         }
       } else if (!document.hidden && document.pictureInPictureElement === videoRef.current) {
         // When returning to the page, exit PiP if it was auto-entered
-        document.exitPictureInPicture().catch(err => {
-          console.log('Auto exit PiP failed:', err);
+        document.exitPictureInPicture().catch(() => {
+          // Silent error handling
         });
       }
     };
@@ -782,8 +660,8 @@ export function PlayEpisodeDialog({
         // Exit PiP if active
         if (document.pictureInPictureElement === videoRef.current) {
           try {
-            document.exitPictureInPicture().catch(err => {
-              console.log('Exit PiP on cleanup failed:', err);
+            document.exitPictureInPicture().catch(() => {
+              // Silent error handling
             });
           } catch (err) {
             console.log('PiP cleanup error:', err);
@@ -801,8 +679,8 @@ export function PlayEpisodeDialog({
   // Automatically exit PiP when dialog closes
   useEffect(() => {
     if (!dialogOpen && document.pictureInPictureElement === videoRef.current) {
-      document.exitPictureInPicture().catch(err => {
-        console.log('Exit PiP on dialog close failed:', err);
+      document.exitPictureInPicture().catch(() => {
+        // Silent error handling
       });
       
       // Also stop video playback
@@ -967,14 +845,7 @@ export function PlayEpisodeDialog({
 
   // Add useEffect to log important props changes
   useEffect(() => {
-    console.log('Repeat mode settings:', {
-      repeatOne,
-      repeatSeason,
-      repeatTvshow,
-      hasNextEpisode,
-      hasPreviousEpisode,
-      initialRepeatMode
-    });
+    // Repeat mode settings are tracked internally
   }, [
     repeatOne, 
     repeatSeason, 
@@ -983,6 +854,197 @@ export function PlayEpisodeDialog({
     hasPreviousEpisode,
     initialRepeatMode
   ]);
+
+  // Add effect to reset video state when the episode changes
+  useEffect(() => {
+    if (!videoRef.current || !dialogOpen) return;
+    
+    // Create a function to handle the video loading and playback
+    const prepareAndPlayVideo = () => {
+      if (!videoRef.current) return;
+      
+      // Reset video state
+      videoRef.current.currentTime = 0;
+      
+      // Use a more reliable way to start playback using event listeners
+      const playVideo = () => {
+        if (!videoRef.current) return;
+        
+        if (autoPlay) {
+          // Use a small timeout to ensure the video element is fully initialized
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.play()
+                .catch(err => {
+                  // Try one more time after a delay if first attempt failed
+                  setTimeout(() => {
+                    if (videoRef.current) {
+                      videoRef.current.play().catch(() => {});
+                    }
+                  }, 1000);
+                });
+            }
+          }, 300);
+        }
+      };
+      
+      // Set up event listeners for video loading
+      const handleCanPlay = () => {
+        playVideo();
+        
+        // Clean up this specific event listener
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('canplay', handleCanPlay);
+        }
+      };
+      
+      // Add event listener for canplay event
+      videoRef.current.addEventListener('canplay', handleCanPlay);
+      
+      // Also try to play if the video is already loaded
+      if (videoRef.current.readyState >= 3) { // HAVE_FUTURE_DATA or higher
+        playVideo();
+      }
+    };
+    
+    // Call the prepare function
+    prepareAndPlayVideo();
+    
+    // Set a timeout as a backup to ensure video plays
+    const backupTimeout = setTimeout(() => {
+      if (videoRef.current && autoPlay && videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+      }
+    }, 2000);
+    
+    return () => {
+      clearTimeout(backupTimeout);
+      // Remove any event listeners we added
+      if (videoRef.current) {
+        videoRef.current.removeEventListener('canplay', function() {});
+      }
+    };
+  }, [episode?.encFilePath, dialogOpen, autoPlay]);
+  
+  // Add a specific hook to initialize the video properly on first render
+  const videoElementRef = useRef<boolean>(false);
+  useEffect(() => {
+    // Only run once when the video element is first rendered
+    if (videoRef.current && !videoElementRef.current) {
+      videoElementRef.current = true;
+      
+      // Create a reference to the original ended event handler
+      const videoElement = videoRef.current;
+      const originalEndedHandler = videoElement.onended;
+      
+      // Override the native onended property to ensure it works on first load
+      videoElement.onended = (event) => {
+        // Call our custom handler first
+        if (hasNextEpisode) {
+          setShowNextEpisodeNotification(true);
+          setTimeout(() => {
+            setShowNextEpisodeNotification(false);
+            onNextEpisode();
+          }, 1500);
+          
+          // Prevent other handlers from firing
+          event.stopPropagation();
+          return false;
+        }
+        
+        // Otherwise, let the original handler run if it exists
+        if (originalEndedHandler && typeof originalEndedHandler === 'function') {
+          return originalEndedHandler.call(videoElement, event);
+        }
+      };
+    }
+  }, [hasNextEpisode, onNextEpisode]);
+  
+  // Add an initialization effect when the dialog first opens
+  useEffect(() => {
+    // This useEffect runs when the dialog opens
+  }, [dialogOpen, episode?.name]);
+
+  // Define a simple direct function to handle video ending
+  const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    // Prevent duplicate firing
+    const video = e.currentTarget;
+    
+    // Create a unique key for this specific video end event
+    const endEventKey = `video_end_${episode.id}_${new Date().getTime()}`;
+    
+    // Check if we've already handled this specific end event
+    if (sessionStorage.getItem(endEventKey)) {
+      return;
+    }
+    
+    // Set a flag to prevent duplicate handling (expires after 2 seconds)
+    sessionStorage.setItem(endEventKey, 'true');
+    setTimeout(() => {
+      sessionStorage.removeItem(endEventKey);
+    }, 2000);
+    
+    // Handle based on repeat mode
+    if (repeatOne) {
+      // Loop current episode
+      video.currentTime = 0;
+      video.play().catch(() => {});
+      setShowLoopNotification(true);
+      setTimeout(() => setShowLoopNotification(false), 2000);
+    } else if (hasNextEpisode) {
+      // Go to next episode
+      setShowNextEpisodeNotification(true);
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onNextEpisode();
+      }, 1500);
+    } else if (repeatTvshow) {
+      // Go to first episode of next season
+      setShowNextEpisodeNotification(true);
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onFirstEpisodeOfTVShow();
+      }, 1500);
+    } else if (repeatSeason) {
+      // Go to first episode of current season
+      setShowLoopNotification(true);
+      setTimeout(() => {
+        setShowLoopNotification(false);
+        onFirstEpisodeOfSeason();
+      }, 2000);
+    } else {
+      // Playback complete
+      onComplete?.();
+    }
+  };
+
+  // Toggle Picture-in-Picture
+  const togglePictureInPicture = () => {
+    if (!videoRef.current || !isPipSupported) return;
+    
+    try {
+      if (document.pictureInPictureElement !== videoRef.current) {
+        videoRef.current.requestPictureInPicture()
+          .then(() => {
+            // Ensure the video is playing in PiP mode
+            if (videoRef.current && videoRef.current.paused) {
+              videoRef.current.play().catch(() => {
+                // Silent error handling
+              });
+            }
+          })
+          .catch(err => {
+            handleError(new Error('Failed to enter Picture-in-Picture mode: ' + err.message));
+          });
+      } else {
+        document.exitPictureInPicture().catch(err => {
+          handleError(new Error('Failed to exit Picture-in-Picture mode: ' + err.message));
+        });
+      }
+    } catch (err) {
+      handleError(new Error('Picture-in-Picture mode is not supported in this browser'));
+    }
+  };
 
   if (error) {
     return (
@@ -1031,12 +1093,12 @@ export function PlayEpisodeDialog({
         </div>
         
         {/* Optional visual debug indicator - remove in production */}
-        {process.env.NODE_ENV === 'development' && (repeatSeason || repeatTvshow) && (
+        {/* {process.env.NODE_ENV === 'development' && (repeatSeason || repeatTvshow) && (
           <div className="absolute top-0 right-0 z-50 bg-black bg-opacity-70 text-white text-xs p-2">
             <div>Repeat mode: {repeatOne ? 'One' : repeatSeason ? 'Season' : repeatTvshow ? 'TV Show' : 'None'}</div>
             <div>Has next episode: {hasNextEpisode ? 'Yes' : 'No'}</div>
           </div>
-        )}
+        )} */}
         
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
@@ -1089,6 +1151,7 @@ export function PlayEpisodeDialog({
                     <>
                       <video 
                         ref={videoRef}
+                        key={episode.encFilePath}
                         src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
                         className="w-full h-full object-cover"
                         style={isFullscreen ? { objectFit: 'contain' } : {}}
@@ -1113,9 +1176,18 @@ export function PlayEpisodeDialog({
                             const progressValue = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
                             setProgress(progressValue);
                             setCurrentTime(e.currentTarget.currentTime);
+                            
+                            // Check if we're close to the end of the video
+                            // This is a backup in case onEnded doesn't fire
+                            if (e.currentTarget.currentTime > 0 && 
+                                e.currentTarget.duration - e.currentTarget.currentTime < 0.5) {
+                              handleVideoEnd(e);
+                            }
                           }
                         }}
-                        onEnded={() => {/* Handled by our custom event listener */}}
+                        onEnded={(e) => {
+                          handleVideoEnd(e);
+                        }}
                         onError={(e) => handleError(new Error('Video playback error'))}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1312,7 +1384,7 @@ export function PlayEpisodeDialog({
                         </div>
                         
                         {/* PiP button */}
-                        {/* {isPipSupported && (
+                        {isPipSupported && (
                           <button 
                             onClick={togglePictureInPicture}
                             title={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture (p)"}
@@ -1320,7 +1392,7 @@ export function PlayEpisodeDialog({
                           >
                             <PictureInPicture2 className={`w-5 h-5 transition-colors duration-150 ${isPipActive ? 'text-rose-500' : 'hover:text-rose-500'}`} />
                           </button>
-                        )} */}
+                        )}
                         
                         {/* fullscreen button */}
                         <button onClick={toggleFullscreen}>

@@ -14,18 +14,6 @@ import { LazyImage } from '@/components/ui/lazy-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PlayEpisodeDialog } from '@/components/ui/play-episode-dialog';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-
 // Constants
 const TVSHOW_OVERVIEW_STR_LIMIT = 260;
 const SEASON_OVERVIEW_STR_LIMIT = 200;
@@ -387,10 +375,15 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                     hasPreviousEpisode={selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id) > 0}
                     onNextEpisode={() => {
                       const currentIndex = selectedSeason.episodes.findIndex((e: any) => e.id === selectedEpisode.id);
+                      
                       if (currentIndex < selectedSeason.episodes.length - 1) {
                         const nextEpisode = selectedSeason.episodes[currentIndex + 1];
+                        
                         if (nextEpisode.is_in_storage && nextEpisode.encFilePath) {
+                          // Keep dialog open when setting next episode
                           setSelectedEpisode(nextEpisode);
+                          // Make sure dialog is open
+                          setIsDialogOpen(true);
                         }
                       }
                     }}
@@ -414,6 +407,45 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                       }
                     }}
                     onFirstEpisodeOfTVShow={() => {
+                      // Check if there's a next season
+                      const currentSeasonIndex = tvshow.seasons.findIndex(
+                        (s: any) => s.season_number === selectedSeason.season_number
+                      );
+                      
+                      // Try to find the next season that has episodes on disk
+                      let nextSeason = null;
+                      
+                      // Start looking from the next season
+                      for (let i = currentSeasonIndex + 1; i < tvshow.seasons.length; i++) {
+                        if (tvshow.seasons[i].seasonFolderExists) {
+                          nextSeason = tvshow.seasons[i];
+                          break;
+                        }
+                      }
+                      
+                      // If we found a next season, go to it
+                      if (nextSeason) {
+                        // Change to the next season
+                        handleSeasonSelect(nextSeason);
+                        
+                        // Find first playable episode in that season
+                        const firstPlayableEpisode = nextSeason.episodes?.find((e: any) => 
+                          e.is_in_storage && e.encFilePath
+                        );
+                        
+                        if (firstPlayableEpisode) {
+                          // Small timeout to ensure season change completes first
+                          setTimeout(() => {
+                            setSelectedEpisode(firstPlayableEpisode);
+                            setIsDialogOpen(true);
+                          }, 100);
+                          
+                          return;
+                        }
+                      }
+                      
+                      // If no next season or no playable episodes, go back to first season
+                      
                       // Try to get Season 1 specifically
                       let firstSeason = tvshow.seasons.find((s: any) => 
                         s.season_number === 1 && s.seasonFolderExists
@@ -439,6 +471,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                           
                           if (firstPlayableEpisode) {
                             setSelectedEpisode(firstPlayableEpisode);
+                            // Make sure dialog is open
+                            setIsDialogOpen(true);
                           }
                         } else {
                           // Otherwise switch to first season
