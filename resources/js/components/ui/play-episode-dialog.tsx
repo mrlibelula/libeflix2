@@ -9,8 +9,9 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack } from 'lucide-react';
 import { route } from 'ziggy-js';
+import { Tooltip } from "@/components/ui/tooltip";
 
 type PlayEpisodeDialogProps = {
   episode: any;
@@ -1292,7 +1293,7 @@ export function PlayEpisodeDialog({
                 {/* Video controls overlay */}
                 <div 
                   ref={controlsRef}
-                  className={`absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] to-transparent transition-opacity duration-300 flex flex-col justify-end ${
+                  className={`absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
                     controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onMouseEnter={() => {
@@ -1365,47 +1366,55 @@ export function PlayEpisodeDialog({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-x-4">
                         {/* play/pause button */}
-                        <button onClick={togglePlay} className="hover:text-rose-500 transition-colors duration-150">
-                          {isPlaying ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                              <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
-                            </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                              <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
+                        <Tooltip text={isPlaying ? "Pause (Space)" : "Play (Space)"} position="bottom">
+                          <button onClick={togglePlay} className="hover:text-rose-500 transition-colors duration-150">
+                            {isPlaying ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                                <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                                <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </button>
+                        </Tooltip>
 
                         {/* skip to previous episode */}
-                        <button 
-                          onClick={handlePreviousEpisode} 
-                          disabled={!hasPreviousEpisode}
-                          className={`${!hasPreviousEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
-                          title={`Previous Episode (B)`}
-                        >
-                          <SkipBack className="w-5 h-5" />
-                        </button>
+                        <Tooltip text="Previous Episode (B)" position="bottom">
+                          <button 
+                            onClick={handlePreviousEpisode} 
+                            disabled={!hasPreviousEpisode}
+                            className={`${!hasPreviousEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                          >
+                            <SkipBack className="w-5 h-5" />
+                          </button>
+                        </Tooltip>
                         
                         {/* step back 5 seconds button */}
-                        <button className="hidden sm:block" onClick={handleStepBack}>
-                          <StepBack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                        </button>
+                        <Tooltip text="Back 5 seconds (Left Arrow)" position="bottom">
+                          <button className="hidden sm:block" onClick={handleStepBack}>
+                            <StepBack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                          </button>
+                        </Tooltip>
                         
                         {/* step forward 5 seconds button */}
-                        <button className="hidden sm:block" onClick={handleStepForward}>
-                          <StepForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                        </button>
+                        <Tooltip text="Forward 5 seconds (Right Arrow)" position="bottom">
+                          <button className="hidden sm:block" onClick={handleStepForward}>
+                            <StepForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                          </button>
+                        </Tooltip>
 
                         {/* skip to next episode */}
-                        <button 
-                          onClick={handleNextEpisode} 
-                          disabled={!hasNextEpisode}
-                          className={`${!hasNextEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
-                          title={`Next Episode (N)`}
-                        >
-                          <SkipForward className="w-5 h-5" />
-                        </button>
+                        <Tooltip text="Next Episode (N)" position="bottom">
+                          <button 
+                            onClick={handleNextEpisode} 
+                            disabled={!hasNextEpisode}
+                            className={`${!hasNextEpisode ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500'} transition-colors duration-150`}
+                          >
+                            <SkipForward className="w-5 h-5" />
+                          </button>
+                        </Tooltip>
                         
                         {/* Timer moved back to left controls */}
                         <div className="hidden sm:block text-sm">
@@ -1416,13 +1425,15 @@ export function PlayEpisodeDialog({
                       <div className="flex items-center gap-x-4">
                         <div className="flex items-center gap-x-2 mr-2">
                           {/* mute button */}
-                          <button onClick={toggleMute}>
-                            {isMuted ? (
-                              <VolumeX className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                            ) : (
-                              <Volume2 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                            )}
-                          </button>
+                          <Tooltip text={isMuted ? "Unmute (m)" : "Mute (m)"} position="bottom">
+                            <button onClick={toggleMute}>
+                              {isMuted ? (
+                                <VolumeX className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                              ) : (
+                                <Volume2 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                              )}
+                            </button>
+                          </Tooltip>
                           {/* volume slider */}
                           <input 
                             type="range" 
@@ -1434,8 +1445,15 @@ export function PlayEpisodeDialog({
                           />
                         </div>
 
-                        {/* Subtitles button */}
-                        <MessageSquareText className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        {/* Seasons and episodes list button */}
+                        <Tooltip text="Seasons & Episodes" position="bottom">
+                          <SquareStack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        </Tooltip>
+
+                        {/* Subtitles and audio button */}
+                        <Tooltip text="Subtitles & Audio" position="bottom">
+                          <MessageSquareText className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                        </Tooltip>
                         
                         {/* PiP button */}
                         {/* {isPipSupported && (
@@ -1449,13 +1467,15 @@ export function PlayEpisodeDialog({
                         )} */}
                         
                         {/* fullscreen button */}
-                        <button onClick={toggleFullscreen}>
-                          {isFullscreen ? (
-                            <Minimize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                          ) : (
-                            <Maximize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
-                          )}
-                        </button>
+                        <Tooltip text={isFullscreen ? "Exit Fullscreen (f)" : "Enter Fullscreen (f)"} position="bottom">
+                          <button onClick={toggleFullscreen}>
+                            {isFullscreen ? (
+                              <Minimize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                            ) : (
+                              <Maximize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                            )}
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>
@@ -1480,48 +1500,51 @@ export function PlayEpisodeDialog({
                   <div className="hidden sm:flex items-center gap-x-4">
                     {/* Repeat mode indicator */}
                     {(repeatOne || repeatSeason || repeatTvshow) && (
-                      <span className="text-xs text-rose-500 ml-2">
+                      <span className="hidden text-xs text-rose-500 ml-2">
                         {repeatOne && "Repeating episode"}
                         {repeatSeason && "Repeating season"}
                         {repeatTvshow && "Repeating entire series"}
                       </span>
                     )}
                     {/* repeat episode (loop episode) */}
-                    <button
-                      className="focus:outline-none"
-                      onClick={toggleRepeatOne}
-                      title="Repeat current episode"
-                    >
-                      <Repeat1 
-                        className={`w-5 h-5 transition-colors duration-150 ${
-                          repeatOne ? 'text-rose-500' : 'hover:text-rose-500'
-                        }`}
-                      />
-                    </button>
+                    <Tooltip text="Repeat current episode" position="bottom">
+                      <button
+                        className="focus:outline-none"
+                        onClick={toggleRepeatOne}
+                      >
+                        <Repeat1 
+                          className={`w-5 h-5 transition-colors duration-150 ${
+                            repeatOne ? 'text-rose-500' : 'hover:text-rose-500'
+                          }`}
+                        />
+                      </button>
+                    </Tooltip>
                     {/* repeat season playlist (loop season) */}
-                    <button
-                      className="focus:outline-none"
-                      onClick={toggleRepeatSeason}
-                      title="Repeat current season"
-                    >
-                      <Repeat 
-                        className={`w-5 h-5 transition-colors duration-150 ${
-                          repeatSeason ? 'text-rose-500' : 'hover:text-rose-500'
-                        }`}
-                      />
-                    </button>
+                    <Tooltip text="Repeat current season" position="bottom">
+                      <button
+                        className="focus:outline-none"
+                        onClick={toggleRepeatSeason}
+                      >
+                        <Repeat 
+                          className={`w-5 h-5 transition-colors duration-150 ${
+                            repeatSeason ? 'text-rose-500' : 'hover:text-rose-500'
+                          }`}
+                        />
+                      </button>
+                    </Tooltip>
                     {/* repeat entire tvshow episodes (loop all seasons) */}
-                    <button
-                      className="focus:outline-none"
-                      onClick={toggleRepeatTvshow}
-                      title="Repeat entire TV show"
-                    >
-                      <Repeat2 
-                        className={`w-5 h-5 transition-colors duration-150 ${
-                          repeatTvshow ? 'text-rose-500' : 'hover:text-rose-500'
-                        }`}
-                      />
-                    </button>
+                    <Tooltip text="Repeat entire TV show" position="bottom">
+                      <button
+                        className="focus:outline-none"
+                        onClick={toggleRepeatTvshow}
+                      >
+                        <Repeat2 
+                          className={`w-5 h-5 transition-colors duration-150 ${
+                            repeatTvshow ? 'text-rose-500' : 'hover:text-rose-500'
+                          }`}
+                        />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               </DialogTitle>
