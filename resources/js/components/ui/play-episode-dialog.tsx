@@ -462,7 +462,19 @@ export function PlayEpisodeDialog({
   // Handle navigation to next episode
   const handleNextEpisode = () => {
     if (hasNextEpisode && onNextEpisode) {
-      onNextEpisode();
+      // If in PiP mode, exit first before navigating to next episode
+      if (document.pictureInPictureElement === videoRef.current) {
+        document.exitPictureInPicture()
+          .then(() => {
+            onNextEpisode();
+          })
+          .catch(() => {
+            // If exiting PiP fails, still try to navigate
+            onNextEpisode();
+          });
+      } else {
+        onNextEpisode();
+      }
     }
   };
 
@@ -965,7 +977,7 @@ export function PlayEpisodeDialog({
     // This useEffect runs when the dialog opens
   }, [dialogOpen, episode?.name]);
 
-  // Define a simple direct function to handle video ending
+  // Replace the handleVideoEnd function to properly handle PiP when episode ends
   const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     // Prevent duplicate firing
     const video = e.currentTarget;
@@ -984,6 +996,9 @@ export function PlayEpisodeDialog({
       sessionStorage.removeItem(endEventKey);
     }, 2000);
     
+    // Check if we're in Picture-in-Picture mode
+    const isInPipMode = document.pictureInPictureElement === videoRef.current;
+    
     // Handle based on repeat mode
     if (repeatOne) {
       // Loop current episode
@@ -991,34 +1006,82 @@ export function PlayEpisodeDialog({
       video.play().catch(() => {});
       setShowLoopNotification(true);
       setTimeout(() => setShowLoopNotification(false), 2000);
-    } else if (repeatSeason && hasNextEpisode) {
-      // Go to next episode within season
+    } else if ((repeatSeason || repeatTvshow) && hasNextEpisode) {
+      // Go to next episode within season or show
       setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onNextEpisode();
-      }, 1500);
+      
+      // If in PiP mode, exit PiP before navigation
+      if (isInPipMode) {
+        document.exitPictureInPicture()
+          .then(() => {
+            setTimeout(() => {
+              setShowNextEpisodeNotification(false);
+              onNextEpisode();
+            }, 1500);
+          })
+          .catch(() => {
+            // If exiting PiP fails, still try to navigate
+            setTimeout(() => {
+              setShowNextEpisodeNotification(false);
+              onNextEpisode();
+            }, 1500);
+          });
+      } else {
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
+        }, 1500);
+      }
     } else if (repeatSeason) {
       // Go to first episode of current season
       setShowLoopNotification(true);
-      setTimeout(() => {
-        setShowLoopNotification(false);
-        onFirstEpisodeOfSeason();
-      }, 2000);
-    } else if (repeatTvshow && hasNextEpisode) {
-      // Go to next episode
-      setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onNextEpisode();
-      }, 1500);
+      
+      // Exit PiP if active before navigating
+      if (isInPipMode) {
+        document.exitPictureInPicture()
+          .then(() => {
+            setTimeout(() => {
+              setShowLoopNotification(false);
+              onFirstEpisodeOfSeason();
+            }, 2000);
+          })
+          .catch(() => {
+            setTimeout(() => {
+              setShowLoopNotification(false);
+              onFirstEpisodeOfSeason();
+            }, 2000);
+          });
+      } else {
+        setTimeout(() => {
+          setShowLoopNotification(false);
+          onFirstEpisodeOfSeason();
+        }, 2000);
+      }
     } else if (repeatTvshow) {
       // Go to first episode of TV show
       setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onFirstEpisodeOfTVShow();
-      }, 1500);
+      
+      // Exit PiP if active before navigating
+      if (isInPipMode) {
+        document.exitPictureInPicture()
+          .then(() => {
+            setTimeout(() => {
+              setShowNextEpisodeNotification(false);
+              onFirstEpisodeOfTVShow();
+            }, 1500);
+          })
+          .catch(() => {
+            setTimeout(() => {
+              setShowNextEpisodeNotification(false);
+              onFirstEpisodeOfTVShow();
+            }, 1500);
+          });
+      } else {
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onFirstEpisodeOfTVShow();
+        }, 1500);
+      }
     } else {
       // No repeat mode active - stop playback at the end
       setIsPlaying(false);
