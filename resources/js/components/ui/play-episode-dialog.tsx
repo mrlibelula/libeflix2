@@ -991,19 +991,12 @@ export function PlayEpisodeDialog({
       video.play().catch(() => {});
       setShowLoopNotification(true);
       setTimeout(() => setShowLoopNotification(false), 2000);
-    } else if (hasNextEpisode) {
-      // Go to next episode
+    } else if (repeatSeason && hasNextEpisode) {
+      // Go to next episode within season
       setShowNextEpisodeNotification(true);
       setTimeout(() => {
         setShowNextEpisodeNotification(false);
         onNextEpisode();
-      }, 1500);
-    } else if (repeatTvshow) {
-      // Go to first episode of next season
-      setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onFirstEpisodeOfTVShow();
       }, 1500);
     } else if (repeatSeason) {
       // Go to first episode of current season
@@ -1012,8 +1005,23 @@ export function PlayEpisodeDialog({
         setShowLoopNotification(false);
         onFirstEpisodeOfSeason();
       }, 2000);
+    } else if (repeatTvshow && hasNextEpisode) {
+      // Go to next episode
+      setShowNextEpisodeNotification(true);
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onNextEpisode();
+      }, 1500);
+    } else if (repeatTvshow) {
+      // Go to first episode of TV show
+      setShowNextEpisodeNotification(true);
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onFirstEpisodeOfTVShow();
+      }, 1500);
     } else {
-      // Playback complete
+      // No repeat mode active - stop playback at the end
+      setIsPlaying(false);
       onComplete?.();
     }
   };
