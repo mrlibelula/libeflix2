@@ -462,18 +462,16 @@ export function PlayEpisodeDialog({
   // Handle navigation to next episode
   const handleNextEpisode = () => {
     if (hasNextEpisode && onNextEpisode) {
-      // If in PiP mode, exit first before navigating to next episode
-      if (document.pictureInPictureElement === videoRef.current) {
-        document.exitPictureInPicture()
-          .then(() => {
-            onNextEpisode();
-          })
-          .catch(() => {
-            // If exiting PiP fails, still try to navigate
-            onNextEpisode();
-          });
-      } else {
-        onNextEpisode();
+      // Store PiP state to restore it after episode change
+      const wasInPipMode = document.pictureInPictureElement === videoRef.current;
+      
+      // Call the next episode handler
+      onNextEpisode();
+      
+      // We'll restore PiP in the episode change effect if needed
+      if (wasInPipMode) {
+        // Store the PiP state in session storage to restore after episode change
+        sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
       }
     }
   };
@@ -977,7 +975,7 @@ export function PlayEpisodeDialog({
     // This useEffect runs when the dialog opens
   }, [dialogOpen, episode?.name]);
 
-  // Replace the handleVideoEnd function to properly handle PiP when episode ends
+  // Replace the handleVideoEnd function to maintain PiP when episode ends
   const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     // Prevent duplicate firing
     const video = e.currentTarget;
@@ -996,8 +994,11 @@ export function PlayEpisodeDialog({
       sessionStorage.removeItem(endEventKey);
     }, 2000);
     
-    // Check if we're in Picture-in-Picture mode
+    // Check if we're in Picture-in-Picture mode and store the state
     const isInPipMode = document.pictureInPictureElement === videoRef.current;
+    if (isInPipMode) {
+      sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
+    }
     
     // Handle based on repeat mode
     if (repeatOne) {
@@ -1009,79 +1010,24 @@ export function PlayEpisodeDialog({
     } else if ((repeatSeason || repeatTvshow) && hasNextEpisode) {
       // Go to next episode within season or show
       setShowNextEpisodeNotification(true);
-      
-      // If in PiP mode, exit PiP before navigation
-      if (isInPipMode) {
-        document.exitPictureInPicture()
-          .then(() => {
-            setTimeout(() => {
-              setShowNextEpisodeNotification(false);
-              onNextEpisode();
-            }, 1500);
-          })
-          .catch(() => {
-            // If exiting PiP fails, still try to navigate
-            setTimeout(() => {
-              setShowNextEpisodeNotification(false);
-              onNextEpisode();
-            }, 1500);
-          });
-      } else {
-        setTimeout(() => {
-          setShowNextEpisodeNotification(false);
-          onNextEpisode();
-        }, 1500);
-      }
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onNextEpisode();
+      }, 1500);
     } else if (repeatSeason) {
       // Go to first episode of current season
       setShowLoopNotification(true);
-      
-      // Exit PiP if active before navigating
-      if (isInPipMode) {
-        document.exitPictureInPicture()
-          .then(() => {
-            setTimeout(() => {
-              setShowLoopNotification(false);
-              onFirstEpisodeOfSeason();
-            }, 2000);
-          })
-          .catch(() => {
-            setTimeout(() => {
-              setShowLoopNotification(false);
-              onFirstEpisodeOfSeason();
-            }, 2000);
-          });
-      } else {
-        setTimeout(() => {
-          setShowLoopNotification(false);
-          onFirstEpisodeOfSeason();
-        }, 2000);
-      }
+      setTimeout(() => {
+        setShowLoopNotification(false);
+        onFirstEpisodeOfSeason();
+      }, 2000);
     } else if (repeatTvshow) {
       // Go to first episode of TV show
       setShowNextEpisodeNotification(true);
-      
-      // Exit PiP if active before navigating
-      if (isInPipMode) {
-        document.exitPictureInPicture()
-          .then(() => {
-            setTimeout(() => {
-              setShowNextEpisodeNotification(false);
-              onFirstEpisodeOfTVShow();
-            }, 1500);
-          })
-          .catch(() => {
-            setTimeout(() => {
-              setShowNextEpisodeNotification(false);
-              onFirstEpisodeOfTVShow();
-            }, 1500);
-          });
-      } else {
-        setTimeout(() => {
-          setShowNextEpisodeNotification(false);
-          onFirstEpisodeOfTVShow();
-        }, 1500);
-      }
+      setTimeout(() => {
+        setShowNextEpisodeNotification(false);
+        onFirstEpisodeOfTVShow();
+      }, 1500);
     } else {
       // No repeat mode active - stop playback at the end
       setIsPlaying(false);
@@ -1116,6 +1062,40 @@ export function PlayEpisodeDialog({
       handleError(new Error('Picture-in-Picture mode is not supported in this browser'));
     }
   };
+
+  // Add effect to restore PiP when episode changes
+  useEffect(() => {
+    if (!videoRef.current || !dialogOpen || !isPipSupported) return;
+    
+    // Create a function to handle video loading and restore PiP if needed
+    const prepareAndRestorePipIfNeeded = () => {
+      // Check if we were in PiP mode before episode change
+      const wasInPipMode = sessionStorage.getItem('pipActiveBeforeEpisodeChange') === 'true';
+      
+      if (wasInPipMode && videoRef.current) {
+        // Clear the flag immediately to prevent redundant attempts
+        sessionStorage.removeItem('pipActiveBeforeEpisodeChange');
+        
+        // Wait a moment for the video to load before restoring PiP
+        const restorePipTimeout = setTimeout(() => {
+          if (videoRef.current && document.pictureInPictureElement !== videoRef.current) {
+            videoRef.current.requestPictureInPicture()
+              .catch(err => {
+                console.log('Failed to restore PiP mode:', err);
+              });
+          }
+        }, 1000);
+        
+        // Clean up the timeout if the component unmounts
+        return () => clearTimeout(restorePipTimeout);
+      }
+    };
+    
+    // Call the prepare function
+    const cleanup = prepareAndRestorePipIfNeeded();
+    
+    return cleanup;
+  }, [episode?.encFilePath, dialogOpen, isPipSupported]);
 
   if (error) {
     return (
