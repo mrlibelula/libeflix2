@@ -1345,12 +1345,12 @@ export function PlayEpisodeDialog({
                         </button>
                         
                         {/* step back 5 seconds button */}
-                        <button onClick={handleStepBack}>
+                        <button className="hidden sm:block" onClick={handleStepBack}>
                           <StepBack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
                         </button>
                         
                         {/* step forward 5 seconds button */}
-                        <button onClick={handleStepForward}>
+                        <button className="hidden sm:block" onClick={handleStepForward}>
                           <StepForward className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
                         </button>
 
@@ -1392,7 +1392,7 @@ export function PlayEpisodeDialog({
                         </div>
                         
                         {/* PiP button */}
-                        {isPipSupported && (
+                        {/* {isPipSupported && (
                           <button 
                             onClick={togglePictureInPicture}
                             title={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture (p)"}
@@ -1400,7 +1400,7 @@ export function PlayEpisodeDialog({
                           >
                             <PictureInPicture2 className={`w-5 h-5 transition-colors duration-150 ${isPipActive ? 'text-rose-500' : 'hover:text-rose-500'}`} />
                           </button>
-                        )}
+                        )} */}
                         
                         {/* fullscreen button */}
                         <button onClick={toggleFullscreen}>
@@ -1422,7 +1422,7 @@ export function PlayEpisodeDialog({
           <div className="p-6">
             <DialogHeader>
               <DialogTitle>
-                <div className="flex justify-between items-start w-full">
+                <div className="sm:flex justify-between items-start w-full">
                   <div>
                     <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
                       {tvshowName}
@@ -1431,7 +1431,7 @@ export function PlayEpisodeDialog({
                       {episode.name}
                     </div>
                   </div>
-                  <div className="flex items-center gap-x-4">
+                  <div className="hidden sm:flex items-center gap-x-4">
                     {/* Repeat mode indicator */}
                     {(repeatOne || repeatSeason || repeatTvshow) && (
                       <span className="text-xs text-rose-500 ml-2">
@@ -1480,7 +1480,7 @@ export function PlayEpisodeDialog({
                 </div>
               </DialogTitle>
               <DialogDescription>
-                <span className="flex justify-start items-center gap-x-2 w-full">
+                <span className="sm:flex justify-start items-center gap-x-2 w-full">
                     <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
                 </span>
               </DialogDescription>
