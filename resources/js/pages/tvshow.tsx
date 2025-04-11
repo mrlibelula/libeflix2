@@ -518,15 +518,15 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             onClick={() => handleSeasonSelect(season)} 
                             className="cursor-pointer"
                           >
-                            <div className={`w-[10rem] h-[15rem] border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover:opacity-100 transition-all duration-150`}>
+                            <div className={`w-[10rem] h-[15rem] border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover-touch:opacity-100 transition-all duration-150`}>
                               <LazyImage 
                                 src={season.posterPathUrl}
                                 alt={season.name}
-                                className={`w-full h-full object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover:grayscale-0 transition-all duration-150`}
+                                className={`w-full h-full object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover-touch:grayscale-0 transition-all duration-150`}
                                 priority={isPriority}
                               />
                             </div>
-                            <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason?.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-neutral-100'} transition-colors duration-150`}>
+                            <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason?.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover-touch:text-neutral-900 dark:group-hover-touch:text-neutral-100'} transition-colors duration-150`}>
                               {season.name}
                             </div>
                           </RibbonItem>
@@ -583,7 +583,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                         
                         return (
                           <li key={episode.id} className={`group flex flex-col lg:flex-row items-start gap-y-3 lg:gap-y-0 lg:items-center gap-x-4 lg:gap-x-8 justify-between px-2 py-8 bg-gradient-to-tr hover:bg-neutral-400/20 dark:hover:bg-neutral-800/30 transition-colors duration-150 ${!isLastItem ? 'border-b border-neutral-800 dark:border-neutral-700 border-dotted' : ''}`}>
-                            <div className="text-2xl text-center w-[2.5rem] group-hover:text-rose-500 dark:group-hover:text-rose-500 transition-colors duration-150">
+                            <div className="text-2xl text-center w-[2.5rem] group-hover-touch:text-rose-500 dark:group-hover-touch:text-rose-500 transition-colors duration-150">
                               {episode.episode_number}
                             </div>
                             
@@ -594,7 +594,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               <LazyImage 
                                 src={`${episode.stillUrl}`}
                                 alt={episode.name}
-                                className={`w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-150 ${!episode.is_in_storage ? 'grayscale' : ''}`}
+                                className={`w-full h-full object-cover opacity-90 group-hover-touch:opacity-100 transition-opacity duration-150 ${!episode.is_in_storage ? 'grayscale' : ''}`}
                                 priority={isPriority}
                               />
                               {episode.is_in_storage && (
