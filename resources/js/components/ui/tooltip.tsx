@@ -18,7 +18,7 @@ interface TooltipProps {
 export function Tooltip({ 
   children, 
   text, 
-  delayMs = 300, 
+  delayMs = 700, 
   position = 'top',
   variant = 'dark',
   className = '',
