@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2 } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText } from 'lucide-react';
 import { route } from 'ziggy-js';
 
 type PlayEpisodeDialogProps = {
@@ -1371,7 +1371,7 @@ export function PlayEpisodeDialog({
                       </div>
                       
                       <div className="flex items-center gap-x-4">
-                        <div className="flex items-center gap-x-2">
+                        <div className="flex items-center gap-x-2 mr-2">
                           {/* mute button */}
                           <button onClick={toggleMute}>
                             {isMuted ? (
@@ -1390,6 +1390,9 @@ export function PlayEpisodeDialog({
                             max="100" 
                           />
                         </div>
+
+                        {/* Subtitles button */}
+                        <MessageSquareText className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
                         
                         {/* PiP button */}
                         {/* {isPipSupported && (

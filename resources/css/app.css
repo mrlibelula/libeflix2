@@ -6,6 +6,7 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant group-hover-touch (&:is(.group:hover *, .group:active *, .group:focus *));
 
 @theme {
     --font-sans:
@@ -239,6 +240,26 @@
   
   .animate-zoomIn {
     animation: zoomIn 0.7s ease-out forwards;
+  }
+
+  /* Mobile touch interaction styles */
+  @media (pointer: coarse) {
+    .touch-manipulation {
+      touch-action: manipulation;
+    }
+    
+    /* Force show hover state elements on touch */
+    .group:active .force-show-on-touch,
+    .group:focus .force-show-on-touch {
+      display: flex !important; 
+      opacity: 1 !important;
+      transform: translateY(-8px) !important;
+    }
+    
+    .group:active .force-scale-on-touch,
+    .group:focus .force-scale-on-touch {
+      transform: scale(1.18) !important;
+    }
   }
 }
 
