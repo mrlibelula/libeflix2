@@ -18,8 +18,21 @@ createInertiaApp({
     progress: {
         color: '#ff2056',
         showSpinner: true,
+        delay: 0,
+        includeCSS: true,
     },
 });
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+// When the page is loaded, hide the global loader
+window.addEventListener('load', () => {
+    const loader = document.getElementById('app-loader');
+    if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(() => {
+            loader.style.display = 'none';
+        }, 300);
+    }
+});
