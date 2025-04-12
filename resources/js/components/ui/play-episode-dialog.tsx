@@ -99,7 +99,6 @@ export function PlayEpisodeDialog({
     { id: 'default', label: 'Default', selected: true },
     { id: 'en-5.1', label: 'English (5.1)', selected: false },
     { id: 'en-2.0', label: 'English (2.0)', selected: false },
-    { id: 'commentary', label: 'Director Commentary', selected: false },
   ]);
 
   // Initialize repeat mode states based on initialRepeatMode prop
