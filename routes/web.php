@@ -14,6 +14,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
     Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
     Route::get('tvshow/stream/{encFilePath}/{disk?}', [StorageController::class, 'tvshowEpisodeServe'])->name('tvshow.episode.serve');
+    Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
 });
 
 require __DIR__.'/settings.php';

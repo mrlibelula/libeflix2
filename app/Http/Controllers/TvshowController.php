@@ -7,6 +7,8 @@ use App\Services\TvshowService;
 use App\Services\SeasonService;
 use App\Services\Tool;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -95,6 +97,55 @@ class TvshowController extends Controller
                 ? Tool::encode($episode->is_in_storage) 
                 : null;
             
+            // Check for subtitles in database or on disk
+            if (!empty($episode->subtitles)) {
+                // Parse the subtitles JSON string if needed
+                $subtitlesData = is_string($episode->subtitles) 
+                    ? json_decode($episode->subtitles, true)
+                    : $episode->subtitles;
+                
+                $mappedSubtitles = collect($subtitlesData)->map(function ($subtitle) {
+                    // Handle both new and old subtitle formats
+                    $languageCode = null;
+                    $filePath = null;
+                    
+                    // Check which format this subtitle uses
+                    if (isset($subtitle['language_code'])) {
+                        $languageCode = $subtitle['language_code'];
+                    } elseif (isset($subtitle['lang'])) {
+                        $languageCode = $subtitle['lang'];
+                    } else {
+                        $languageCode = 'EN'; // Default
+                    }
+                    
+                    // Check which file path format this subtitle uses
+                    if (isset($subtitle['file_path'])) {
+                        $filePath = $subtitle['file_path'];
+                    } elseif (isset($subtitle['subtFilePath'])) {
+                        $filePath = $subtitle['subtFilePath'];
+                    } else {
+                        return null; // Skip this subtitle if no valid file path
+                    }
+                    
+                    return [
+                        'language_code' => $languageCode,
+                        'language_name' => Tool::getLanguageForSubtitleLabel($languageCode),
+                        'encFilePath' => Tool::encode($filePath),
+                    ];
+                })->filter()->toArray(); // Remove any null values
+                
+                $episode->subtitles = $mappedSubtitles;
+            } else {
+                // If no subtitles in database but we have a valid episode file, check the disk for subtitle files
+                if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
+                    // Get potential subtitles
+                    $diskSubtitles = $this->findSubtitlesForEpisode($episode->is_in_storage);
+                    $episode->subtitles = $diskSubtitles;
+                } else {
+                    $episode->subtitles = [];
+                }
+            }
+            
             return $episode;
         });
 
@@ -112,10 +163,63 @@ class TvshowController extends Controller
             return $episodeArray;
         });
 
+        // dd($tvshow->episodes->first());
+
         return Inertia::render('tvshow', [
             'tvshow' => $tvshow,
             'backdropUrl' => TvshowService::getRandomTvshowImages($tvshow, 'backdrops'),
             'selectedSeasonNumber' => (int)$selectedSeasonNumber,
         ]);
+    }
+
+    /**
+     * Find subtitle files for an episode directly from disk
+     *
+     * @param string $videoFilePath
+     * @return array
+     */
+    private function findSubtitlesForEpisode(string $videoFilePath): array
+    {
+        $result = [];
+        $storage = Storage::disk('tvshows');
+        
+        // Extract path info from the video file path
+        $videoPathInfo = pathinfo($videoFilePath);
+        $searchPath = dirname($videoFilePath); // Get directory
+        $basenameNoExt = pathinfo(basename($videoFilePath), PATHINFO_FILENAME);
+        
+        try {
+            // Check if directory exists first
+            if (!$storage->exists($searchPath)) {
+                return [];
+            }
+            
+            // Get all files in the directory
+            $files = $storage->files($searchPath);
+            
+            foreach ($files as $file) {
+                // Skip if not a subtitle file (VTT format)
+                if (!str_ends_with(strtolower($file), '.vtt')) {
+                    continue;
+                }
+                
+                $subtitleFilename = basename($file);
+                
+                // Match the pattern: same filename + _LANG.vtt (e.g. "video_EN.vtt")
+                if (preg_match('/^' . preg_quote($basenameNoExt, '/') . '_([A-Z]{2})\.vtt$/i', $subtitleFilename, $matches)) {
+                    $langCode = strtoupper($matches[1]);
+                    $result[] = [
+                        'language_code' => $langCode,
+                        'language_name' => Tool::getLanguageForSubtitleLabel($langCode),
+                        'encFilePath' => Tool::encode($file)
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // Silent failure - just return empty array
+            Log::error("Error finding subtitles: " . $e->getMessage());
+        }
+        
+        return $result;
     }
 }

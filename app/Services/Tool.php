@@ -89,4 +89,46 @@ class Tool
     {
         return $method === 'laravel' ? decrypt($data) : self::base64UrlDecode($data);
     }
+
+    /**
+     * Get language name from short language code for subtitle label
+     *
+     * @param string $shortLanguage
+     * @return string
+     */
+    public static function getLanguageForSubtitleLabel(string $shortLanguage): string
+    {
+        $languages = [
+            'EN' => 'English',
+            'ES' => 'Spanish',
+            'FR' => 'French',
+            'DE' => 'German',
+            'IT' => 'Italian',
+            'JA' => 'Japanese',
+            'KO' => 'Korean',
+            'PT' => 'Portuguese',
+            'RU' => 'Russian',
+            'ZH' => 'Chinese',
+            'AR' => 'Arabic',
+            'TR' => 'Turkish',
+            'NL' => 'Dutch',
+            'SV' => 'Swedish',
+            'NO' => 'Norwegian',
+            'DA' => 'Danish',
+            'PL' => 'Polish',
+            'RO' => 'Romanian',
+            'HU' => 'Hungarian',
+            'CS' => 'Czech',
+            'SK' => 'Slovak',
+            'BG' => 'Bulgarian',
+            'HR' => 'Croatian',
+            'EL' => 'Greek',
+            'HE' => 'Hebrew',
+            'HI' => 'Hindi',
+            'ID' => 'Indonesian',
+            'MS' => 'Malay',
+        ];
+
+        return $languages[strtoupper($shortLanguage)] ?? __('Other');
+    }
 }

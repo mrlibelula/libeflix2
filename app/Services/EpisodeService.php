@@ -256,8 +256,8 @@ class EpisodeService
             if (preg_match('/^' . preg_quote($basenameNoExt, '/') . '_([A-Z]{2})\.vtt$/i', $subtitleFilename, $matches)) {
                 $lang = strtoupper($matches[1]);
                 $subtitles[] = [
-                    'subtFilePath' => $file, // Store the full path relative to the storage disk
-                    'lang' => $lang
+                    'file_path' => $file, // Store the full path relative to the storage disk
+                    'language_code' => $lang
                 ];
                 
                 Log::info("Found subtitle: $file for language: $lang");

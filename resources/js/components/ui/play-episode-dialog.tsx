@@ -83,23 +83,25 @@ export function PlayEpisodeDialog({
   
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
   
-  // Example subtitle and audio tracks
-  const [subtitleTracks, setSubtitleTracks] = useState([
+  // Subtitle tracks state with default "Off" option
+  const [subtitleTracks, setSubtitleTracks] = useState<Array<{id: string, label: string, selected: boolean, src?: string}>>([
     { id: 'off', label: 'Off', selected: true },
-    { id: 'en', label: 'English', selected: false },
-    { id: 'es', label: 'Spanish', selected: false },
-    { id: 'fr', label: 'French', selected: false },
   ]);
   
+  // Track the currently selected subtitle ID
+  const [currentSubtitleId, setCurrentSubtitleId] = useState<string>('off');
+
   const [audioTracks, setAudioTracks] = useState([
     { id: 'default', label: 'Default', selected: true },
-    { id: 'en-5.1', label: 'English (5.1)', selected: false },
-    { id: 'en-2.0', label: 'English (2.0)', selected: false },
+    { id: 'EN-5.1', label: 'English (5.1)', selected: false },
+    { id: 'EN-2.0', label: 'English (2.0)', selected: false },
   ]);
+
+  // Check if subtitles exist
+  const [hasSubtitles, setHasSubtitles] = useState(false);
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -107,6 +109,58 @@ export function PlayEpisodeDialog({
     setRepeatSeason(initialRepeatMode === 'season');
     setRepeatTvshow(initialRepeatMode === 'tvshow');
   }, [initialRepeatMode]);
+
+  // Initialize subtitle tracks when episode changes
+  useEffect(() => {
+    if (episode && episode.subtitles && Array.isArray(episode.subtitles)) {
+      try {
+        
+        
+        // Map the subtitles from the episode to our format
+        const subtitleOptions = [
+          { id: 'off', label: 'Off', selected: true },
+          ...episode.subtitles
+            .filter((subtitle: any) => 
+              subtitle && 
+              subtitle.language_code && 
+              subtitle.encFilePath && 
+              typeof subtitle.encFilePath === 'string'
+            )
+            .map((subtitle: any) => {
+              
+              return {
+                id: subtitle.language_code,
+                label: subtitle.language_name || subtitle.language_code,
+                selected: false,
+                src: route('tvshow.subtitles.serve', { 
+                  encFilePath: subtitle.encFilePath,
+                  disk: 'tvshows'
+                })
+              };
+            })
+        ];
+        
+        
+        setSubtitleTracks(subtitleOptions);
+        
+        // Initialize with "Off" as default
+        setCurrentSubtitleId('off');
+        
+        // Only set hasSubtitles to true if we have valid subtitle tracks (not just the 'off' option)
+        setHasSubtitles(subtitleOptions.length > 1);
+      } catch (err) {
+        console.error('Error processing subtitles:', err);
+        setSubtitleTracks([{ id: 'off', label: 'Off', selected: true }]);
+        setCurrentSubtitleId('off');
+        setHasSubtitles(false);
+      }
+    } else {
+      // Reset to just the "Off" option if no subtitles
+      setSubtitleTracks([{ id: 'off', label: 'Off', selected: true }]);
+      setCurrentSubtitleId('off');
+      setHasSubtitles(false);
+    }
+  }, [episode]);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -599,6 +653,12 @@ export function PlayEpisodeDialog({
         document.pictureInPictureEnabled || 
         (typeof video.requestPictureInPicture === 'function')
       );
+      
+      // Check if browser supports PiP with subtitles (Chrome 94+ and Safari 16.1+)
+      const supportsPictureInPictureWithSubtitles = 'pictureInPictureWindow' in window && 
+                                                  document.pictureInPictureEnabled;
+      
+      
     };
     
     checkPipSupport();
@@ -695,7 +755,7 @@ export function PlayEpisodeDialog({
               // Silent error handling
             });
           } catch (err) {
-            console.log('PiP cleanup error:', err);
+            
           }
         }
         
@@ -1056,32 +1116,214 @@ export function PlayEpisodeDialog({
     }
   };
 
-  // Toggle Picture-in-Picture
-  const togglePictureInPicture = () => {
-    if (!videoRef.current || !isPipSupported) return;
+  // Toggle Picture in Picture mode
+  const togglePictureInPicture = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      // Check if already in PiP mode
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPipActive(false);
+      } else {
+        // Safari and Chrome 94+ support subtitles in PiP
+        const browserSupportsPipWithSubtitles = 
+          (navigator.userAgent.includes('Chrome') && parseInt(navigator.userAgent.match(/Chrome\/([0-9]+)/)?.[1] || '0') >= 94) || 
+          (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') && parseInt(navigator.userAgent.match(/Version\/([0-9]+)\.([0-9]+)/)?.[1] || '0') >= 16);
+          
+        if (browserSupportsPipWithSubtitles) {
+          // Chrome 94+ and Safari 16.1+ support PiP with subtitles
+          const pipVideo = videoRef.current as any;
+          
+          // Make sure subtitles are applied before entering PiP
+          if (currentSubtitleId && currentSubtitleId !== 'off') {
+            applySubtitleToVideo(currentSubtitleId);
+          }
+          
+          // Set up PiP options with subtitles
+          if (pipVideo.webkitSupportsPresentationMode && typeof pipVideo.webkitSetPresentationMode === 'function') {
+            // Safari method
+            pipVideo.webkitSetPresentationMode('picture-in-picture');
+            setIsPipActive(true);
+          } else {
+            // Chrome method - explicitly request subtitles in PiP
+            try {
+              await pipVideo.requestPictureInPicture();
+              setIsPipActive(true);
+              
+              // Re-apply subtitles after entering PiP in Chrome
+              if (currentSubtitleId && currentSubtitleId !== 'off') {
+                setTimeout(() => {
+                  applySubtitleToVideo(currentSubtitleId);
+                }, 100);
+              }
+            } catch (error: unknown) {
+              handlePipError(error);
+            }
+          }
+        } else {
+          // Fallback for browsers without subtitle support in PiP
+          try {
+            await videoRef.current.requestPictureInPicture();
+            setIsPipActive(true);
+            
+            // Force re-apply subtitles after entering PiP
+            if (currentSubtitleId && currentSubtitleId !== 'off') {
+              setTimeout(() => {
+                applySubtitleToVideo(currentSubtitleId);
+              }, 100);
+            }
+          } catch (error: unknown) {
+            handlePipError(error);
+          }
+        }
+      }
+    } catch (error: unknown) {
+      handlePipError(error);
+    }
+  };
+  
+  // Handler for successful PiP entry
+  const handlePipEntered = () => {
+    // Ensure the video is playing in PiP mode
+    if (videoRef.current && videoRef.current.paused) {
+      videoRef.current.play().catch(() => {
+        // Silent error handling
+      });
+    }
+    
+    // Use the current subtitle ID from state
+    // Make sure subtitles remain visible in PiP mode
+    if (currentSubtitleId !== 'off') {
+      // Different browsers have different PiP subtitle implementations
+      // For modern Chrome (94+) and Safari (16.1+), subtitle tracks set to 'showing'
+      // should automatically appear in PiP
+      setTimeout(() => {
+        applySubtitleToVideo(currentSubtitleId);
+        
+        // Add PiP subtitle event listener if browser supports it
+        if ('pictureInPictureWindow' in window) {
+          try {
+            // @ts-ignore - Modern API
+            const pipWindow = videoRef.current.requestPictureInPicture();
+            // @ts-ignore - Modern API
+            pipWindow.addEventListener('resize', () => {
+              // Re-apply subtitles when PiP window resizes
+              applySubtitleToVideo(currentSubtitleId);
+            });
+          } catch (err) {
+            
+          }
+        }
+      }, 100);
+    }
+  };
+  
+  // Handler for PiP errors
+  const handlePipError = (error: unknown) => {
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Unknown Picture-in-Picture error';
+    handleError(new Error(`Failed to handle Picture-in-Picture: ${errorMessage}`));
+  };
+
+  // Helper function to apply subtitle to video
+  const applySubtitleToVideo = (subtitleId: string) => {
+    if (!videoRef.current) return;
     
     try {
-      if (document.pictureInPictureElement !== videoRef.current) {
-        videoRef.current.requestPictureInPicture()
-          .then(() => {
-            // Ensure the video is playing in PiP mode
-            if (videoRef.current && videoRef.current.paused) {
-              videoRef.current.play().catch(() => {
-                // Silent error handling
-              });
+      
+      
+      // Disable all tracks first
+      Array.from(videoRef.current.textTracks).forEach((track) => {
+        track.mode = 'disabled';
+      });
+      
+      // Enable the selected track if it's not "off"
+      if (subtitleId !== 'off') {
+        const selectedTrackIndex = subtitleTracks.findIndex(track => track.id === subtitleId) - 1;
+        
+        if (selectedTrackIndex >= 0 && videoRef.current.textTracks.length > selectedTrackIndex) {
+          // Force a brief hidden->showing transition which can help trigger visibility in PiP mode
+          videoRef.current.textTracks[selectedTrackIndex].mode = 'hidden';
+          
+          // Short timeout before showing to ensure the track mode change is processed
+          setTimeout(() => {
+            if (videoRef.current && videoRef.current.textTracks.length > selectedTrackIndex) {
+              videoRef.current.textTracks[selectedTrackIndex].mode = 'showing';
+              
+              
+              // For PiP mode in some browsers, we need an additional force-show
+              if (document.pictureInPictureElement === videoRef.current) {
+                
+                
+                // Some browsers need multiple attempts to show subtitles in PiP
+                setTimeout(() => {
+                  if (videoRef.current && videoRef.current.textTracks.length > selectedTrackIndex) {
+                    // Re-apply showing mode after a brief delay
+                    videoRef.current.textTracks[selectedTrackIndex].mode = 'showing';
+                  }
+                }, 200);
+              }
             }
-          })
-          .catch(err => {
-            handleError(new Error('Failed to enter Picture-in-Picture mode: ' + err.message));
-          });
-      } else {
-        document.exitPictureInPicture().catch(err => {
-          handleError(new Error('Failed to exit Picture-in-Picture mode: ' + err.message));
-        });
+          }, 50);
+        } else {
+          console.warn(`Invalid track index: ${selectedTrackIndex}, total tracks: ${videoRef.current.textTracks.length}`);
+        }
       }
     } catch (err) {
-      handleError(new Error('Picture-in-Picture mode is not supported in this browser'));
+      console.error('Error applying subtitle to video:', err);
     }
+  };
+
+  // Handle subtitle selection
+  const handleSelectSubtitle = (id: string) => {
+    
+    
+    // Update the subtitle tracks with the selected one
+    const updatedTracks = subtitleTracks.map(track => ({
+      ...track,
+      selected: track.id === id
+    }));
+    
+    setSubtitleTracks(updatedTracks);
+    
+    // Update the current subtitle ID state
+    setCurrentSubtitleId(id);
+    
+    // Store the active subtitle ID for PiP mode
+    sessionStorage.setItem('activePipSubtitleId', id);
+    
+    // Apply the subtitle to the video
+    applySubtitleToVideo(id);
+    
+    // Close menu after selection
+    setTimeout(() => {
+      setShowContextMenu(false);
+      setActiveSection('none');
+    }, 200);
+  };
+
+  // Handle audio track selection
+  const handleSelectAudio = (id: string) => {
+    const updatedTracks = audioTracks.map(track => ({
+      ...track,
+      selected: track.id === id
+    }));
+    
+    setAudioTracks(updatedTracks);
+    
+    // Apply audio track to video element
+    if (videoRef.current) {
+      // In a real implementation, you would select the appropriate audio track
+      // This depends on how your video is served and what audio tracks are available
+    }
+    
+    // Close menu after selection
+    setTimeout(() => {
+      setShowContextMenu(false);
+      setActiveSection('none');
+    }, 200);
   };
 
   // Add effect to restore PiP when episode changes
@@ -1101,6 +1343,14 @@ export function PlayEpisodeDialog({
         const restorePipTimeout = setTimeout(() => {
           if (videoRef.current && document.pictureInPictureElement !== videoRef.current) {
             videoRef.current.requestPictureInPicture()
+              .then(() => {
+                // Apply subtitle if one was active
+                if (currentSubtitleId !== 'off') {
+                  setTimeout(() => {
+                    applySubtitleToVideo(currentSubtitleId);
+                  }, 200);
+                }
+              })
               .catch(err => {
                 console.log('Failed to restore PiP mode:', err);
               });
@@ -1116,7 +1366,7 @@ export function PlayEpisodeDialog({
     const cleanup = prepareAndRestorePipIfNeeded();
     
     return cleanup;
-  }, [episode?.encFilePath, dialogOpen, isPipSupported]);
+  }, [episode?.encFilePath, dialogOpen, isPipSupported, currentSubtitleId]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -1147,63 +1397,6 @@ export function PlayEpisodeDialog({
     if (showContextMenu) {
       setActiveSection('none');
     }
-  };
-
-  // Handle subtitle selection
-  const handleSelectSubtitle = (id: string) => {
-    const updatedTracks = subtitleTracks.map(track => ({
-      ...track,
-      selected: track.id === id
-    }));
-    
-    setSubtitleTracks(updatedTracks);
-    
-    // Apply subtitle to video element
-    if (videoRef.current) {
-      // Reset all tracks
-      Array.from(videoRef.current.textTracks).forEach(track => {
-        track.mode = 'disabled';
-      });
-      
-      // Enable selected track
-      if (id !== 'off') {
-        const trackElement = Array.from(videoRef.current.textTracks).find(
-          track => track.language === id
-        );
-        
-        if (trackElement) {
-          trackElement.mode = 'showing';
-        }
-      }
-    }
-    
-    // Close menu after selection
-    setTimeout(() => {
-      setShowContextMenu(false);
-      setActiveSection('none');
-    }, 200);
-  };
-
-  // Handle audio track selection
-  const handleSelectAudio = (id: string) => {
-    const updatedTracks = audioTracks.map(track => ({
-      ...track,
-      selected: track.id === id
-    }));
-    
-    setAudioTracks(updatedTracks);
-    
-    // Apply audio track to video element
-    if (videoRef.current) {
-      // In a real implementation, you would select the appropriate audio track
-      // This depends on how your video is served and what audio tracks are available
-    }
-    
-    // Close menu after selection
-    setTimeout(() => {
-      setShowContextMenu(false);
-      setActiveSection('none');
-    }, 200);
   };
 
   if (error) {
@@ -1357,7 +1550,24 @@ export function PlayEpisodeDialog({
                             togglePlay();
                           }
                         }}
-                      ></video>
+                      >
+                        {/* Render subtitle tracks dynamically */}
+                        {subtitleTracks.map((track, index) => {
+                          // Skip the "Off" option
+                          if (track.id === 'off' || !track.src) return null;
+                          
+                          return (
+                            <track 
+                              key={track.id}
+                              kind="subtitles"
+                              src={track.src}
+                              srcLang={track.id.toLowerCase()}
+                              label={track.label}
+                              default={track.selected}
+                            />
+                          );
+                        })}
+                      </video>
                       
                       {/* Loop notification */}
                       {showLoopNotification && (
@@ -1578,23 +1788,25 @@ export function PlayEpisodeDialog({
                           >
                             {/* Main menu items */}
                             <div className="py-1">
-                              {/* Subtitles option */}
-                              <div 
-                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                                  activeSection === 'subtitles' 
-                                    ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                }`}
-                                onMouseEnter={() => setActiveSection('subtitles')}
-                              >
-                                <span className="text-sm font-medium">Subtitles</span>
-                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                                  {subtitleTracks.find(track => track.selected)?.label || 'Off'}
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                </span>
-                              </div>
+                              {/* Subtitles option - only show if subtitles are available */}
+                              {hasSubtitles && (
+                                <div 
+                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                    activeSection === 'subtitles' 
+                                      ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                  }`}
+                                  onMouseEnter={() => setActiveSection('subtitles')}
+                                >
+                                  <span className="text-sm font-medium">Subtitles</span>
+                                  <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                                    {subtitleTracks.find(track => track.selected)?.label || 'Off'}
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                </div>
+                              )}
                               
                               {/* Audio option */}
                               <div 
@@ -1684,9 +1896,9 @@ export function PlayEpisodeDialog({
                     {/* Repeat mode indicator */}
                     {(repeatOne || repeatSeason || repeatTvshow) && (
                       <span className="hidden text-xs text-rose-500 ml-2">
-                        {repeatOne && "Repeating episode"}
-                        {repeatSeason && "Repeating season"}
-                        {repeatTvshow && "Repeating entire series"}
+                        {repeatOne ? "Repeating episode" : ""}
+                        {repeatSeason ? "Repeating season" : ""}
+                        {repeatTvshow ? "Repeating entire series" : ""}
                       </span>
                     )}
                     {/* repeat episode (loop episode) */}
