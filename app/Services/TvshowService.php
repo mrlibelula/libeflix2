@@ -202,8 +202,8 @@ class TvshowService
                 echo "------------------------\n";
             }
 
-            // check if all mp4 episodes are in storage and update db
-            EpisodeService::checkIfAllEpisodesAreInStorageAndUpdateDb();
+            // check if all mp4 episodes + subtitles are in storage and update db
+            EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb();
 
             $endTime = microtime(true);
             $executionTime = $endTime - $startTime;

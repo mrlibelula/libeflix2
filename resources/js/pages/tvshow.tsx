@@ -107,7 +107,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
         <div className="absolute light-gradient-hero dark:dark-gradient-hero h-[calc(100vh-5.5rem)] w-full" />
         <div className="flex flex-col xl:flex-row w-full absolute">
           <div className="w-full flex flex-col items-start justify-start ">
-            <div className="flex flex-col 2xl:flex-row w-full items-start justify-between gap-x-4 p-10">
+            <div className="flex flex-col 2xl:flex-row w-full items-start justify-between gap-x-4 py-2 xl:p-4 2xl:p-6">
               {/* left panel */}
               <div className="flex flex-col gap-y-4 items-start w-full 2xl:w-[50%] overflow-hidden">
                 {/* hero title */}
@@ -619,6 +619,17 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                                   >
                                     {episode.name}
                                   </div>
+                                  {/* subtitles */}
+                                    {episode.subtitles && episode.subtitles.length > 0 && (
+                                    <div className="flex flex-row items-center gap-x-2 py-1">
+                                      <div className="flex items-center gap-x-1 text-[0.65rem] font-mono text-neutral-700 dark:text-neutral-400">
+                                        <div className="rounded cursor-default select-none border border-neutral-700 dark:border-neutral-700 bg-neutral-200 dark:bg-neutral-600 text-neutral-700 dark:text-neutral-100 px-0.5">
+                                          CC
+                                        </div>
+                                        {episode.subtitles.map((subtitle: any) => <div className="rounded cursor-default select-none border border-neutral-700 dark:border-neutral-700 px-0.5" key={subtitle.lang}>{subtitle.lang}</div>)}
+                                      </div>
+                                    </div>
+                                    )}
                                   <div className="mt-1 3xl:mt-0 text-sm text-neutral-700 dark:text-neutral-400">
                                     <StarRating rating={episode.voteAverageStars} size={3} />
                                   </div>

@@ -10,27 +10,29 @@ use Illuminate\Support\Facades\Log;
 class EpisodeService
 {
     /**
-     * Check if all episodes are in storage
+     * Check if all episodes and subtitles are in storage
      * 
      * @param Tvshow $tvshow
      * @param string $fileExtensionToCheck
      * @param string $disk
      */
-    public static function checkIfAllEpisodesAreInStorageAndUpdateDb(string $fileExtensionToCheck = 'mp4', string $disk = 'tvshows'): bool
+    public static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb(string $fileExtensionToCheck = 'mp4', string $disk = 'tvshows'): bool
     {
         // Start timing the execution
         $startTime = microtime(true);
 
-        echo "Starting to check all episodes in storage...\n";
+        echo "Starting to check all episodes and subtitles in storage...\n";
         
         // Load all required relationships with their proper columns
-        $episodes = Episode::select('episodes.id', 'season_id', 'episode_number', 'is_in_storage')
+        $episodes = Episode::select('episodes.id', 'season_id', 'episode_number', 'is_in_storage', 'subtitles')
             ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name'])
             ->get();
             
         echo "Found " . $episodes->count() . " episodes to check.\n";
         $foundCount = 0;
         $notFoundCount = 0;
+        $episodesWithSubtitles = 0;
+        $totalSubtitlesFound = 0;
 
         try {
             foreach ($episodes as $index => $episode) {
@@ -92,7 +94,23 @@ class EpisodeService
                 );
                 
                 if (!empty($result)) {
-                    echo "FOUND at " . $result . "\n";
+                    echo "FOUND at " . $result;
+                    
+                    // Get the updated episode to check for subtitles
+                    $updatedEpisode = Episode::find($episode->id);
+                    if ($updatedEpisode && !empty($updatedEpisode->subtitles)) {
+                        $subtitles = json_decode($updatedEpisode->subtitles, true);
+                        $subtitleCount = count($subtitles);
+                        $totalSubtitlesFound += $subtitleCount;
+                        $episodesWithSubtitles++;
+                        
+                        echo " with " . $subtitleCount . " subtitles (";
+                        $langCodes = array_column($subtitles, 'lang');
+                        echo implode(', ', $langCodes);
+                        echo ")";
+                    }
+                    
+                    echo "\n";
                     $foundCount++;
                 } else {
                     echo "NOT FOUND\n";
@@ -108,6 +126,8 @@ class EpisodeService
             echo "\nCheck complete. Summary:\n";
             echo "- Episodes found in storage: " . $foundCount . "\n";
             echo "- Episodes not found: " . $notFoundCount . "\n";
+            echo "- Episodes with subtitles: " . $episodesWithSubtitles . "\n";
+            echo "- Total subtitle files found: " . $totalSubtitlesFound . "\n";
             echo "- Total execution time: " . $formattedTime . " seconds\n";
             
         } catch (\Throwable $th) {
@@ -124,7 +144,7 @@ class EpisodeService
             return false;
         }
 
-        echo "All episodes checked successfully.\n";
+        echo "All episodes and subtitles checked successfully.\n";
         return true;
     }
     
@@ -187,11 +207,67 @@ class EpisodeService
             
             // If no English version found or only one file exists, use the first matching file
             $selectedFile = $matchingFiles[0];
-            Episode::where('id', $episodeId)->update(['is_in_storage' => $selectedFile]);
+            
+            // Check for subtitle files
+            $subtitles = self::findSubtitleFiles($storage, $searchPath, $selectedFile);
+            
+            // Update episode with both video file and subtitles
+            Episode::where('id', $episodeId)->update([
+                'is_in_storage' => $selectedFile,
+                'subtitles' => !empty($subtitles) ? json_encode($subtitles) : null
+            ]);
+            
             return $selectedFile;
             
         } catch (\Throwable $th) {
             return '';
         }
+    }
+    
+    /**
+     * Find subtitle files for a given episode
+     * 
+     * @param \Illuminate\Contracts\Filesystem\Filesystem $storage
+     * @param string $searchPath
+     * @param string $videoFilePath
+     * @return array
+     */
+    private static function findSubtitleFiles($storage, string $searchPath, string $videoFilePath): array
+    {
+        $subtitles = [];
+        $files = $storage->files($searchPath);
+        
+        // Extract the base filename without extension from the video path
+        $videoPathInfo = pathinfo($videoFilePath);
+        $videoFilename = $videoPathInfo['filename'];
+        $basename = basename($videoFilePath);
+        $basenameNoExt = pathinfo($basename, PATHINFO_FILENAME);
+        
+        foreach ($files as $file) {
+            // Check if it's a subtitle file
+            if (!str_ends_with(strtolower($file), '.vtt')) {
+                continue;
+            }
+            
+            $subtitleFilename = basename($file);
+            
+            // Match the pattern from the example: same filename + _LANG.vtt
+            // e.g., "11.louie.s04e11.hdtv.x264-2hd_EN.vtt"
+            if (preg_match('/^' . preg_quote($basenameNoExt, '/') . '_([A-Z]{2})\.vtt$/i', $subtitleFilename, $matches)) {
+                $lang = strtoupper($matches[1]);
+                $subtitles[] = [
+                    'subtFilePath' => $file, // Store the full path relative to the storage disk
+                    'lang' => $lang
+                ];
+                
+                Log::info("Found subtitle: $file for language: $lang");
+            }
+        }
+        
+        if (count($subtitles) > 0) {
+            Log::info("Found " . count($subtitles) . " subtitles for " . $videoFilePath);
+        }
+        
+        return $subtitles;
     }
 }

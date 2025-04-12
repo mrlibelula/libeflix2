@@ -12,6 +12,7 @@ class Episode extends Model
     protected $appends = ['stillUrl'];
     protected $casts = [
         'credits' => 'array',
+        'subtitles' => 'array',
     ];
 
     public function season(): BelongsTo
