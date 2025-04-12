@@ -103,6 +103,9 @@ export function PlayEpisodeDialog({
   // Check if subtitles exist
   const [hasSubtitles, setHasSubtitles] = useState(false);
 
+  // Add userPreferredSubtitleId state to remember user's subtitle preference
+  const [userPreferredSubtitleId, setUserPreferredSubtitleId] = useState<string>('off');
+
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
     setRepeatOne(initialRepeatMode === 'one');
@@ -114,11 +117,12 @@ export function PlayEpisodeDialog({
   useEffect(() => {
     if (episode && episode.subtitles && Array.isArray(episode.subtitles)) {
       try {
-        
+        // Get previous selected subtitle ID to handle transitions
+        const previouslySelectedId = currentSubtitleId;
         
         // Map the subtitles from the episode to our format
         const subtitleOptions = [
-          { id: 'off', label: 'Off', selected: true },
+          { id: 'off', label: 'Off', selected: true }, // Start with 'Off' selected by default
           ...episode.subtitles
             .filter((subtitle: any) => 
               subtitle && 
@@ -127,11 +131,13 @@ export function PlayEpisodeDialog({
               typeof subtitle.encFilePath === 'string'
             )
             .map((subtitle: any) => {
+              // Normalize language code to uppercase for consistency
+              const normalizedLanguageCode = subtitle.language_code.toUpperCase();
               
               return {
-                id: subtitle.language_code,
+                id: normalizedLanguageCode,
                 label: subtitle.language_name || subtitle.language_code,
-                selected: false,
+                selected: false, // None selected initially
                 src: route('tvshow.subtitles.serve', { 
                   encFilePath: subtitle.encFilePath,
                   disk: 'tvshows'
@@ -140,14 +146,49 @@ export function PlayEpisodeDialog({
             })
         ];
         
+        // Get list of available subtitle language IDs for this episode (excluding 'off')
+        const availableSubtitleIds = subtitleOptions
+          .filter(option => option.id !== 'off')
+          .map(option => option.id);
         
-        setSubtitleTracks(subtitleOptions);
+        // Normalize the user preferred subtitle ID for comparison
+        const normalizedUserPreferredId = userPreferredSubtitleId !== 'off' 
+          ? userPreferredSubtitleId.toUpperCase() 
+          : 'off';
         
-        // Initialize with "Off" as default
-        setCurrentSubtitleId('off');
+        // Check if preferred subtitle exists in this episode
+        const preferredSubtitleExists = availableSubtitleIds.includes(normalizedUserPreferredId);
+        
+        // Update selected state based on availability
+        let selectedSubtitleId = 'off';
+        
+        if (preferredSubtitleExists) {
+          // If preferred subtitle exists, mark it as selected
+          selectedSubtitleId = normalizedUserPreferredId;
+        } else if (normalizedUserPreferredId !== 'off' && availableSubtitleIds.length > 0) {
+          // If user prefers subtitles but their language isn't available,
+          // select the first available subtitle as fallback (common UX pattern)
+          selectedSubtitleId = availableSubtitleIds[0];
+        }
+        
+        // Update the selected state in the options
+        const updatedOptions = subtitleOptions.map(option => ({
+          ...option,
+          selected: option.id === selectedSubtitleId
+        }));
+        
+        setSubtitleTracks(updatedOptions);
+        setCurrentSubtitleId(selectedSubtitleId);
+        
+        // Apply subtitle after a short delay
+        if (selectedSubtitleId !== 'off') {
+          setTimeout(() => {
+            applySubtitleToVideo(selectedSubtitleId);
+          }, 1000);
+        }
         
         // Only set hasSubtitles to true if we have valid subtitle tracks (not just the 'off' option)
-        setHasSubtitles(subtitleOptions.length > 1);
+        setHasSubtitles(availableSubtitleIds.length > 0);
       } catch (err) {
         console.error('Error processing subtitles:', err);
         setSubtitleTracks([{ id: 'off', label: 'Off', selected: true }]);
@@ -160,7 +201,7 @@ export function PlayEpisodeDialog({
       setCurrentSubtitleId('off');
       setHasSubtitles(false);
     }
-  }, [episode]);
+  }, [episode, userPreferredSubtitleId, currentSubtitleId]);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -977,6 +1018,31 @@ export function PlayEpisodeDialog({
             }
           }, 300);
         }
+        
+        // Apply user's preferred subtitle after video starts playing if it exists for this episode
+        if (userPreferredSubtitleId !== 'off') {
+          // Get the available subtitle IDs for this episode
+          const availableSubtitleIds = subtitleTracks
+            .filter(track => track.id !== 'off')
+            .map(track => track.id);
+          
+          // Check if user's preferred subtitle exists in this episode
+          const preferredSubtitleExists = availableSubtitleIds.includes(userPreferredSubtitleId);
+          
+          // Apply the appropriate subtitle
+          if (preferredSubtitleExists) {
+            // If preferred subtitle exists, apply it
+            setTimeout(() => {
+              applySubtitleToVideo(userPreferredSubtitleId);
+            }, 1500);
+          } else if (availableSubtitleIds.length > 0 && currentSubtitleId !== 'off') {
+            // If user had a subtitle selected but their preference isn't available,
+            // apply the currently selected subtitle (which should be the fallback)
+            setTimeout(() => {
+              applySubtitleToVideo(currentSubtitleId);
+            }, 1500);
+          }
+        }
       };
       
       // Set up event listeners for video loading
@@ -1006,6 +1072,24 @@ export function PlayEpisodeDialog({
       if (videoRef.current && autoPlay && videoRef.current.paused) {
         videoRef.current.play().catch(() => {});
       }
+      
+      // Also ensure subtitle is applied as a backup
+      if (userPreferredSubtitleId !== 'off') {
+        // Get the available subtitle IDs for this episode
+        const availableSubtitleIds = subtitleTracks
+          .filter(track => track.id !== 'off')
+          .map(track => track.id);
+        
+        // Check if user's preferred subtitle exists in this episode
+        const preferredSubtitleExists = availableSubtitleIds.includes(userPreferredSubtitleId);
+        
+        if (preferredSubtitleExists) {
+          applySubtitleToVideo(userPreferredSubtitleId);
+        } else if (availableSubtitleIds.length > 0 && currentSubtitleId !== 'off') {
+          // Apply the currently selected subtitle (which should be the fallback)
+          applySubtitleToVideo(currentSubtitleId);
+        }
+      }
     }, 2000);
     
     return () => {
@@ -1015,8 +1099,25 @@ export function PlayEpisodeDialog({
         videoRef.current.removeEventListener('canplay', function() {});
       }
     };
+  // Only run this effect when the episode changes or dialog state changes, NOT when subtitle preferences change
   }, [episode?.encFilePath, dialogOpen, autoPlay]);
-  
+
+  // Separate effect to handle subtitle changes without restarting the video
+  useEffect(() => {
+    // Only apply subtitle changes if video is already playing (not during initial load)
+    if (videoRef.current && videoRef.current.readyState >= 3 && currentSubtitleId !== 'off') {
+      // Get the available subtitle IDs for this episode
+      const availableSubtitleIds = subtitleTracks
+        .filter(track => track.id !== 'off')
+        .map(track => track.id);
+      
+      // Only apply if the current subtitle is available
+      if (availableSubtitleIds.includes(currentSubtitleId)) {
+        applySubtitleToVideo(currentSubtitleId);
+      }
+    }
+  }, [currentSubtitleId, subtitleTracks]);
+
   // Add a specific hook to initialize the video properly on first render
   const videoElementRef = useRef<boolean>(false);
   useEffect(() => {
@@ -1227,12 +1328,17 @@ export function PlayEpisodeDialog({
     handleError(new Error(`Failed to handle Picture-in-Picture: ${errorMessage}`));
   };
 
-  // Helper function to apply subtitle to video
+  // Enhance the applySubtitleToVideo function to be more robust
   const applySubtitleToVideo = (subtitleId: string) => {
     if (!videoRef.current) return;
     
     try {
+      // Store current playback position and playing state
+      const currentTime = videoRef.current.currentTime;
+      const wasPlaying = !videoRef.current.paused;
       
+      // Normalize the subtitle ID for case-insensitive comparison
+      const normalizedSubtitleId = subtitleId !== 'off' ? subtitleId.toUpperCase() : 'off';
       
       // Disable all tracks first
       Array.from(videoRef.current.textTracks).forEach((track) => {
@@ -1240,35 +1346,46 @@ export function PlayEpisodeDialog({
       });
       
       // Enable the selected track if it's not "off"
-      if (subtitleId !== 'off') {
-        const selectedTrackIndex = subtitleTracks.findIndex(track => track.id === subtitleId) - 1;
+      if (normalizedSubtitleId !== 'off') {
+        // Find the track index with case-insensitive comparison
+        const subtitleIndex = subtitleTracks.findIndex(
+          track => track.id.toUpperCase() === normalizedSubtitleId
+        );
         
-        if (selectedTrackIndex >= 0 && videoRef.current.textTracks.length > selectedTrackIndex) {
-          // Force a brief hidden->showing transition which can help trigger visibility in PiP mode
-          videoRef.current.textTracks[selectedTrackIndex].mode = 'hidden';
+        // Only proceed if we found a valid subtitle in our tracks list (not "off")
+        if (subtitleIndex > 0) { // Index 0 is "Off", so must be > 0
+          // Calculate the actual track index in the video's textTracks collection
+          const textTrackIndex = subtitleIndex - 1; // -1 because "Off" isn't in textTracks
           
-          // Short timeout before showing to ensure the track mode change is processed
-          setTimeout(() => {
-            if (videoRef.current && videoRef.current.textTracks.length > selectedTrackIndex) {
-              videoRef.current.textTracks[selectedTrackIndex].mode = 'showing';
-              
-              
-              // For PiP mode in some browsers, we need an additional force-show
-              if (document.pictureInPictureElement === videoRef.current) {
+          // Verify the calculated index is valid before trying to use it
+          if (textTrackIndex >= 0 && videoRef.current.textTracks.length > textTrackIndex) {
+            // Force a brief hidden->showing transition which can help trigger visibility in PiP mode
+            videoRef.current.textTracks[textTrackIndex].mode = 'hidden';
+            
+            // Short timeout before showing to ensure the track mode change is processed
+            setTimeout(() => {
+              if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
+                videoRef.current.textTracks[textTrackIndex].mode = 'showing';
                 
-                
-                // Some browsers need multiple attempts to show subtitles in PiP
-                setTimeout(() => {
-                  if (videoRef.current && videoRef.current.textTracks.length > selectedTrackIndex) {
-                    // Re-apply showing mode after a brief delay
-                    videoRef.current.textTracks[selectedTrackIndex].mode = 'showing';
-                  }
-                }, 200);
+                // For PiP mode in some browsers, we need an additional force-show
+                if (document.pictureInPictureElement === videoRef.current) {
+                  // Some browsers need multiple attempts to show subtitles in PiP
+                  setTimeout(() => {
+                    if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
+                      // Re-apply showing mode after a brief delay
+                      videoRef.current.textTracks[textTrackIndex].mode = 'showing';
+                    }
+                  }, 200);
+                }
               }
-            }
-          }, 50);
+            }, 50);
+          } else {
+            // Log a more helpful error message for diagnosis
+            console.warn(`Cannot apply subtitle: calculated textTrack index (${textTrackIndex}) is invalid or out of range. Available tracks: ${videoRef.current.textTracks.length}`);
+          }
         } else {
-          console.warn(`Invalid track index: ${selectedTrackIndex}, total tracks: ${videoRef.current.textTracks.length}`);
+          // Log when the requested subtitle ID isn't found in our tracks
+          console.warn(`Subtitle ID "${normalizedSubtitleId}" not found in available subtitle tracks. Available IDs: ${subtitleTracks.map(t => t.id).join(', ')}`);
         }
       }
     } catch (err) {
@@ -1279,23 +1396,28 @@ export function PlayEpisodeDialog({
   // Handle subtitle selection
   const handleSelectSubtitle = (id: string) => {
     
+    // Normalize the selected ID to uppercase (except for 'off')
+    const normalizedId = id !== 'off' ? id.toUpperCase() : 'off';
     
     // Update the subtitle tracks with the selected one
     const updatedTracks = subtitleTracks.map(track => ({
       ...track,
-      selected: track.id === id
+      selected: track.id === normalizedId
     }));
     
     setSubtitleTracks(updatedTracks);
     
     // Update the current subtitle ID state
-    setCurrentSubtitleId(id);
+    setCurrentSubtitleId(normalizedId);
+    
+    // Store user preference for future episode changes
+    setUserPreferredSubtitleId(normalizedId);
     
     // Store the active subtitle ID for PiP mode
-    sessionStorage.setItem('activePipSubtitleId', id);
+    sessionStorage.setItem('activePipSubtitleId', normalizedId);
     
     // Apply the subtitle to the video
-    applySubtitleToVideo(id);
+    applySubtitleToVideo(normalizedId);
     
     // Close menu after selection
     setTimeout(() => {
