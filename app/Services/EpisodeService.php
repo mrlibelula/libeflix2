@@ -12,11 +12,10 @@ class EpisodeService
     /**
      * Check if all episodes and subtitles are in storage
      * 
-     * @param Tvshow $tvshow
-     * @param string $fileExtensionToCheck
      * @param string $disk
+     * @return bool
      */
-    public static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb(string $fileExtensionToCheck = 'mp4', string $disk = 'tvshows'): bool
+    public static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb(string $disk = 'tvshows'): bool
     {
         // Start timing the execution
         $startTime = microtime(true);
