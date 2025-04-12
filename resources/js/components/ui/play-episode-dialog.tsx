@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check } from 'lucide-react';
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -80,6 +80,27 @@ export function PlayEpisodeDialog({
   const [repeatTvshow, setRepeatTvshow] = useState(false);
   const [showLoopNotification, setShowLoopNotification] = useState(false);
   const [showNextEpisodeNotification, setShowNextEpisodeNotification] = useState(false);
+  
+  // Subtitles & Audio menu state
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
+  const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  
+  // Example subtitle and audio tracks
+  const [subtitleTracks, setSubtitleTracks] = useState([
+    { id: 'off', label: 'Off', selected: true },
+    { id: 'en', label: 'English', selected: false },
+    { id: 'es', label: 'Spanish', selected: false },
+    { id: 'fr', label: 'French', selected: false },
+  ]);
+  
+  const [audioTracks, setAudioTracks] = useState([
+    { id: 'default', label: 'Default', selected: true },
+    { id: 'en-5.1', label: 'English (5.1)', selected: false },
+    { id: 'en-2.0', label: 'English (2.0)', selected: false },
+    { id: 'commentary', label: 'Director Commentary', selected: false },
+  ]);
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -1098,6 +1119,94 @@ export function PlayEpisodeDialog({
     return cleanup;
   }, [episode?.encFilePath, dialogOpen, isPipSupported]);
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        setShowContextMenu(false);
+        setActiveSection('none');
+      }
+    };
+
+    if (showContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showContextMenu]);
+
+  // Toggle context menu
+  const handleToggleContextMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Simply toggle the menu visibility
+    setShowContextMenu(!showContextMenu);
+    
+    // Reset active section when closing
+    if (showContextMenu) {
+      setActiveSection('none');
+    }
+  };
+
+  // Handle subtitle selection
+  const handleSelectSubtitle = (id: string) => {
+    const updatedTracks = subtitleTracks.map(track => ({
+      ...track,
+      selected: track.id === id
+    }));
+    
+    setSubtitleTracks(updatedTracks);
+    
+    // Apply subtitle to video element
+    if (videoRef.current) {
+      // Reset all tracks
+      Array.from(videoRef.current.textTracks).forEach(track => {
+        track.mode = 'disabled';
+      });
+      
+      // Enable selected track
+      if (id !== 'off') {
+        const trackElement = Array.from(videoRef.current.textTracks).find(
+          track => track.language === id
+        );
+        
+        if (trackElement) {
+          trackElement.mode = 'showing';
+        }
+      }
+    }
+    
+    // Close menu after selection
+    setTimeout(() => {
+      setShowContextMenu(false);
+      setActiveSection('none');
+    }, 200);
+  };
+
+  // Handle audio track selection
+  const handleSelectAudio = (id: string) => {
+    const updatedTracks = audioTracks.map(track => ({
+      ...track,
+      selected: track.id === id
+    }));
+    
+    setAudioTracks(updatedTracks);
+    
+    // Apply audio track to video element
+    if (videoRef.current) {
+      // In a real implementation, you would select the appropriate audio track
+      // This depends on how your video is served and what audio tracks are available
+    }
+    
+    // Close menu after selection
+    setTimeout(() => {
+      setShowContextMenu(false);
+      setActiveSection('none');
+    }, 200);
+  };
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -1293,7 +1402,7 @@ export function PlayEpisodeDialog({
                 {/* Video controls overlay */}
                 <div 
                   ref={controlsRef}
-                  className={`absolute inset-0 overflow-hidden bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
+                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
                     controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onMouseEnter={() => {
@@ -1452,21 +1561,96 @@ export function PlayEpisodeDialog({
 
                         {/* Subtitles and audio button */}
                         <Tooltip text="Subtitles & Audio" position="bottom">
-                          <MessageSquareText className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                          <button 
+                            onClick={handleToggleContextMenu}
+                            className="focus:outline-none relative"
+                            aria-label="Subtitles and Audio Options"
+                          >
+                            <MessageSquareText className={`w-5 h-5 ${showContextMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
+                          </button>
                         </Tooltip>
                         
-                        {/* PiP button */}
-                        {/* {isPipSupported && (
-                          <button 
-                            onClick={togglePictureInPicture}
-                            title={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture (p)"}
-                            aria-label={isPipActive ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture"}
+                        {/* Context Menu for Subtitles and Audio */}
+                        {showContextMenu && (
+                          <div 
+                            ref={contextMenuRef}
+                            className="absolute right-10 bottom-14 z-50 bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
+                            style={{ width: '240px' }}
                           >
-                            <PictureInPicture2 className={`w-5 h-5 transition-colors duration-150 ${isPipActive ? 'text-rose-500' : 'hover:text-rose-500'}`} />
-                          </button>
-                        )} */}
+                            {/* Main menu items */}
+                            <div className="py-1">
+                              {/* Subtitles option */}
+                              <div 
+                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                  activeSection === 'subtitles' 
+                                    ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                }`}
+                                onMouseEnter={() => setActiveSection('subtitles')}
+                              >
+                                <span className="text-sm font-medium">Subtitles</span>
+                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                                  {subtitleTracks.find(track => track.selected)?.label || 'Off'}
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </span>
+                              </div>
+                              
+                              {/* Audio option */}
+                              <div 
+                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                  activeSection === 'audio' 
+                                    ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                }`}
+                                onMouseEnter={() => setActiveSection('audio')}
+                              >
+                                <span className="text-sm font-medium">Audio</span>
+                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                                  {audioTracks.find(track => track.selected)?.label || 'Default'}
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Subtitles submenu */}
+                            {activeSection === 'subtitles' && (
+                              <div className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" style={{ width: '180px' }}>
+                                {subtitleTracks.map((track) => (
+                                  <div 
+                                    key={track.id}
+                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                                    onClick={() => handleSelectSubtitle(track.id)}
+                                  >
+                                    <span className="flex-1 text-sm">{track.label}</span>
+                                    {track.selected && <Check className="w-4 h-4 text-rose-500" />}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Audio submenu */}
+                            {activeSection === 'audio' && (
+                              <div className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" style={{ width: '180px' }}>
+                                {audioTracks.map((track) => (
+                                  <div 
+                                    key={track.id}
+                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                                    onClick={() => handleSelectAudio(track.id)}
+                                  >
+                                    <span className="flex-1 text-sm">{track.label}</span>
+                                    {track.selected && <Check className="w-4 h-4 text-rose-500" />}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
-                        {/* fullscreen button */}
+                        {/* PiP button */}
                         <Tooltip text={isFullscreen ? "Exit Fullscreen (f)" : "Enter Fullscreen (f)"} position="bottom">
                           <button onClick={toggleFullscreen}>
                             {isFullscreen ? (
