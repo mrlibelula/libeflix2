@@ -99,7 +99,9 @@ class EpisodeService
                     // Get the updated episode to check for subtitles
                     $updatedEpisode = Episode::find($episode->id);
                     if ($updatedEpisode && !empty($updatedEpisode->subtitles)) {
-                        $subtitles = json_decode($updatedEpisode->subtitles, true);
+                        $subtitles = is_array($updatedEpisode->subtitles) 
+                            ? $updatedEpisode->subtitles 
+                            : json_decode($updatedEpisode->subtitles, true);
                         $subtitleCount = count($subtitles);
                         $totalSubtitlesFound += $subtitleCount;
                         $episodesWithSubtitles++;
@@ -259,13 +261,7 @@ class EpisodeService
                     'file_path' => $file, // Store the full path relative to the storage disk
                     'language_code' => $lang
                 ];
-                
-                Log::info("Found subtitle: $file for language: $lang");
             }
-        }
-        
-        if (count($subtitles) > 0) {
-            Log::info("Found " . count($subtitles) . " subtitles for " . $videoFilePath);
         }
         
         return $subtitles;
