@@ -17,7 +17,7 @@ class EpisodeService
      * @param string $disk
      * @return bool
      */
-    public static function checkForAdditionalLanguageVideoFilesOnEachSeasonFoldersAndStoreInDb(string $disk = 'tvshows'): bool
+    public static function checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb(string $disk = 'tvshows'): bool
     {
         // Start timing the execution
         $startTime = microtime(true);
@@ -80,8 +80,8 @@ class EpisodeService
                     // Extract the language code from the directory path
                     $langCode = basename($directory);
                     
-                    // Language codes should be 2-3 characters
-                    if (!preg_match('/^[A-Z]{2,3}$/i', $langCode)) {
+                    // Language codes should be 2-10 characters
+                    if (!preg_match('/^[A-Z]{2,10}$/i', $langCode)) {
                         continue;
                     }
                     
@@ -112,8 +112,9 @@ class EpisodeService
                         
                         // Add to the collection of additional language files
                         $additionalLanguageFiles[] = [
-                            'audioLang' => strtoupper($langCode),
-                            'filePath' => $file
+                            'langCode' => strtoupper($langCode),
+                            'langName' => Tool::getLanguageForVideoLabel($langCode),
+                            'encFilePath' => Tool::encode($file),
                         ];
                     }
                 }

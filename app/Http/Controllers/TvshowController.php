@@ -90,8 +90,10 @@ class TvshowController extends Controller
         // Append credits to the TV show
         $tvshow->credits = TvshowService::getTvshowCredits($tvshow, withCrew: true);
 
+        $episodes = $tvshow->episodes()->get();
+
         // Encode episodes file paths via is_in_storage and use prop encFilePath as final prop
-        $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
+        $episodes->map(function ($episode) {
             // If is_in_storage contains the file path (fallbacks as a boolean (truthy or falsy)), encode it
             $episode->encFilePath = (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) 
                 ? Tool::encode($episode->is_in_storage) 
@@ -148,22 +150,6 @@ class TvshowController extends Controller
             
             return $episode;
         });
-
-        // Make sure encFilePath is explicitly included in the data structure sent to the frontend
-        // by ensuring it's part of the array version of the data
-        $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
-            // Convert to array to ensure all properties are included
-            $episodeArray = is_array($episode) ? $episode : $episode->toArray();
-            
-            // Explicitly ensure encFilePath is included
-            if (!isset($episodeArray['encFilePath']) && isset($episode->encFilePath)) {
-                $episodeArray['encFilePath'] = $episode->encFilePath;
-            }
-            
-            return $episodeArray;
-        });
-
-        // dd($tvshow->episodes->first());
 
         return Inertia::render('tvshow', [
             'tvshow' => $tvshow,

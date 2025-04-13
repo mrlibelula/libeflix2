@@ -206,7 +206,7 @@ class TvshowService
             EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb();
 
             // check for additional audio files in each season's folder and store them in db
-            EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFoldersAndStoreInDb();
+            EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb();
 
             $endTime = microtime(true);
             $executionTime = $endTime - $startTime;

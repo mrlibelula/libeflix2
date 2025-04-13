@@ -222,6 +222,10 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                             </TabsList>
                             <TabsContent value="cast">
                               {/* cast ribbon */}
+                              {(() => {
+                                console.log('Cast credits:', tvshow.cast);
+                                return null;
+                              })()}
                               {Object.entries(tvshow.credits.cast).length > 0 && (
                                 <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
                                   <Ribbon 
