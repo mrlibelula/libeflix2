@@ -3,12 +3,169 @@
 namespace App\Services;
 
 use App\Models\Episode;
-use App\Models\Tvshow;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 
 class EpisodeService
 {
+    /**
+     * Check for additional language video files on each season folder.
+     * Must comply with the following convention: 
+     * Additional files: "tvshowName/seasonNumber/LANGUAGE_CODE/episodeNumber.fileName.mp4"
+     * The conataining folder name is the "language code".
+     * Stores the file paths in the "language_video_files" database episode column.
+     * 
+     * @param string $disk
+     * @return bool
+     */
+    public static function checkForAdditionalLanguageVideoFilesOnEachSeasonFoldersAndStoreInDb(string $disk = 'tvshows'): bool
+    {
+        // Start timing the execution
+        $startTime = microtime(true);
+
+        echo "Starting to check for additional language video files on each season folder...\n";
+
+        // find convention paths: "tvshowName/seasonNumber/ES/episodeNumber.fileName.mp4"
+        // folder name: "ES", "EN", "ZH", ... is the language code
+
+        $tvshowStorage = Storage::disk($disk);
+        
+        // Load all episodes with their relationships
+        $episodes = Episode::select('episodes.id', 'season_id', 'episode_number', 'language_video_files')
+            ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name'])
+            ->get();
+            
+        echo "Found " . $episodes->count() . " episodes to process.\n";
+        $updatedCount = 0;
+        $episodesWithAdditionalLanguages = 0;
+        $totalAdditionalFiles = 0;
+
+        try {
+            foreach ($episodes as $index => $episode) {
+                echo "Processing episode " . ($index + 1) . "/" . $episodes->count() . " (ID: " . $episode->id . "): ";
+                
+                // Access tvshow through season relation
+                if (!$episode->season || !$episode->season->tvshow) {
+                    echo "SKIPPED - Missing season or tvshow relation\n";
+                    continue;
+                }
+                
+                $tvshow = $episode->season->tvshow;
+                $seasonNumber = $episode->season->season_number;
+                $episodeNumber = $episode->episode_number;
+                
+                // Skip if we're missing critical info
+                if (empty($tvshow->folder_name) || empty($seasonNumber) || empty($episodeNumber)) {
+                    echo "SKIPPED - Missing folder name, season number or episode number\n";
+                    continue;
+                }
+                
+                echo "S" . $seasonNumber . "E" . $episodeNumber . " of \"" . $tvshow->folder_name . "\": ";
+                
+                // Base path to the season folder
+                $seasonPath = $tvshow->folder_name . '/' . $seasonNumber;
+                
+                // Skip if season folder doesn't exist
+                if (!$tvshowStorage->exists($seasonPath)) {
+                    echo "SKIPPED - Season folder not found\n";
+                    continue;
+                }
+                
+                // Get all directories in the season folder (potential language folders)
+                $directories = $tvshowStorage->directories($seasonPath);
+                
+                $additionalLanguageFiles = [];
+                
+                // Check each directory if it's a language folder
+                foreach ($directories as $directory) {
+                    // Extract the language code from the directory path
+                    $langCode = basename($directory);
+                    
+                    // Language codes should be 2-3 characters
+                    if (!preg_match('/^[A-Z]{2,3}$/i', $langCode)) {
+                        continue;
+                    }
+                    
+                    // Get all files in this language directory
+                    $files = $tvshowStorage->files($directory);
+                    natsort($files);
+                    
+                    // Loop through files to find matching episode files
+                    foreach ($files as $file) {
+                        // Check if it's an MP4 file
+                        if (!str_ends_with(strtolower($file), '.mp4')) {
+                            continue;
+                        }
+                        
+                        // Check if the filename starts with the episode number
+                        $filename = basename($file);
+                        $filePathParts = explode('/', $file);
+                        
+                        // Validate convention: "tvshowName/seasonNumber/LANG/episodeNumber.fileName.mp4"
+                        if (count($filePathParts) < 4) {
+                            continue;
+                        }
+                        
+                        // Check if episode number is at the start of the filename
+                        if (strpos($filename, $episodeNumber.'.') !== 0) {
+                            continue;
+                        }
+                        
+                        // Add to the collection of additional language files
+                        $additionalLanguageFiles[] = [
+                            'audioLang' => strtoupper($langCode),
+                            'filePath' => $file
+                        ];
+                    }
+                }
+                
+                // Update the episode if we found additional language files
+                if (!empty($additionalLanguageFiles)) {
+                    Episode::where('id', $episode->id)->update([
+                        'language_video_files' => $additionalLanguageFiles
+                    ]);
+                    
+                    $totalAdditionalFiles += count($additionalLanguageFiles);
+                    $episodesWithAdditionalLanguages++;
+                    $updatedCount++;
+                    
+                    echo "FOUND " . count($additionalLanguageFiles) . " additional language files (";
+                    $langCodes = array_column($additionalLanguageFiles, 'audioLang');
+                    echo implode(', ', array_unique($langCodes));
+                    echo ")\n";
+                } else {
+                    echo "No additional language files found\n";
+                }
+            }
+            
+            // Calculate execution time
+            $endTime = microtime(true);
+            $executionTime = $endTime - $startTime;
+            $formattedTime = number_format($executionTime, 2);
+            
+            echo "\nCheck complete. Summary:\n";
+            echo "- Episodes updated: " . $updatedCount . "\n";
+            echo "- Episodes with additional languages: " . $episodesWithAdditionalLanguages . "\n";
+            echo "- Total additional language files found: " . $totalAdditionalFiles . "\n";
+            echo "- Total execution time: " . $formattedTime . " seconds\n";
+            
+        } catch (\Throwable $th) {
+            info($th->getMessage());
+            echo "\nERROR: " . $th->getMessage() . "\n";
+            echo "Stack trace:\n" . $th->getTraceAsString() . "\n";
+            
+            // Even if there's an error, report the execution time
+            $endTime = microtime(true);
+            $executionTime = $endTime - $startTime;
+            $formattedTime = number_format($executionTime, 2);
+            echo "- Execution time until error: " . $formattedTime . " seconds\n";
+            
+            return false;
+        }
+
+        echo "Additional language video files check completed successfully.\n";
+        return true;
+    }
+
     /**
      * Check if all episodes and subtitles are in storage
      * 

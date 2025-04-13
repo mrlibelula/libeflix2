@@ -98,36 +98,22 @@ class Tool
      */
     public static function getLanguageForSubtitleLabel(string $shortLanguage): string
     {
-        $languages = [
-            'EN' => 'English',
-            'ES' => 'Spanish',
-            'FR' => 'French',
-            'DE' => 'German',
-            'IT' => 'Italian',
-            'JA' => 'Japanese',
-            'KO' => 'Korean',
-            'PT' => 'Portuguese',
-            'RU' => 'Russian',
-            'ZH' => 'Chinese',
-            'AR' => 'Arabic',
-            'TR' => 'Turkish',
-            'NL' => 'Dutch',
-            'SV' => 'Swedish',
-            'NO' => 'Norwegian',
-            'DA' => 'Danish',
-            'PL' => 'Polish',
-            'RO' => 'Romanian',
-            'HU' => 'Hungarian',
-            'CS' => 'Czech',
-            'SK' => 'Slovak',
-            'BG' => 'Bulgarian',
-            'HR' => 'Croatian',
-            'EL' => 'Greek',
-            'HE' => 'Hebrew',
-            'HI' => 'Hindi',
-            'ID' => 'Indonesian',
-            'MS' => 'Malay',
-        ];
+        $languages = config('app.languages');
+
+        return $languages[strtoupper($shortLanguage)] ?? __('Other');
+    }
+
+    /**
+     * Get language name from short language code for video label
+     *
+     * @param string $shortLanguage
+     * @return string
+     */
+    public static function getLanguageForVideoLabel(string $shortLanguage): string
+    {
+        $languages = config('app.languages');
+        // additional acceptable language codes
+        $languages = array_merge($languages, config('app.additional-language-codes'));
 
         return $languages[strtoupper($shortLanguage)] ?? __('Other');
     }

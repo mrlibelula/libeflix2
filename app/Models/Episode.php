@@ -14,6 +14,7 @@ class Episode extends Model
     protected $casts = [
         'credits' => 'array',
         'subtitles' => 'array',
+        'language_video_files' => 'array',
     ];
 
     public function season(): BelongsTo

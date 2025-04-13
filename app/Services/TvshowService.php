@@ -205,6 +205,9 @@ class TvshowService
             // check if all mp4 episodes + subtitles are in storage and update db
             EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb();
 
+            // check for additional audio files in each season's folder and store them in db
+            EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFoldersAndStoreInDb();
+
             $endTime = microtime(true);
             $executionTime = $endTime - $startTime;
             
@@ -637,5 +640,76 @@ class TvshowService
             'crew' => $crew,
             'guestStars' => $guestStars,
         ];
+    }
+
+    /**
+     * Set the episode number in the file name of a tvshow episode
+     * according to naming convention: "episodeNumber.fileName.mp4".
+     * Finds all episodes in all extra season folders (like EN, ES, etc.) 
+     * and renames them according to the naming convention.
+     * 
+     * @param Tvshow $tvshow
+     * @param string $disk
+     * @return bool
+     */
+    public static function setEpisodeNumberInStorageFilePaths(Tvshow $tvshow, string $disk = 'tvshows'): bool
+    {
+        $tvshowDisk = Storage::disk($disk);
+        $seasons = $tvshowDisk->directories($tvshow->folder_name);
+        $filesToRename = []; // Track both source and destination paths
+        
+        // enter each season folder and search for additional folders named ES, EN, or similar
+        foreach ($seasons as $season) {
+            $extraFolders = $tvshowDisk->directories($season);
+            if (count($extraFolders)) {
+                // found extra audio folders (like EN, ES, etc.) for other languages in season's episodes
+                foreach ($extraFolders as $extraFolder) {
+                    $counter = 1;
+                    $episodes = $tvshowDisk->files($extraFolder);
+                    natsort($episodes);
+                    foreach ($episodes as $episode) {
+                        $newEpisodePath = preg_replace_callback(
+                            '/\/([^\/]+)\.mp4$/i',
+                            function ($matches) use ($counter) {
+                                // Check if filename already starts with "<number>."
+                                if (preg_match('/^\d+\./', $matches[1])) {
+                                    return '/' . $matches[1] . '.mp4'; // No change
+                                }
+                    
+                                return '/' . $counter . '.' . $matches[1] . '.mp4'; // Rename
+                            },
+                            $episode
+                        );
+                        
+                        if ($episode !== $newEpisodePath) {
+                            $filesToRename[] = [
+                                'source' => $episode,
+                                'destination' => $newEpisodePath
+                            ];
+                        }
+                        $counter++;
+                    }
+                }
+            }
+        }
+        
+        // rename episodes
+        $renamedCount = 0;
+        foreach ($filesToRename as $file) {
+            try {
+                $tvshowDisk->move($file['source'], $file['destination']);
+                $renamedCount++;
+            } catch (\Exception $e) {
+                echo "Error renaming file {$file['source']} to {$file['destination']}: {$e->getMessage()}\n";
+            }
+        }
+
+        // report and list changes
+        echo "Updated {$renamedCount} episodes\n";
+        foreach ($filesToRename as $file) {
+            echo "Renamed: {$file['source']} → {$file['destination']}\n";
+        }
+
+        return true;
     }
 }
