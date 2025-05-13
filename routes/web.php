@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\MovieController;
+use App\Http\Controllers\StorageController;
+use App\Http\Controllers\TvshowController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Http\Controllers\TvshowController;
-use App\Http\Controllers\StorageController;
+
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -15,6 +17,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
     Route::get('tvshow/stream/{encFilePath}/{disk?}', [StorageController::class, 'tvshowEpisodeServe'])->name('tvshow.episode.serve');
     Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
+
+    Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 });
 
 require __DIR__.'/settings.php';

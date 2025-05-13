@@ -310,7 +310,7 @@ class TvshowService
     private static function getTvshowReleaseYearFromOpenAI(string $folderName): int
     {
         // system user role prompt
-        $prompt = env('OPENAI_RELEASE_YEAR_PROMPT');
+        $prompt = env('OPENAI_TVSHOW_RELEASE_YEAR_PROMPT');
         $prompt = str_replace('**tvshowName**', $folderName, $prompt);
 
         echo "\033[36mAsking \"" . env('OPENAI_MODEL') . "\" for the release year of \"{$folderName}\" TV show...\033[0m\n";

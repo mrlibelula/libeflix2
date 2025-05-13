@@ -43,6 +43,11 @@ return [
             'root' => 'S:',
         ],
 
+        'movies' => [
+            'driver' => 'local',
+            'root' => 'W:/_libeflix',
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
