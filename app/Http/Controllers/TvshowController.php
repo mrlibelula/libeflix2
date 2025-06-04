@@ -27,7 +27,7 @@ class TvshowController extends Controller
             ->withCount('episodes')
             ->get();
 
-        return Inertia::render('dashboard', [
+        return Inertia::render('tvshows', [
             'tvshows' => $tvshows,
         ]);
     }

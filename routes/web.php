@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TvshowController;
@@ -12,12 +13,11 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', [TvshowController::class, 'index'])->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
     Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
     Route::get('tvshow/stream/{encFilePath}/{disk?}', [StorageController::class, 'tvshowEpisodeServe'])->name('tvshow.episode.serve');
     Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
-
     Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 });
 
