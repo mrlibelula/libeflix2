@@ -164,7 +164,11 @@
       font-weight: normal;
       font-style: normal;
       font-display: swap;
-  }
+    }
+
+    .font-staatliches {
+      font-family: 'Staatliches', sans-serif;
+    }
   
 }
 

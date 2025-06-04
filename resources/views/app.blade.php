@@ -19,6 +19,9 @@
             })();
         </script>
 
+        {{-- favicon --}}
+        <link rel="icon" href="{{ asset('images/libeflix-web-icon.webp') }}" type="image/png">
+
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
             html {
