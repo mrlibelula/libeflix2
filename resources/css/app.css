@@ -157,19 +157,6 @@
     body {
         @apply bg-background text-foreground;
     }
-
-    @font-face {
-      font-family: 'Staatliches';
-      src: url('fonts/Staatliches-Regular.ttf') format('truetype');
-      font-weight: normal;
-      font-style: normal;
-      font-display: swap;
-    }
-
-    .font-staatliches {
-      font-family: 'Staatliches', sans-serif;
-    }
-  
 }
 
 @utility dark-gradient {
