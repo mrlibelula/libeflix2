@@ -18,7 +18,9 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
         const ribbonContainer = activeElement.closest('[data-ribbon]');
         if (ribbonContainer) {
           const ribbonTitle = ribbonContainer.getAttribute('data-ribbon');
-          lastFocusedRibbonRef.current = ribbonTitle;
+          if (ribbonTitle) {
+            lastFocusedRibbonRef.current = ribbonTitle;
+          }
         }
       }
     };
@@ -71,7 +73,7 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
         const ribbonContainer = document.querySelector(`[data-ribbon="${lastFocusedRibbonRef.current}"]`);
         
         if (ribbonContainer) {
-          // Try different selectors for the carousel element
+          // Try different selectors for the carousel element in order of preference
           let carouselElement = ribbonContainer.querySelector('[tabindex="0"]');
           if (!carouselElement) {
             carouselElement = ribbonContainer.querySelector('[role="region"][aria-roledescription="carousel"]');
@@ -80,13 +82,23 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
             carouselElement = ribbonContainer.querySelector('[data-slot="carousel"]');
           }
           
+          // If no carousel found (e.g., empty state), focus on the ribbon container itself
+          if (!carouselElement) {
+            console.log('No carousel found, focusing on ribbon container itself');
+            // Make the ribbon container focusable if it isn't already
+            if (!ribbonContainer.hasAttribute('tabindex')) {
+              ribbonContainer.setAttribute('tabindex', '0');
+            }
+            carouselElement = ribbonContainer;
+          } else {
+            // console.log('Found carousel element to focus');
+          }
+          
           if (carouselElement) {
             (carouselElement as HTMLElement).focus();
-          } else {
-            console.log('Could not find carousel element to focus');
           }
         } else {
-          console.log('Could not find ribbon container');
+          console.log('Could not find ribbon container with data-ribbon:', lastFocusedRibbonRef.current);
         }
       }, 100); // Increased delay
     }
@@ -111,13 +123,15 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
         <MovieRibbon
           movies={allMovies}
           imgBaseUrl={imgBaseUrl}
+          ribbonId="now-streaming"
           onWatchLaterToggle={handleWatchLaterToggle}
         />
 
         <MovieRibbon
           movies={watchLaterMoviesList}
           imgBaseUrl={imgBaseUrl}
-          title="Watch Later"
+          title={`Watch Later (${watchLaterMoviesList.length})`}
+          ribbonId="watch-later"
           onWatchLaterToggle={handleWatchLaterToggle}
         />
         

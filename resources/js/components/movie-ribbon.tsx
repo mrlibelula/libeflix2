@@ -8,6 +8,7 @@ interface MovieRibbonProps {
   movies: Array<any>;
   imgBaseUrl: string;
   title?: string;
+  ribbonId?: string;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
 }
 
@@ -15,6 +16,7 @@ export function MovieRibbon({
   movies, 
   imgBaseUrl, 
   title = "Now Streaming",
+  ribbonId,
   onWatchLaterToggle,
 }: MovieRibbonProps) {
 
@@ -69,7 +71,11 @@ export function MovieRibbon({
   return (
     <div 
       className="relative px-4 mx-auto w-full max-w-screen md:max-w-[calc(100vw-var(--sidebar-width,0px)-10px)] _md:group-data-[state=collapsed]/sidebar-wrapper:max-w-[calc(100vw-var(--sidebar-width-icon,0px))]"
-      data-ribbon={title}
+      data-ribbon={ribbonId || title}
+      tabIndex={movies.length === 0 ? 0 : -1}
+      style={{
+        outline: 'none', // Remove default focus outline, rely on custom styling if needed
+      }}
     >
       {/* ribbon header */}
       <div onClick={toggleRibbon} className="flex w-full justify-start items-center select-none gap-x-4 px-2 mb-8 mt-5 text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out">

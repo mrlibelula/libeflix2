@@ -24,6 +24,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isToggling, setIsToggling] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const { props } = usePage<{ csrf_token: string }>();
 
   // Ensure component is ready before allowing interactions
@@ -39,6 +40,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     if (isToggling || !isReady) return;
     
     setIsToggling(true);
+    setIsAnimating(true);
     
     try {
       // Get CSRF token from Inertia shared data or meta tag
@@ -46,6 +48,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
       
       if (!csrfToken) {
         console.error('CSRF token not found');
+        setIsAnimating(false);
         return;
       }
       
@@ -61,7 +64,17 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
       
       if (response.ok) {
         const data = await response.json();
-        setIsWatchLater(data.is_watch_later);
+        
+        // Change icon at the midpoint of animation (when rotated 90deg and not visible)
+        setTimeout(() => {
+          setIsWatchLater(data.is_watch_later);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsAnimating(false);
+        }, 300);
+        
         onWatchLaterToggle?.(movie.id, data.is_watch_later);
       } else {
         console.error('HTTP error:', response.status, response.statusText);
@@ -69,13 +82,16 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           console.error('CSRF token mismatch. Please refresh the page.');
           // You could show a toast notification here or handle it differently
         }
+        setIsAnimating(false);
       }
     } catch (error) {
       console.error('Error toggling watch later:', error);
+      setIsAnimating(false);
     } finally {
       setIsToggling(false);
     }
   };
+
   return (
     <>
       <Link href={`/movie/${movie.slug}`}>
@@ -104,13 +120,24 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               <button
                 onClick={handleToggleWatchLater}
                 disabled={isToggling || !isReady}
-                className="transition-colors duration-150 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
+                className="transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
               >
-                {isWatchLater ? (
-                  <CheckIcon className="text-green-400 w-[1rem] h-[1rem]" />
-                ) : (
-                  <PlusIcon className="text-zinc-400 hover:text-zinc-200 w-[1rem] h-[1rem]" />
-                )}
+                <div 
+                  className={`transition-all duration-300 ease-in-out ${
+                    isAnimating ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
+                  }`}
+                  style={{
+                    transform: isAnimating 
+                      ? 'rotate(180deg) scale(1.1)' 
+                      : 'rotate(0deg) scale(1)',
+                  }}
+                >
+                  {isWatchLater ? (
+                    <CheckIcon className="text-green-400 w-[1rem] h-[1rem] transition-colors duration-200" />
+                  ) : (
+                    <PlusIcon className="text-zinc-400 hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
+                  )}
+                </div>
               </button>
               <HeartIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
               <ClapperboardIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
