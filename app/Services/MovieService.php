@@ -7,10 +7,50 @@ use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Models\User;
 
 class MovieService
 {
     /**
+     * Add a movie to the watch later list.
+     *
+     * @param Movie $movie
+     * @param User $user
+     * @return Movie
+     */
+    public static function addWatchLater(Movie $movie, User $user): Movie
+    {
+        $movie->addWatchLater($user);
+        return $movie;
+    }
+
+    /**
+     * Remove a movie from the watch later list.
+     *
+     * @param Movie $movie
+     * @param User $user
+     * @return Movie
+     */
+    public static function removeWatchLater(Movie $movie, User $user): Movie
+    {
+        $movie->removeWatchLater($user);
+        return $movie;
+    }
+
+    /**
+     * Check if a movie is in the User's watch later list.
+     *
+     * @param Movie $movie
+     * @param User $user
+     * @return bool
+     */
+    public static function isWatchLater(Movie $movie, User $user): bool
+    {
+        return $user->watchLaterMovies()->where('movies.id', $movie->id)->exists();
+    }
+
+    /**
+     * CONSOLE SCRIPT
      * Import movies from the movies disk
      * Each movie folder must contain "metadata.json" in order to be indexed
      * Use "playground - movie importer" app to generate metadata.json to movies folders
@@ -23,6 +63,11 @@ class MovieService
      */
     public static function importMovies(string $disk = 'movies', bool $conectToAPI = true)
     {
+        // Check if user is running this from command line
+        if (!app()->runningInConsole()) {
+            throw new Exception('This script can only be run from the command line');
+        }
+
         $startTime = microtime(true);
         ini_set('memory_limit', '-1');  // Temporary fix for memory limit
         echo "Importing movies..." . PHP_EOL;
@@ -224,9 +269,16 @@ class MovieService
         return true;
     }
 
+    /**
+     * Get the path of the first mp4 file in the movie directory
+     * This is used to set the movie path in the database
+     *
+     * @param string $dir
+     * @param string $disk
+     * @return string
+     */
     private static function moviePath(string $dir, string $disk): string
     {
-        // search for mp4 files in the dir
         $files = Storage::disk($disk)->files($dir . '/');
         $mp4Files = collect($files)->filter(function (string $file) {
             return str_contains($file, '.mp4');

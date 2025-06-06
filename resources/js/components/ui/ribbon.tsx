@@ -82,9 +82,17 @@ export function Ribbon({
       opts={{
         align: align,
         dragFree: dragFree,
+        skipSnaps: false,
+        containScroll: "trimSnaps",
       }}
       className={`w-full select-none ${className}`}
       setApi={setApi}
+      style={{
+        // Enable hardware acceleration for smoother animations
+        transform: "translate3d(0, 0, 0)",
+        backfaceVisibility: "hidden",
+        perspective: 1000,
+      }}
     >
       {navPosition === "top" && (
         <>
@@ -124,8 +132,23 @@ export function RibbonItem({
     <CarouselItem 
       className={`group basis-auto ${className || ""}`}
       onClick={onClick}
+      style={{
+        // Enable hardware acceleration
+        transform: "translate3d(0, 0, 0)",
+        backfaceVisibility: "hidden",
+        // Prevent layout shifts
+        flexShrink: 0,
+      }}
     >
-      <div style={{ minHeight: '150px', minWidth: '100px' }}>
+      <div 
+        style={{ 
+          minHeight: '150px', 
+          minWidth: '100px',
+          // Improve rendering performance
+          willChange: "transform",
+          isolation: "isolate",
+        }}
+      >
         {children}
       </div>
     </CarouselItem>

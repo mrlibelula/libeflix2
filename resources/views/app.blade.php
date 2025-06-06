@@ -20,7 +20,7 @@
         </script>
 
         {{-- favicon --}}
-        <link rel="icon" href="{{ asset('images/libeflix-web-icon.webp') }}" type="image/png">
+        <link rel="icon" href="{{ asset('/images/libeflix-web-icon.webp') }}" type="image/png">
 
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
@@ -82,6 +82,7 @@
 
             .app-loader-logo-text {
                 margin-left: 10px;
+                margin-bottom: 1.5rem;
                 font-weight: 600;
                 font-size: 18px;
                 color: rgb(23, 23, 23);
@@ -93,6 +94,18 @@
 
             html.dark .app-loader-logo-icon svg {
                 fill: black;
+            }
+
+            .app-loader-image-container {
+                margin-bottom: 0.5rem;
+                width: 2rem;
+                height: 2rem;
+            }
+
+            .app-loader-image {
+                width: 2.5rem;
+                height: 2.5rem;
+                object-fit: contain;
             }
 
             @keyframes spinner {
@@ -115,7 +128,7 @@
     <body class="font-sans antialiased scrollbar">
         <!-- Initial loader that shows before React/Inertia initializes -->
         <div id="app-loader">
-            <div class="app-loader-logo">
+            {{-- <div class="app-loader-logo">
                 <div class="app-loader-logo-icon">
                     <svg viewBox="0 0 40 42" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px; fill: currentColor;">
                         <path
@@ -125,8 +138,11 @@
                         />
                     </svg>
                 </div>
-                {{-- <div class="app-loader-logo-text">LIBEFLIX</div> --}}
-            </div>
+            </div> --}}
+            {{-- <div class="app-loader-image-container">
+                <img src="/images/libeflix-web-icon.webp" alt="StreamLab" class="app-loader-image" />
+            </div> --}}
+            {{-- <div class="app-loader-logo-text">StreamLab</div> --}}
             <div class="app-loader-spinner"></div>
         </div>
 

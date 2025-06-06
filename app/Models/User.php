@@ -34,6 +34,16 @@ class User extends Authenticatable
     ];
 
     /**
+     * Get the movies that the user has added to their watch later list.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function watchLaterMovies(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Movie::class)->withPivot('created_at')->orderBy('movie_user.created_at', 'DESC');
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
