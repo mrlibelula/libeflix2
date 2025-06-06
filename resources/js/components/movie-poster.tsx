@@ -1,6 +1,7 @@
-import { Link } from "@inertiajs/react";
+import { Link, router, usePage } from "@inertiajs/react";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { CheckIcon, ClapperboardIcon, HeartIcon, PlusIcon, StarIcon } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface Movie {
   id: number;
@@ -9,15 +10,72 @@ interface Movie {
   poster_path?: string;
   release_date?: string;
   vote_average?: number;
+  is_watch_later?: boolean;
 }
 
 interface MoviePosterProps {
   movie: Movie;
   imgBaseUrl: string;
   isPriority?: boolean;
+  onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
 }
 
-export function MoviePoster({ movie, imgBaseUrl, isPriority = false }: MoviePosterProps) {
+export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLaterToggle }: MoviePosterProps) {
+  const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const { props } = usePage<{ csrf_token: string }>();
+
+  // Ensure component is ready before allowing interactions
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleToggleWatchLater = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation
+    e.stopPropagation();
+    
+    if (isToggling || !isReady) return;
+    
+    setIsToggling(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        return;
+      }
+      
+      const response = await fetch(`/movies/${movie.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setIsWatchLater(data.is_watch_later);
+        onWatchLaterToggle?.(movie.id, data.is_watch_later);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+          // You could show a toast notification here or handle it differently
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling watch later:', error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
   return (
     <>
       <Link href={`/movie/${movie.slug}`}>
@@ -43,11 +101,17 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false }: MoviePost
           <div className="flex items-center gap-x-4">
             <div className="flex items-center gap-x-2">
               {/* if movie is in watch later list, show check icon */}
-              {movie.is_watch_later ? (
-                <CheckIcon className=" text-green-400 w-[1rem] h-[1rem]" />
-              ) : (
-                <PlusIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
-              )}
+              <button
+                onClick={handleToggleWatchLater}
+                disabled={isToggling || !isReady}
+                className="transition-colors duration-150 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
+              >
+                {isWatchLater ? (
+                  <CheckIcon className="text-green-400 w-[1rem] h-[1rem]" />
+                ) : (
+                  <PlusIcon className="text-zinc-400 hover:text-zinc-200 w-[1rem] h-[1rem]" />
+                )}
+              </button>
               <HeartIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
               <ClapperboardIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
             </div>

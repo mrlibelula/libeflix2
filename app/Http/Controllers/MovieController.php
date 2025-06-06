@@ -21,10 +21,6 @@ class MovieController extends Controller
             ->orderBy('title', 'asc')
             ->get();
 
-        if (!$movies) {
-            abort(404, 'No movies found');
-        }
-
         $user = Auth::user();
 
         $movies = $movies->map(function ($movie) use ($user) {
@@ -41,6 +37,30 @@ class MovieController extends Controller
             'movies' => $movies->shuffle(),
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
+        ]);
+    }
+
+    /**
+     * Toggle watch later status for a movie.
+     *
+     * @param Request $request
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleWatchLater(Request $request, Movie $movie)
+    {
+        $user = Auth::user();
+        $isWatchLater = MovieService::isWatchLater($movie, $user);
+
+        if ($isWatchLater) {
+            MovieService::removeWatchLater($movie, $user);
+        } else {
+            MovieService::addWatchLater($movie, $user);
+        }
+
+        return response()->json([
+            'success' => true,
+            'is_watch_later' => !$isWatchLater,
         ]);
     }
 }
