@@ -56,27 +56,6 @@ export function Ribbon({
     onApiInitialized(api)
   }, [api, onApiInitialized])
 
-  // Add keyboard navigation
-  React.useEffect(() => {
-    if (!api) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
-        api.scrollPrev()
-      } else if (e.key === "ArrowRight") {
-        api.scrollNext()
-      }
-    }
-
-    // Add event listener
-    window.addEventListener("keydown", handleKeyDown)
-
-    // Clean up event listener on component unmount
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [api])
-
   return (
     <Carousel
       opts={{
@@ -85,8 +64,9 @@ export function Ribbon({
         skipSnaps: false,
         containScroll: "trimSnaps",
       }}
-      className={`w-full select-none ${className}`}
+      className={`w-full select-none focus:outline-none ${className}`}
       setApi={setApi}
+      tabIndex={0}
       style={{
         // Enable hardware acceleration for smoother animations
         transform: "translate3d(0, 0, 0)",

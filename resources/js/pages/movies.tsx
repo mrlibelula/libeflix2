@@ -2,13 +2,37 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movies: Array<any>, imgBaseUrl: string, watchLaterMovies: Array<any> }) {
   const [allMovies, setAllMovies] = useState(movies);
   const [watchLaterMoviesList, setWatchLaterMoviesList] = useState(watchLaterMovies);
+  const lastFocusedRibbonRef = useRef<string | null>(null);
+  const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleWatchLaterToggle = (movieId: number, newStatus: boolean) => {
+  // Track which ribbon has focus
+  useEffect(() => {
+    const handleFocusChange = () => {
+      const activeElement = document.activeElement;
+      if (activeElement) {
+        const ribbonContainer = activeElement.closest('[data-ribbon]');
+        if (ribbonContainer) {
+          const ribbonTitle = ribbonContainer.getAttribute('data-ribbon');
+          lastFocusedRibbonRef.current = ribbonTitle;
+        }
+      }
+    };
+
+    // Listen for focus changes globally
+    document.addEventListener('focusin', handleFocusChange);
+    
+    return () => {
+      document.removeEventListener('focusin', handleFocusChange);
+    };
+  }, []);
+
+  const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
+
     // Update the is_watch_later status in both lists
     setAllMovies(prevMovies => 
       prevMovies.map(movie => 
@@ -20,15 +44,59 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
 
     if (newStatus) {
       // Add to watch later list if not already there (prepend to maintain DESC order)
-      const movieToAdd = allMovies.find(movie => movie.id === movieId);
-      if (movieToAdd && !watchLaterMoviesList.find(movie => movie.id === movieId)) {
-        setWatchLaterMoviesList(prev => [{ ...movieToAdd, is_watch_later: true }, ...prev]);
-      }
+      setWatchLaterMoviesList(prev => {
+        const movieToAdd = allMovies.find(movie => movie.id === movieId);
+        if (movieToAdd && !prev.find(movie => movie.id === movieId)) {
+          return [{ ...movieToAdd, is_watch_later: true }, ...prev];
+        }
+        return prev;
+      });
     } else {
       // Remove from watch later list
       setWatchLaterMoviesList(prev => prev.filter(movie => movie.id !== movieId));
     }
-  };
+  }, [allMovies]);
+
+  // Restore focus after state changes
+  useEffect(() => {
+    if (lastFocusedRibbonRef.current) {
+      
+      // Clear any existing timeout
+      if (restoreFocusTimeoutRef.current) {
+        clearTimeout(restoreFocusTimeoutRef.current);
+      }
+
+      // Set a delay to ensure DOM has updated
+      restoreFocusTimeoutRef.current = setTimeout(() => {
+        const ribbonContainer = document.querySelector(`[data-ribbon="${lastFocusedRibbonRef.current}"]`);
+        
+        if (ribbonContainer) {
+          // Try different selectors for the carousel element
+          let carouselElement = ribbonContainer.querySelector('[tabindex="0"]');
+          if (!carouselElement) {
+            carouselElement = ribbonContainer.querySelector('[role="region"][aria-roledescription="carousel"]');
+          }
+          if (!carouselElement) {
+            carouselElement = ribbonContainer.querySelector('[data-slot="carousel"]');
+          }
+          
+          if (carouselElement) {
+            (carouselElement as HTMLElement).focus();
+          } else {
+            console.log('Could not find carousel element to focus');
+          }
+        } else {
+          console.log('Could not find ribbon container');
+        }
+      }, 100); // Increased delay
+    }
+
+    return () => {
+      if (restoreFocusTimeoutRef.current) {
+        clearTimeout(restoreFocusTimeoutRef.current);
+      }
+    };
+  }, [allMovies, watchLaterMoviesList]);
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
