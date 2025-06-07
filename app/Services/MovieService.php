@@ -11,7 +11,13 @@ use App\Models\User;
 
 class MovieService
 {
-    public static function getMovieSubtitles(Movie $movie): array
+    /**
+     * Get the subtitles of a movie in json format
+     * 
+     * @param Movie $movie
+     * @return string
+     */
+    public static function getMovieSubtitles(Movie $movie): string
     {
         $storage = Storage::disk('movies');
         $moviePath = $movie->path;
@@ -21,21 +27,24 @@ class MovieService
         $vttFiles = $subtitles->filter(function ($file) {
             return Str::endsWith($file, '.vtt');
         });
+
+        $vttSubtitles = [];
         
         if ($vttFiles->count()) {
-            $subtitles = $vttFiles->map(function ($file) use ($movie) {
-                $language = Str::afterLast($file, '_');
+            $vttSubtitles = $vttFiles->map(function ($vttFile) use ($movie) {
+                $language = Str::afterLast($vttFile, '_');
                 $language = Str::before($language, '.vtt');
                 return [
                     'movieId' => $movie->id,
                     'languageCode' => strtoupper($language),
                     'languageName' => self::getLangName($language),
-                    'path' => $file
+                    'path' => $vttFile
                 ];
-            });
+            })->values()->toArray(); // Add values() to ensure indexed array
         }
 
-        return $subtitles->toArray();
+        // Ensure we always return a JSON array, not object
+        return json_encode(array_values($vttSubtitles));
     }
 
     public static function getLangName(string $langCode): string
@@ -126,12 +135,14 @@ class MovieService
         $errorMovies = collect([]);
         $notFoundMoviesInTMDB = collect([]);
         $notPersistedMovies = collect([]);
+        $alreadyPersistedMovies = collect([]);
 
         $foundMoviesInStorage = 0;
         $foundMoviesCount = 0;
         $notFoundMoviesInTMDBCount = 0;
         $notPersistedMoviesCount = 0;
         $totalPersistedMoviesCount = 0;
+        $alreadyPersistedMoviesCount = 0;
 
         // Get metadata.json from movies folders
         $movieDirs->each(function (string $movieDir) use ($storage, $moviesJsonData, &$foundMoviesInStorage) {
@@ -140,7 +151,7 @@ class MovieService
                 return str_contains($file, '.json');
             })->each(function (string $jsonFile) use ($storage, $moviesJsonData, $movieDir, &$foundMoviesInStorage) {
                 $jsonContent = json_decode($storage->get($jsonFile), true);
-                unset($jsonContent['api_id']);
+                if (isset($jsonContent['api_id'])) unset($jsonContent['api_id']);
                 $jsonContent['dir'] = $movieDir;
                 $moviesJsonData->push($jsonContent);
                 $foundMoviesInStorage++;
@@ -149,17 +160,26 @@ class MovieService
             });
         });
 
-        // Search for movies in TMDB
         if ($conectToAPI) {
-            $moviesJsonData->each(function ($movieData) use ($baseFetchApiUrl, &$movies, &$errorMovies, &$notFoundMoviesInTMDB, &$foundMoviesCount, &$notFoundMoviesInTMDBCount, $disk, $storage) {
+            // Search for movies in TMDB
+            $moviesJsonData->each(function ($movieData) use ($baseFetchApiUrl, &$movies, &$errorMovies, &$notFoundMoviesInTMDB, &$foundMoviesCount, &$notFoundMoviesInTMDBCount, $disk, &$alreadyPersistedMovies, &$alreadyPersistedMoviesCount) {
+                if ($dbMovie = Movie::where('id', $movieData['id'])->first()) {
+                    $alreadyPersistedMovies->push($dbMovie);
+                    // updates subtitles
+                    $dbMovie->subtitles = self::getMovieSubtitles($dbMovie);
+                    $dbMovie->save();
+                    $alreadyPersistedMoviesCount++;
+                    return;
+                }
+
                 echo "Searching for movie: \"" . $movieData['name'] . "\" (" . $movieData['release_year'] . ")..." . PHP_EOL;
                 $apiUrl = $baseFetchApiUrl . urlencode(strtolower(trim($movieData['name'])));
                 $response = Http::get($apiUrl);
                 $responseArrayDataResults = collect($response->json()['results']);
-    
+
                 $foundMovie = $responseArrayDataResults->first(function ($responseMovieData) use ($movieData, &$errorMovies) {
-                    if (isset($responseMovieData['release_date'])) {
-                        $found = (int)(substr($responseMovieData['release_date'], 0, 4)) === (int)$movieData['release_year'];
+                    if (isset($responseMovieData['id'])) {
+                        $found = (int)$responseMovieData['id'] === (int)$movieData['id'];
                         if ($found) {
                             echo "   - Found movie: \"" . $responseMovieData['title'] . "\" (" . $responseMovieData['release_date'] . ")" . PHP_EOL;
                         }
@@ -169,6 +189,7 @@ class MovieService
                         return null;
                     }
                 });
+                
                 // Grab additional movie data from TMDB
                 if ($foundMovie) {
                     $foundMoviesCount++;
@@ -202,7 +223,7 @@ class MovieService
                     unset($foundMovie['genre_ids']);
                     unset($foundMovie['adult']);
                     unset($foundMovie['video']);
-
+    
                     $movies->push($foundMovie);
                 } else {
                     $notFoundMoviesInTMDBCount++;
@@ -210,7 +231,7 @@ class MovieService
                 }
                 echo PHP_EOL;
             });
-
+    
             // save collected data into json file
             echo "\033[36m* Saving collected data into json file...\033[0m" . PHP_EOL;
             $storage->put($moviesTMDB, json_encode($movies->toArray()));
@@ -233,7 +254,7 @@ class MovieService
             try {
                 echo "- Persisting movie: " . $movie['title'] . "..." . PHP_EOL;
                 if ($movie) {
-                    Movie::create([
+                    $createdMovie = Movie::create([
                         'id' => $movie['id'],
                         'slug' => self::movieUniqueSlug($movie['title']),
                         'original_name' => $movie['original_name'],
@@ -255,6 +276,9 @@ class MovieService
                         'overview' => $movie['overview'],
                         'is_free' => $movie['is_free'],
                     ]);
+                    // updates subtitles
+                    $createdMovie->subtitles = self::getMovieSubtitles($createdMovie);
+                    $createdMovie->save();
                     $totalPersistedMoviesCount++;
                 } else {
                     $notPersistedMoviesCount++;
@@ -298,12 +322,21 @@ class MovieService
             });
         }
 
+        if ($alreadyPersistedMovies->count()) {
+            echo "\033[33m* Already persisted movies have been logged...\033[0m" . PHP_EOL;
+            info(['alreadyPersistedMovies' => $alreadyPersistedMovies->pluck('title', 'id')->toArray()]);
+            $alreadyPersistedMovies->each(function ($movie) {
+                echo "\033[33m  - ID: " . $movie->id . " - " . $movie->title . " (" . $movie->release_date . ")" . "\033[0m" . PHP_EOL;
+            });
+        }
+
         echo PHP_EOL;
         echo '---------------------------------------------' . PHP_EOL;
         echo "\033[32m* Movies found in storage: " . $foundMoviesInStorage . "\033[0m" . PHP_EOL;
         echo "\033[32m* Movies found in TMDB: " . $foundMoviesCount . "\033[0m" . PHP_EOL;
         echo "\033[32m* 'Not found' movies in TMDB: " . $notFoundMoviesInTMDBCount . "\033[0m" . PHP_EOL;
         echo "\033[32m* 'Not persisted' movies: " . $notPersistedMoviesCount . "\033[0m" . PHP_EOL;
+        echo "\033[32m* 'Already persisted' movies: " . $alreadyPersistedMoviesCount . "\033[0m" . PHP_EOL;
         echo "\033[32m* Total persisted movies: " . $totalPersistedMoviesCount . "\033[0m" . PHP_EOL;
         echo '---------------------------------------------' . PHP_EOL;
         $endTime = microtime(true);

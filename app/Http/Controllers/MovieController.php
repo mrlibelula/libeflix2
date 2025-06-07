@@ -17,7 +17,7 @@ class MovieController extends Controller
      */
     public function index()
     {
-        $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'trailers', 'slug')
+        $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'trailers', 'slug', 'subtitles')
             ->orderBy('title', 'asc')
             ->get();
 
@@ -25,13 +25,13 @@ class MovieController extends Controller
 
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
-            // $movie->subtitles = MovieService::getMovieSubtitles($movie);
+            $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             return $movie;
         });
 
         $watchLaterMovies = $user->watchLaterMovies()->get()->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
-            // $movie->subtitles = MovieService::getMovieSubtitles($movie);
+            $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             return $movie;
         });
 

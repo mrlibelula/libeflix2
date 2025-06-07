@@ -15,7 +15,7 @@ interface MovieRibbonProps {
 export function MovieRibbon({ 
   movies, 
   imgBaseUrl, 
-  title = "Now Streaming",
+  title = "Now Streaming" + (movies.length > 0 ? ` (${movies.length})` : ""),
   ribbonId,
   onWatchLaterToggle,
 }: MovieRibbonProps) {
@@ -78,7 +78,7 @@ export function MovieRibbon({
       }}
     >
       {/* ribbon header */}
-      <div onClick={toggleRibbon} className="flex w-full justify-start items-center select-none gap-x-4 px-2 mb-8 mt-5 text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out">
+      <div onClick={toggleRibbon} className="flex w-full justify-start items-center select-none gap-x-4 pr-2 mb-3 mt-5 text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out">
         <div>
           {title}
         </div>

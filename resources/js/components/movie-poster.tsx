@@ -108,15 +108,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               className="w-full h-full object-cover"
               priority={isPriority}
             />
-            <div className="absolute inset-0 poster-gradient w-full h-full" />
-            <div className="absolute inset-0 w-full h-full flex items-end justify-center gap-x-0.5 pb-2_">
-              <div className="text-zinc-900 text-[0.65rem] px-0.5 bg-zinc-300 font-bold border border-zinc-300">
-                CC
-              </div>
-              <div className="text-zinc-300 text-[0.65rem] px-0.5 border border-zinc-300 font-bold">
-                ES
-              </div>
-            </div>
+            
           </div>
         </div>
       </Link>
@@ -138,29 +130,42 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               >
                 <div 
                   className={`transition-all duration-300 ease-in-out ${
-                    isAnimating ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
+                    isAnimating ? 'rotate-180 scale-110_' : 'rotate-0 _scale-100'
                   }`}
                   style={{
                     transform: isAnimating 
-                      ? 'rotate(180deg) scale(1.1)' 
-                      : 'rotate(0deg) scale(1)',
+                      ? 'rotate(180deg)' 
+                      : 'rotate(0deg)',
                   }}
                 >
                   {isWatchLater ? (
                     <CheckIcon className="text-green-400 w-[1rem] h-[1rem] transition-colors duration-200" />
                   ) : (
-                    <PlusIcon className="text-zinc-400 hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
+                    <PlusIcon className="text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
                   )}
                 </div>
               </button>
               <HeartIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
               <ClapperboardIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
             </div>
-            <div className="flex items-center gap-x-1 text-amber-500 dark:text-amber-500 truncate text-xs group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-colors duration-150 ease-in-out">
+            <div className="flex items-center gap-x-1 text-amber-600 dark:text-amber-400 truncate text-xs group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors duration-150 ease-in-out">
               <StarIcon className="w-3 h-3" />
               {movie.vote_average ? Math.round(movie.vote_average * 10) + '%' : 'N/A'}
             </div>
           </div>
+        </div>
+        {/* subtitles */}
+        <div className="w-full h-full flex items-end justify-start gap-x-0.5 pt-1">
+          {movie.subtitles && movie.subtitles.length > 0 && (
+            <div className="dark:text-zinc-900 text-zinc-100 text-[0.55rem] px-0.5 bg-zinc-400 font-bold border border-zinc-400">
+              CC
+            </div>
+          )}
+          {Array.isArray(movie.subtitles) && movie.subtitles.map((subtitle) => (
+            <div key={subtitle.languageCode} className="text-zinc-500 dark:text-zinc-300 text-[0.55rem] px-0.5 border border-zinc-400 font-bold">
+              {subtitle.languageCode}
+            </div>
+          ))}
         </div>
       </div>
     </>
