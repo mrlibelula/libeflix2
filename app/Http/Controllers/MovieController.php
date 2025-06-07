@@ -25,11 +25,13 @@ class MovieController extends Controller
 
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+            // $movie->subtitles = MovieService::getMovieSubtitles($movie);
             return $movie;
         });
 
         $watchLaterMovies = $user->watchLaterMovies()->get()->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+            // $movie->subtitles = MovieService::getMovieSubtitles($movie);
             return $movie;
         });
 

@@ -11,6 +11,11 @@ interface Movie {
   release_date?: string;
   vote_average?: number;
   is_watch_later?: boolean;
+  subtitles?: {
+    languageCode: string;
+    languageName: string;
+    path: string;
+  }[];
 }
 
 interface MoviePosterProps {
@@ -103,6 +108,15 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               className="w-full h-full object-cover"
               priority={isPriority}
             />
+            <div className="absolute inset-0 poster-gradient w-full h-full" />
+            <div className="absolute inset-0 w-full h-full flex items-end justify-center gap-x-0.5 pb-2_">
+              <div className="text-zinc-900 text-[0.65rem] px-0.5 bg-zinc-300 font-bold border border-zinc-300">
+                CC
+              </div>
+              <div className="text-zinc-300 text-[0.65rem] px-0.5 border border-zinc-300 font-bold">
+                ES
+              </div>
+            </div>
           </div>
         </div>
       </Link>

@@ -11,6 +11,50 @@ use App\Models\User;
 
 class MovieService
 {
+    public static function getMovieSubtitles(Movie $movie): array
+    {
+        $storage = Storage::disk('movies');
+        $moviePath = $movie->path;
+        $movieDir = dirname($moviePath);
+        // search for *.vtt files in the movie directory
+        $subtitles = collect($storage->files($movieDir));
+        $vttFiles = $subtitles->filter(function ($file) {
+            return Str::endsWith($file, '.vtt');
+        });
+        
+        if ($vttFiles->count()) {
+            $subtitles = $vttFiles->map(function ($file) use ($movie) {
+                $language = Str::afterLast($file, '_');
+                $language = Str::before($language, '.vtt');
+                return [
+                    'movieId' => $movie->id,
+                    'languageCode' => strtoupper($language),
+                    'languageName' => self::getLangName($language),
+                    'path' => $file
+                ];
+            });
+        }
+
+        return $subtitles->toArray();
+    }
+
+    public static function getLangName(string $langCode): string
+    {
+        return [
+            'en' => 'English',
+            'es' => 'Español',
+            'fr' => 'French',
+            'de' => 'German',
+            'it' => 'Italian',
+            'br' => 'Portuguese (Br)',
+            'cn' => 'Chinesse',
+            'jp' => 'Japanesse',
+            'se' => 'Swedish',
+            'kr' => 'Korean',
+            'nl' => 'Dutch',
+        ][strtolower($langCode)] ?? strtoupper($langCode);
+    }
+
     /**
      * Add a movie to the watch later list.
      *
