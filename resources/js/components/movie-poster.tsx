@@ -32,6 +32,11 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   const [isAnimating, setIsAnimating] = useState(false);
   const { props } = usePage<{ csrf_token: string }>();
 
+  // Sync local state with movie prop changes
+  useEffect(() => {
+    setIsWatchLater(movie.is_watch_later || false);
+  }, [movie.is_watch_later]);
+
   // Ensure component is ready before allowing interactions
   useEffect(() => {
     const timer = setTimeout(() => setIsReady(true), 100);
