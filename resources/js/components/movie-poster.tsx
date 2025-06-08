@@ -2,6 +2,7 @@ import { Link, router, usePage } from "@inertiajs/react";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { CheckIcon, ClapperboardIcon, HeartIcon, PlusIcon, StarIcon } from "lucide-react";
 import { useState, useEffect } from "react";
+import { TrailerModal } from "@/components/trailer-modal";
 
 interface Movie {
   id: number;
@@ -11,6 +12,7 @@ interface Movie {
   release_date?: string;
   vote_average?: number;
   is_watch_later?: boolean;
+  trailer_count?: number;
   subtitles?: {
     languageCode: string;
     languageName: string;
@@ -30,6 +32,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   const [isToggling, setIsToggling] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
   const { props } = usePage<{ csrf_token: string }>();
 
   // Sync local state with movie prop changes
@@ -102,6 +105,12 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     }
   };
 
+  const handleTrailerClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsTrailerModalOpen(true);
+  };
+
   return (
     <>
       <Link href={`/movie/${movie.slug}`}>
@@ -150,8 +159,19 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
                   )}
                 </div>
               </button>
+
               <HeartIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
-              <ClapperboardIcon className=" text-zinc-400 w-[1rem] h-[1rem]" />
+              
+              {(movie.trailer_count ?? 0) > 0 && (
+                <button
+                  onClick={handleTrailerClick}
+                  className="hover:scale-110 transition-transform duration-200 cursor-pointer"
+                  title="Watch trailers"
+                >
+                  <ClapperboardIcon className="text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
+                </button>
+              )}
+              
             </div>
             <div className="flex items-center gap-x-1 text-amber-600 dark:text-amber-400 truncate text-xs group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors duration-150 ease-in-out">
               <StarIcon className="w-3 h-3" />
@@ -173,6 +193,13 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           ))}
         </div>
       </div>
+
+      <TrailerModal
+        isOpen={isTrailerModalOpen}
+        onOpenChange={setIsTrailerModalOpen}
+        movieTitle={movie.title}
+        movieId={movie.id}
+      />
     </>
   );
 } 

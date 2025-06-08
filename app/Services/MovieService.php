@@ -11,6 +11,19 @@ use App\Models\User;
 
 class MovieService
 {
+
+    /**
+     * Get the Movie trailers from the database
+     *
+     * @param int $movieId
+     * @return array
+     */
+    public static function getMovieTrailers(int $movieId): array
+    {
+        $movie = Movie::find($movieId);
+        return json_decode($movie->trailers, true) ?? [];
+    }
+
     /**
      * Get the subtitles of a movie in json format
      * 

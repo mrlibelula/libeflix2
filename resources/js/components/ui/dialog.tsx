@@ -51,32 +51,38 @@ function DialogContent({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   const [isVideoMuted, setIsVideoMuted] = React.useState(false);
+  const [hasNativeVideo, setHasNativeVideo] = React.useState(false);
 
-  // Effect to check if video is muted
+  // Effect to check if video is muted and detect video type
   React.useEffect(() => {
-    const checkMuteStatus = () => {
+    const checkVideoStatus = () => {
       const videoElement = document.querySelector('video');
+      const iframeElement = document.querySelector('iframe[src*="youtube.com/embed"]');
+      
       if (videoElement) {
         setIsVideoMuted(videoElement.muted);
+        setHasNativeVideo(true);
+      } else {
+        setHasNativeVideo(false);
       }
     };
 
     // Check initially
-    checkMuteStatus();
+    checkVideoStatus();
 
     // Set up an interval to check periodically
-    const interval = setInterval(checkMuteStatus, 1000);
+    const interval = setInterval(checkVideoStatus, 1000);
 
     // Also listen for volume change events
     const videoElement = document.querySelector('video');
     if (videoElement) {
-      videoElement.addEventListener('volumechange', checkMuteStatus);
+      videoElement.addEventListener('volumechange', checkVideoStatus);
     }
 
     return () => {
       clearInterval(interval);
       if (videoElement) {
-        videoElement.removeEventListener('volumechange', checkMuteStatus);
+        videoElement.removeEventListener('volumechange', checkVideoStatus);
       }
     };
   }, []);
@@ -95,35 +101,38 @@ function DialogContent({
         {children}
         <div className="absolute top-5 right-5 flex gap-1 items-center">
           {isVideoMuted && <div className="bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded text-xs text-rose-600 dark:text-rose-400 font-medium">Muted</div>}
-          <Tooltip text="Picture in Picture" position="bottom">
-            <button 
-              className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded flex items-center"
-              onClick={() => {
-                const videoElement = document.querySelector('video');
-                if (videoElement && document.pictureInPictureElement !== videoElement) {
-                  videoElement.requestPictureInPicture()
-                    .then(() => {
-                      // Ensure video continues playing in PiP mode
-                      if (videoElement.paused) {
-                        videoElement.play().catch(error => {
-                          console.error("Picture-in-Picture play failed:", error);
-                        });
-                      }
-                    })
-                    .catch(error => {
-                      console.error("Picture-in-Picture failed:", error);
+          {hasNativeVideo && (
+            <Tooltip text="Picture in Picture" position="bottom">
+              <button 
+                className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded flex items-center"
+                onClick={() => {
+                  const videoElement = document.querySelector('video');
+                  
+                  if (videoElement && document.pictureInPictureElement !== videoElement) {
+                    videoElement.requestPictureInPicture()
+                      .then(() => {
+                        // Ensure video continues playing in PiP mode
+                        if (videoElement.paused) {
+                          videoElement.play().catch(error => {
+                            console.error("Picture-in-Picture play failed:", error);
+                          });
+                        }
+                      })
+                      .catch(error => {
+                        console.error("Picture-in-Picture failed:", error);
+                      });
+                  } else if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture().catch(error => {
+                      console.error("Exiting Picture-in-Picture failed:", error);
                     });
-                } else if (document.pictureInPictureElement) {
-                  document.exitPictureInPicture().catch(error => {
-                    console.error("Exiting Picture-in-Picture failed:", error);
-                  });
-                }
-              }}
-            >
-              <PictureInPicture2 className="w-4 h-4"/>
-              <span className="sr-only">Picture in Picture</span>
-            </button>
-          </Tooltip>
+                  }
+                }}
+              >
+                <PictureInPicture2 className="w-4 h-4"/>
+                <span className="sr-only">Picture in Picture</span>
+              </button>
+            </Tooltip>
+          )}
           <Tooltip text="Close" position="bottom">
             <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded">
                 <XIcon className="w-4 h-4"/>

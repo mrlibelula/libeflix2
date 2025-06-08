@@ -17,11 +17,12 @@ class MovieController extends Controller
      */
     public function index()
     {
-        $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'trailers', 'slug', 'subtitles')
+        $user = Auth::user();
+        
+        $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
+            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
             ->orderBy('title', 'asc')
             ->get();
-
-        $user = Auth::user();
 
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
@@ -29,11 +30,15 @@ class MovieController extends Controller
             return $movie;
         });
 
-        $watchLaterMovies = $user->watchLaterMovies()->get()->map(function ($movie) use ($user) {
-            $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
-            $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
-            return $movie;
-        });
+        $watchLaterMovies = $user->watchLaterMovies()
+            ->select('movies.id', 'movies.title', 'movies.poster_path', 'movies.vote_average', 'movies.release_date', 'movies.slug', 'movies.subtitles')
+            ->selectRaw('COALESCE(json_array_length(movies.trailers), 0) as trailer_count')
+            ->get()
+            ->map(function ($movie) use ($user) {
+                $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+                $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+                return $movie;
+            });
 
         return Inertia::render('movies', [
             'movies' => $movies->shuffle(),
@@ -64,5 +69,18 @@ class MovieController extends Controller
             'success' => true,
             'is_watch_later' => !$isWatchLater,
         ]);
+    }
+
+    /**
+     * Get movie trailers.
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTrailers(Movie $movie)
+    {
+        $trailers = MovieService::getMovieTrailers($movie->id);
+        
+        return response()->json($trailers);
     }
 }

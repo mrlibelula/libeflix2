@@ -203,6 +203,25 @@
     }
 }
 
+@utility custom-scrollbar {
+    &::-webkit-scrollbar {
+        width: 0.25rem;
+    }
+    
+    &::-webkit-scrollbar-track {
+        background-color: var(--muted);
+    }
+    
+    &::-webkit-scrollbar-thumb {
+        background-color: var(--muted-foreground);
+        border-radius: 0.125rem;
+    }
+    
+    &::-webkit-scrollbar-thumb:hover {
+        background-color: var(--foreground);
+    }
+}
+
 @layer utilities {
   @keyframes fadeIn {
     0% {
