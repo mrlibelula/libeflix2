@@ -18,7 +18,7 @@ class MovieController extends Controller
     public function index()
     {
         $user = Auth::user();
-        
+
         $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
             ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
             ->orderBy('title', 'asc')
@@ -27,6 +27,7 @@ class MovieController extends Controller
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+            if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             return $movie;
         });
 
@@ -37,6 +38,7 @@ class MovieController extends Controller
             ->map(function ($movie) use ($user) {
                 $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+                if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
                 return $movie;
             });
 

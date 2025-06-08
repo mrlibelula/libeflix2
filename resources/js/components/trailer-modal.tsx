@@ -52,12 +52,27 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
         const data = await response.json();
         // Filter only YouTube trailers
         const youtubeTrailers = data.filter((trailer: Trailer) => trailer.site === 'YouTube');
-        // Sort trailers to put "Official" ones first
+        // Sort to put trailers first, with official trailers at the very top
         const sortedTrailers = youtubeTrailers.sort((a: Trailer, b: Trailer) => {
-          // Official trailers come first
-          if (a.official && !b.official) return -1;
-          if (!a.official && b.official) return 1;
-          // If both are official or both are not official, maintain original order
+          const aIsTrailer = a.type.toLowerCase() === 'trailer';
+          const bIsTrailer = b.type.toLowerCase() === 'trailer';
+          
+          // If only one is a trailer, trailer comes first
+          if (aIsTrailer && !bIsTrailer) return -1;
+          if (!aIsTrailer && bIsTrailer) return 1;
+          
+          // If both are trailers, official ones come first
+          if (aIsTrailer && bIsTrailer) {
+            if (a.official && !b.official) return -1;
+            if (!a.official && b.official) return 1;
+          }
+          
+          // For non-trailers, official ones come first
+          if (!aIsTrailer && !bIsTrailer) {
+            if (a.official && !b.official) return -1;
+            if (!a.official && b.official) return 1;
+          }
+          
           return 0;
         });
         setTrailers(sortedTrailers);
@@ -79,7 +94,7 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1400px] max-h-[90vh] p-0 overflow-hidden w-[98vw] sm:w-[95vw]">
+      <DialogContent className="sm:max-w-[1400px] max-h-[90vh] p-0 overflow-hidden w-[98vw] sm:w-[95vw] outline-none focus:outline-none border-none focus:ring-0 focus:ring-offset-0" style={{ outline: 'none', border: 'none' }}>
         <DialogTitle className="sr-only">
           {movieTitle} - Trailers
         </DialogTitle>
@@ -102,21 +117,23 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
 
         <div className="flex flex-col lg:flex-row h-full max-h-[70vh]">
           {/* Main video player */}
-          <div className="flex-1 bg-black">
+          <div className="flex-1 bg-black outline-none focus:outline-none" style={{ outline: 'none' }}>
             {isLoading ? (
               <div className="aspect-video flex items-center justify-center">
                 <div className="text-white">Loading trailers...</div>
               </div>
             ) : selectedTrailer ? (
-              <div className="aspect-video w-full lg:min-w-[800px]">
+              <div className="aspect-video w-full lg:min-w-[800px] outline-none focus:outline-none" style={{ outline: 'none' }}>
                 <iframe
                   key={selectedTrailer.key}
                   src={`https://www.youtube.com/embed/${selectedTrailer.key}?autoplay=1&rel=0&modestbranding=1`}
                   title={selectedTrailer.name}
-                  className="w-full h-full outline-none focus:outline-none"
+                  className="w-full h-full outline-none focus:outline-none border-none"
+                  style={{ outline: 'none', border: 'none' }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
+                  tabIndex={-1}
                 />
               </div>
             ) : (
