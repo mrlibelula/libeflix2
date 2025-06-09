@@ -70,7 +70,7 @@ export function MovieRibbon({
 
   return (
     <div 
-      className="relative px-4 mx-auto w-full max-w-screen md:max-w-[calc(100vw-var(--sidebar-width,0px)-10px)] _md:group-data-[state=collapsed]/sidebar-wrapper:max-w-[calc(100vw-var(--sidebar-width-icon,0px))]"
+      className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--sidebar-width,0px)-10px)] _md:group-data-[state=collapsed]/sidebar-wrapper:max-w-[calc(100vw-var(--sidebar-width-icon,0px))]"
       data-ribbon={ribbonId || title}
       tabIndex={movies.length === 0 ? 0 : -1}
       style={{

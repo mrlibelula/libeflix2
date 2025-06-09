@@ -45,7 +45,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       <div>
         <div className="flex flex-col xl:flex-row items-start justify-between p-0 lg:p-5">
           <div className="flex flex-col w-full min-w-[75%]">
-            <div className="relative_ bg-black text-white w-full_ lg:rounded-lg lg:overflow-hidden">
+            <div className="relative_ bg-black text-white w-full_ lg:rounded-lg lg:overflow-hidden shadow-md_ _shadow-zinc-900 focus:outline-none">
               <video 
                 className="w-full aspect-video lg:aspect-auto lg:h-[50vh] _h-full aspect-video_ _md:aspect-auto object-cover object-center  focus:outline-none"  
                 controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()}
@@ -67,11 +67,11 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                 Your browser does not support the video tag.
               </video>
             </div>
-            <div className=" w-full">
+            <div className="py-6 w-full">
               overview
             </div>
           </div>
-          <div className=" w-full min-w-[25%]">
+          <div className="px-6 w-full min-w-[25%]">
             Right panel
           </div>
         </div>
