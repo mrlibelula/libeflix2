@@ -1756,7 +1756,7 @@ export function PlayEpisodeDialog({
                   }}
                 >
                   
-                  <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video" />
+                  <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10" />
 
                   <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30">
                     <div className="mb-3 relative">
