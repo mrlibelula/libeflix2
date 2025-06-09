@@ -10,6 +10,30 @@ use Illuminate\Http\Response;
 class StorageController extends Controller
 {
     /**
+     * Serve a movie file for streaming
+     * 
+     * @param string $encFilePath
+     * @param string $disk
+     * @return BinaryFileResponse
+     */
+    public function movieServe(string $encFilePath, string $disk = 'movies'): BinaryFileResponse
+    {
+        return $this->fileServe($encFilePath, $disk);
+    }
+
+    /**
+     * Serve a movie subtitles file for streaming
+     * 
+     * @param string $encFilePath
+     * @param string $disk
+     * @return Response
+     */
+    public function movieSubtitlesServe(string $encFilePath, string $disk = 'movies'): Response
+    {
+        return $this->subtitlesServe($encFilePath, $disk);
+    }
+
+    /**
      * Serve a TV show episode file for streaming
      * 
      * @param string $encFilePath
@@ -17,6 +41,18 @@ class StorageController extends Controller
      * @return BinaryFileResponse
      */
     public function tvshowEpisodeServe(string $encFilePath, string $disk = 'tvshows'): BinaryFileResponse
+    {
+        return $this->fileServe($encFilePath, $disk);
+    }
+
+    /**
+     * Serve a file for streaming
+     * 
+     * @param string $encFilePath
+     * @param string $disk
+     * @return BinaryFileResponse
+     */
+    public function fileServe(string $encFilePath, string $disk = 'movies'): BinaryFileResponse
     {
         $filePath = $this->getFilePath($encFilePath, $disk);
 
@@ -29,6 +65,18 @@ class StorageController extends Controller
         ]);
     }
 
+    /**
+     * Serve a TV show subtitles file for streaming
+     * 
+     * @param string $encFilePath
+     * @param string $disk
+     * @return Response
+     */
+    public function tvshowSubtitlesServe(string $encFilePath, string $disk = 'tvshows'): Response
+    {
+        return $this->subtitlesServe($encFilePath, $disk);
+    }
+
     /** 
      * Serve a TV show episode subtitles file for streaming
      * 
@@ -36,7 +84,7 @@ class StorageController extends Controller
      * @param string $disk
      * @return \Illuminate\Http\Response
      */
-    public function tvshowSubtitlesServe(string $encFilePath, string $disk = 'tvshows'): Response
+    public function subtitlesServe(string $encFilePath, string $disk = 'tvshows'): Response
     {
         try {
             $filePath = $this->getFilePath($encFilePath, $disk);

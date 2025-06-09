@@ -21,6 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
     Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'])->name('api.movies.trailers');
+    Route::get('movie/{slug}', [MovieController::class, 'show'])->name('movie.show');
+    Route::get('movie/stream/{encFilePath}/{disk?}', [StorageController::class, 'movieServe'])->name('movie.serve');
+    Route::get('movie/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'movieSubtitlesServe'])->name('movie.subtitles.serve');
 });
 
 require __DIR__.'/settings.php';

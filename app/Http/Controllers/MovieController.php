@@ -7,6 +7,7 @@ use Inertia\Inertia;
 use App\Models\Movie;
 use App\Services\MovieService;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Tool;
 
 class MovieController extends Controller
 {
@@ -28,6 +29,7 @@ class MovieController extends Controller
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
+            if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
             return $movie;
         });
 
@@ -39,13 +41,33 @@ class MovieController extends Controller
                 $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
                 if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
+                if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
                 return $movie;
             });
 
         return Inertia::render('movies', [
-            'movies' => $movies->shuffle(),
+            'movies' => $movies,
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
+        ]);
+    }
+
+    public function show(string $slug)
+    {
+        $movie = Movie::where('slug', $slug)->first();
+        if (!$movie) {
+            return redirect()->route('movies.index');
+        }
+        
+        // Decode subtitles JSON to make it accessible in React
+        $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+        
+        return Inertia::render('movie', [
+            'movie' => $movie,
+            'encFilePath' => Tool::encode($movie->path),
+            'imgBaseUrl300' => env('TMDB_IMAGE_BASE_URL_300'),
+            'imgBaseUrl500' => env('TMDB_IMAGE_BASE_URL_500'),
+            'imgBaseUrl780' => env('TMDB_IMAGE_BASE_URL_780'),
         ]);
     }
 

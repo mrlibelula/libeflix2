@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\User;
+use App\Services\Tool;
 
 class MovieService
 {
@@ -51,7 +52,8 @@ class MovieService
                     'movieId' => $movie->id,
                     'languageCode' => strtoupper($language),
                     'languageName' => self::getLangName($language),
-                    'path' => $vttFile
+                    'path' => $vttFile,
+                    'encPath' => Tool::encode($vttFile),
                 ];
             })->values()->toArray(); // Add values() to ensure indexed array
         }
