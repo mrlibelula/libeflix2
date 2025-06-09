@@ -68,6 +68,8 @@ class MovieController extends Controller
             'imgBaseUrl300' => env('TMDB_IMAGE_BASE_URL_300'),
             'imgBaseUrl500' => env('TMDB_IMAGE_BASE_URL_500'),
             'imgBaseUrl780' => env('TMDB_IMAGE_BASE_URL_780'),
+            'imgBaseUrl1280' => env('TMDB_IMAGE_BASE_URL_1280'),
+            'imgBaseUrl1920' => env('TMDB_IMAGE_BASE_URL_1920'),
         ]);
     }
 

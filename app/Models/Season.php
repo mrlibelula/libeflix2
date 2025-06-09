@@ -27,6 +27,6 @@ class Season extends Model
 
     public function getBackdropUrlAttribute(): string
     {
-        return env('TMDB_IMAGE_BASE_URL_780') . $this->backdrop_path;
+        return env('TMDB_IMAGE_BASE_URL_1280') . $this->backdrop_path;
     }
 }

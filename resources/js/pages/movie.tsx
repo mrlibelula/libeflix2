@@ -2,8 +2,8 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head } from "@inertiajs/react";
 
-export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string }) {
-  const breadcrumbs: BreadcrumbItem[] = [
+export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280, imgBaseUrl1920 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string, imgBaseUrl1920: string }) {
+  const breadcrumbs: BreadcrumbItem[] = [ 
     {
       title: `${movie.title}`,
       href: `/movie/${movie.slug}`,
@@ -49,7 +49,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
               <video 
                 className="w-full aspect-video lg:aspect-auto lg:h-[50vh] object-cover object-center focus:outline-none"  
                 controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()}
-                poster={`${imgBaseUrl780}${movie.backdrop_path}`}
+                poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
               >
                 <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
                 
