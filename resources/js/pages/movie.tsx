@@ -45,9 +45,9 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       <div>
         <div className="flex flex-col xl:flex-row items-start justify-between p-0 lg:p-5">
           <div className="flex flex-col w-full min-w-[75%]">
-            <div className="relative_ bg-black text-white w-full_ lg:rounded-lg lg:overflow-hidden shadow-md_ _shadow-zinc-900 focus:outline-none">
+            <div className="bg-black text-white lg:rounded-lg lg:overflow-hidden focus:outline-none">
               <video 
-                className="w-full aspect-video lg:aspect-auto lg:h-[50vh] _h-full aspect-video_ _md:aspect-auto object-cover object-center  focus:outline-none"  
+                className="w-full aspect-video lg:aspect-auto lg:h-[50vh] object-cover object-center focus:outline-none"  
                 controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()}
                 poster={`${imgBaseUrl780}${movie.backdrop_path}`}
               >
