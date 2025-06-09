@@ -44,7 +44,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
       <div>
         <div className="flex flex-col xl:flex-row items-start justify-between p-0 lg:p-5">
-          <div className="flex flex-col w-full min-w-[75%]">
+          <div className="flex flex-col w-full min-w-[65%]">
             <div className="bg-black text-white lg:rounded-lg lg:overflow-hidden focus:outline-none">
               <video 
                 className="w-full aspect-video lg:aspect-auto lg:h-[50vh] object-cover object-center focus:outline-none"  
@@ -71,7 +71,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
               overview
             </div>
           </div>
-          <div className="px-6 w-full min-w-[25%]">
+          <div className="px-6 w-full min-w-[35%]">
             Right panel
           </div>
         </div>

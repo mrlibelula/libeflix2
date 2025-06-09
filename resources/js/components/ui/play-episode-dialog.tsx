@@ -1567,14 +1567,6 @@ export function PlayEpisodeDialog({
           Debug info
         </div>
         
-        {/* Optional visual debug indicator - remove in production */}
-        {/* {process.env.NODE_ENV === 'development' && (repeatSeason || repeatTvshow) && (
-          <div className="absolute top-0 right-0 z-50 bg-black bg-opacity-70 text-white text-xs p-2">
-            <div>Repeat mode: {repeatOne ? 'One' : repeatSeason ? 'Season' : repeatTvshow ? 'TV Show' : 'None'}</div>
-            <div>Has next episode: {hasNextEpisode ? 'Yes' : 'No'}</div>
-          </div>
-        )} */}
-        
         <div className="w-full h-full flex flex-col">
           {/* Video player area */}
           <div 
@@ -1733,7 +1725,7 @@ export function PlayEpisodeDialog({
                 {/* Video controls overlay */}
                 <div 
                   ref={controlsRef}
-                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
+                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
                     controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onMouseEnter={() => {
@@ -1763,7 +1755,10 @@ export function PlayEpisodeDialog({
                     }, 3000);
                   }}
                 >
-                  <div className="p-4 text-neutral-900 dark:text-neutral-100">
+                  
+                  <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video" />
+
+                  <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30">
                     <div className="mb-3 relative">
                       {/* Progress bar with track and indicator */}
                       <div className="w-full h-2 bg-neutral-600 rounded-full relative">

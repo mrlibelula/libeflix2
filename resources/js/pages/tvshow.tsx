@@ -103,7 +103,9 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
       <Head title={`${tvshow.name} ▸ S${selectedSeason.season_number.toString().padStart(2, '0')} ▸ TV Show`} />
       {/* hero */}
       <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
-        <div style={{ backgroundImage: `url(${backdropUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} className="w-full h-[calc(100vh-5.5rem)] filter grayscale" />
+        <div 
+          style={{ backgroundImage: `url(${backdropUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} className="w-full h-[calc(100vh-5.5rem)] filter grayscale opacity-10" 
+        />
         <div className="absolute light-gradient-hero dark:dark-gradient-hero h-[calc(100vh-5.5rem)] w-full" />
         <div className="flex flex-col xl:flex-row w-full absolute">
           <div className="w-full flex flex-col items-start justify-start ">
@@ -114,7 +116,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                 <div className="text-black dark:text-white text-4xl font-bold px-5 py-3">
                   {
                     tvshow.logo?.url ?
-                      <img src={`${tvshow.logo?.url}`} alt={tvshow.name} className="w-full sm:w-1/2 object-cover animate-zoomIn" />
+                      <img src={`${tvshow.logo?.url}`} alt={tvshow.name} className="w-full sm:w-1/2 object-cover animate-zoomIn invert dark:invert-0" />
                       :
                       <h1 className="text-3xl md:text-4xl xl:text-6xl font-bold animate-zoomIn">
                         {tvshow.name}

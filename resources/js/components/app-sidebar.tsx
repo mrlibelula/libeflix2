@@ -24,40 +24,40 @@ const mainNavItems: NavItem[] = [
         icon: Film,
     },
     {
-        title: 'Tunes',
-        href: '/tunes',
+        title: 'Music',
+        href: '/music',
         icon: Music,
     },
-    {
-        title: 'Watch Later',
-        href: '/watch-later',
-        icon: Clock,
-    },
-    {
-        title: 'Popular',
-        href: '/popular',
-        icon: TrendingUp,
-    },
-    {
-        title: 'Top',
-        href: '/top',
-        icon: ListFilter,
-    },
+    // {
+    //     title: 'Watch Later',
+    //     href: '/watch-later',
+    //     icon: Clock,
+    // },
+    // {
+    //     title: 'Popular',
+    //     href: '/popular',
+    //     icon: TrendingUp,
+    // },
+    // {
+    //     title: 'Top',
+    //     href: '/top',
+    //     icon: ListFilter,
+    // },
     {
         title: 'Vintage Games',
         href: '/vintage-games',
         icon: Gamepad2,
     },
-    {
-        title: 'History',
-        href: '/history',
-        icon: History,
-    },
-    {
-        title: 'Control Panel',
-        href: '/cpanel',
-        icon: SlidersHorizontal,
-    },
+    // {
+    //     title: 'History',
+    //     href: '/history',
+    //     icon: History,
+    // },
+    // {
+    //     title: 'Control Panel',
+    //     href: '/cpanel',
+    //     icon: SlidersHorizontal,
+    // },
 ];
 
 const footerNavItems: NavItem[] = [
