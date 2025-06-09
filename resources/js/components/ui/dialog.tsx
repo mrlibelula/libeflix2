@@ -58,7 +58,7 @@ function DialogContent({
     const checkVideoStatus = () => {
       const videoElement = document.querySelector('video');
       const iframeElement = document.querySelector('iframe[src*="youtube.com/embed"]');
-      
+
       if (videoElement) {
         setIsVideoMuted(videoElement.muted);
         setHasNativeVideo(true);
@@ -99,15 +99,15 @@ function DialogContent({
         {...props}
       >
         {children}
-        <div className="absolute top-5 right-5 flex gap-1 items-center">
+        <div className="absolute top-5 right-5 flex gap-1 items-center z-50">
           {isVideoMuted && <div className="bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded text-xs text-rose-600 dark:text-rose-400 font-medium">Muted</div>}
           {hasNativeVideo && (
             <Tooltip text="Picture in Picture" position="bottom">
-              <button 
-                className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded flex items-center"
+              <button
+                className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded flex items-center cursor-pointer"
                 onClick={() => {
                   const videoElement = document.querySelector('video');
-                  
+
                   if (videoElement && document.pictureInPictureElement !== videoElement) {
                     videoElement.requestPictureInPicture()
                       .then(() => {
@@ -128,17 +128,17 @@ function DialogContent({
                   }
                 }}
               >
-                <PictureInPicture2 className="w-4 h-4"/>
+                <PictureInPicture2 className="w-4 h-4" />
                 <span className="sr-only">Picture in Picture</span>
               </button>
             </Tooltip>
           )}
           <Tooltip text="Close" position="bottom">
-            <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded">
-                <XIcon className="w-4 h-4"/>
-                <span className="sr-only">Close</span>
-              </DialogPrimitive.Close>
-            </Tooltip>
+            <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded cursor-pointer">
+              <XIcon className="w-4 h-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          </Tooltip>
         </div>
       </DialogPrimitive.Content>
     </DialogPortal>

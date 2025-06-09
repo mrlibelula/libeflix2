@@ -1882,14 +1882,14 @@ export function PlayEpisodeDialog({
 
                         {/* Seasons and episodes list button */}
                         <Tooltip text="Seasons & Episodes" position="bottom">
-                          <SquareStack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                          <SquareStack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150 cursor-pointer" />
                         </Tooltip>
 
                         {/* Subtitles and audio button */}
                         <Tooltip text="Subtitles & Audio" position="bottom">
                           <button 
                             onClick={handleToggleContextMenu}
-                            className="focus:outline-none relative"
+                            className="focus:outline-none relative cursor-pointer"
                             aria-label="Subtitles and Audio Options"
                           >
                             <MessageSquareText className={`w-5 h-5 ${showContextMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
@@ -1982,9 +1982,9 @@ export function PlayEpisodeDialog({
                         <Tooltip text={isFullscreen ? "Exit Fullscreen (f)" : "Enter Fullscreen (f)"} position="bottom">
                           <button onClick={toggleFullscreen}>
                             {isFullscreen ? (
-                              <Minimize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                              <Minimize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150 cursor-pointer" />
                             ) : (
-                              <Maximize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150" />
+                              <Maximize className="w-5 h-5 hover:text-rose-500 transition-colors duration-150 cursor-pointer" />
                             )}
                           </button>
                         </Tooltip>
@@ -2021,7 +2021,7 @@ export function PlayEpisodeDialog({
                     {/* repeat episode (loop episode) */}
                     <Tooltip text="Repeat current episode" position="bottom">
                       <button
-                        className="focus:outline-none"
+                        className="focus:outline-none cursor-pointer"
                         onClick={toggleRepeatOne}
                       >
                         <Repeat1 
@@ -2034,7 +2034,7 @@ export function PlayEpisodeDialog({
                     {/* repeat season playlist (loop season) */}
                     <Tooltip text="Repeat current season" position="bottom">
                       <button
-                        className="focus:outline-none"
+                        className="focus:outline-none cursor-pointer"
                         onClick={toggleRepeatSeason}
                       >
                         <Repeat 
@@ -2047,7 +2047,7 @@ export function PlayEpisodeDialog({
                     {/* repeat entire tvshow episodes (loop all seasons) */}
                     <Tooltip text="Repeat entire TV show" position="bottom">
                       <button
-                        className="focus:outline-none"
+                        className="focus:outline-none cursor-pointer"
                         onClick={toggleRepeatTvshow}
                       >
                         <Repeat2 
