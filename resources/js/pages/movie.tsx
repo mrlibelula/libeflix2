@@ -17,7 +17,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${movie.title}`} />
 
-      <div className=" h-full w-full bg-black">
+      {/* <div className=" h-full w-full bg-black">
         <div className="relative bg-black h-[calc(100vh-5rem)] w-full text-white focus:outline-none">
           <video 
             className="w-full h-full object-cover_ focus:outline-none"  
@@ -40,14 +40,14 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
             Your browser does not support the video tag.
           </video>
         </div>
-      </div>
+      </div> */}
 
-      {/* <div>
-        <div className="flex flex-col xl:flex-row items-start justify-between">
+      <div>
+        <div className="flex flex-col xl:flex-row items-start justify-between p-0 lg:p-5">
           <div className="flex flex-col w-full min-w-[75%]">
-            <div className="relative bg-black text-white w-full">
+            <div className="relative_ bg-black text-white w-full_ lg:rounded-lg lg:overflow-hidden">
               <video 
-                className="w-full h-full aspect-video md:aspect-auto object-cover focus:outline-none"  
+                className="w-full aspect-video lg:aspect-auto lg:h-[50vh] _h-full aspect-video_ _md:aspect-auto object-cover object-center  focus:outline-none"  
                 controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()}
                 poster={`${imgBaseUrl780}${movie.backdrop_path}`}
               >
@@ -75,7 +75,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
             Right panel
           </div>
         </div>
-      </div> */}
+      </div>
       
     </AppLayout>
   );
