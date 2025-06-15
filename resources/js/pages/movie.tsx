@@ -317,7 +317,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     >
                       {/* Recommended Movies Section */}
                       <div className="flex flex-col gap-y-4 w-full">
-                        <h2 className="text-xl font-bold">Recommended Movies</h2>
+                        <h2 className="text-xl font-bold mb-4">Recommended Movies</h2>
                         {loadingRecommendations ? (
                           <div className="w-full">
                             <Ribbon align="start" dragFree={true}>
@@ -355,7 +355,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
                       {/* Similar Movies Section */}
                       <div className="flex flex-col gap-y-4 w-full">
-                        <h2 className="text-xl font-bold">Similar Movies</h2>
+                        <h2 className="text-xl font-bold mb-4">Similar Movies</h2>
                         {loadingSimilarMovies ? (
                           <div className="w-full">
                             <Ribbon align="start" dragFree={true}>
