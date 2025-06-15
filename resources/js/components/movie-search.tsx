@@ -33,6 +33,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [searchTimestamp, setSearchTimestamp] = useState<string | null>(null);
+  const [resultTimestamps, setResultTimestamps] = useState<Map<string, string>>(new Map());
   
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +57,13 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
         setResults(response.data.results);
         setIsOpen(true);
         setSelectedIndex(-1);
-        setSearchTimestamp(new Date().toISOString());
+        const timestamp = new Date().toISOString();
+        setSearchTimestamp(timestamp);
+        
+        // Store timestamp for each result based on the query
+        const newTimestamps = new Map(resultTimestamps);
+        newTimestamps.set(searchQuery, timestamp);
+        setResultTimestamps(newTimestamps);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -147,14 +154,16 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
 
   // Track click on search result
   const trackClick = async (movie: MovieSearchResult) => {
-    if (!searchTimestamp) return;
+    // Use the timestamp for the current query, fallback to general timestamp
+    const relevantTimestamp = resultTimestamps.get(query) || searchTimestamp;
+    if (!relevantTimestamp) return;
     
     try {
       await axios.post('/api/movies/search/track-click', {
         query: query,
         movie_id: movie.id,
         movie_title: movie.title,
-        search_timestamp: searchTimestamp,
+        search_timestamp: relevantTimestamp,
       });
     } catch (error) {
       console.error('Failed to track search click:', error);
