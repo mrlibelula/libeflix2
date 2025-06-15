@@ -6,12 +6,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { CreditPoster } from "@/components/ui/credit-poster";
 import { useEffect, useState } from "react";
+import { MovieCard } from "@/components/ui/movie-card";
+import { MovieCardSkeleton } from "@/components/ui/movie-card-skeleton";
+import axios from 'axios';
 
 // Interface for sidebar state event
 interface SidebarStateDetail {
   state: 'expanded' | 'collapsed';
   width: string;
   isMobile: boolean;
+}
+
+// Interface for movie data from API
+interface MovieData {
+  id: number;
+  title: string;
+  poster_path?: string;
+  poster_url?: string;
+  backdrop_path?: string;
+  backdrop_url?: string;
+  vote_average: number;
+  release_date: string;
+  overview?: string;
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {
@@ -40,6 +56,52 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
   // State to track sidebar width for dynamic CSS calculations
   const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth());
+  
+  // State for recommendations and similar movies
+  const [recommendations, setRecommendations] = useState<MovieData[]>([]);
+  const [similarMovies, setSimilarMovies] = useState<MovieData[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [loadingSimilarMovies, setLoadingSimilarMovies] = useState(true);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [similarMoviesError, setSimilarMoviesError] = useState<string | null>(null);
+
+  // Function to fetch recommendations
+  const fetchRecommendations = async () => {
+    try {
+      setLoadingRecommendations(true);
+      setRecommendationsError(null);
+      const response = await axios.get(`/api/movies/${movie.id}/recommendations`);
+      if (response.data.success) {
+        setRecommendations(response.data.recommendations);
+      } else {
+        setRecommendationsError('Failed to load recommendations');
+      }
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+      setRecommendationsError('Failed to load recommendations');
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  // Function to fetch similar movies
+  const fetchSimilarMovies = async () => {
+    try {
+      setLoadingSimilarMovies(true);
+      setSimilarMoviesError(null);
+      const response = await axios.get(`/api/movies/${movie.id}/similar`);
+      if (response.data.success) {
+        setSimilarMovies(response.data.similar_movies);
+      } else {
+        setSimilarMoviesError('Failed to load similar movies');
+      }
+    } catch (error) {
+      console.error('Error fetching similar movies:', error);
+      setSimilarMoviesError('Failed to load similar movies');
+    } finally {
+      setLoadingSimilarMovies(false);
+    }
+  };
 
   // Listen for sidebar state changes
   useEffect(() => {
@@ -56,6 +118,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
     };
   }, []);
+
+  // Fetch recommendations and similar movies when component mounts
+  useEffect(() => {
+    fetchRecommendations();
+    fetchSimilarMovies();
+  }, [movie.id]);
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -287,12 +355,84 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         </TabsContent>
                       </Tabs>
                     </div>
-                    <div className="flex flex-col 2xl:flex-row gap-y-7 2xl:gap-x-7 w-full bg-green-500">
-                      <div className="flex gap-x-7 w-full bg-violet-500">
-                        Recommended movies
+                    <div 
+                      className="flex flex-col gap-y-10 w-[calc(100vw-2rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]"
+                      style={{
+                        '--dynamic-sidebar-width': sidebarWidth
+                      } as React.CSSProperties}
+                    >
+                      {/* Recommended Movies Section */}
+                      <div className="flex flex-col gap-y-4 w-full">
+                        <h2 className="text-xl font-bold">Recommended Movies</h2>
+                        {loadingRecommendations ? (
+                          <div className="w-full">
+                            <Ribbon align="start" dragFree={true}>
+                              {Array.from({ length: 8 }).map((_, index) => (
+                                <RibbonItem key={`rec-skeleton-${index}`}>
+                                  <MovieCardSkeleton count={1} className="w-[180px]" />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        ) : recommendationsError ? (
+                          <div className="text-red-500 text-center py-8">
+                            {recommendationsError}
+                          </div>
+                        ) : recommendations.length > 0 ? (
+                          <div className="w-full">
+                            <Ribbon align="start" dragFree={true}>
+                              {recommendations.map((recommendation, index) => (
+                                <RibbonItem key={`recommendation-${recommendation.id}-${index}`}>
+                                  <MovieCard
+                                    movie={recommendation}
+                                    className="w-[180px]"
+                                  />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-8">
+                            No recommendations available
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-x-7 w-full bg-orange-500">
-                        Similar movies
+
+                      {/* Similar Movies Section */}
+                      <div className="flex flex-col gap-y-4 w-full">
+                        <h2 className="text-xl font-bold">Similar Movies</h2>
+                        {loadingSimilarMovies ? (
+                          <div className="w-full">
+                            <Ribbon align="start" dragFree={true}>
+                              {Array.from({ length: 8 }).map((_, index) => (
+                                <RibbonItem key={`sim-skeleton-${index}`}>
+                                  <MovieCardSkeleton count={1} className="w-[180px]" />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        ) : similarMoviesError ? (
+                          <div className="text-red-500 text-center py-8">
+                            {similarMoviesError}
+                          </div>
+                        ) : similarMovies.length > 0 ? (
+                          <div className="w-full">
+                            <Ribbon align="start" dragFree={true}>
+                              {similarMovies.map((similar, index) => (
+                                <RibbonItem key={`similar-${similar.id}-${index}`}>
+                                  <MovieCard
+                                    movie={similar}
+                                    className="w-[180px]"
+                                  />
+                                </RibbonItem>
+                              ))}
+                            </Ribbon>
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-8">
+                            No similar movies available
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="bg-red-500">

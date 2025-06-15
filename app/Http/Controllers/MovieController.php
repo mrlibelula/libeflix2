@@ -8,6 +8,7 @@ use App\Models\Movie;
 use App\Services\MovieService;
 use Illuminate\Support\Facades\Auth;
 use App\Services\Tool;
+use Illuminate\Support\Facades\Cache;
 
 class MovieController extends Controller
 {
@@ -166,5 +167,177 @@ class MovieController extends Controller
         $trailers = MovieService::getMovieTrailers($movie->id);
         
         return response()->json($trailers);
+    }
+
+    /**
+     * Get movie recommendations asynchronously.
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getRecommendations(Movie $movie)
+    {
+        try {
+            $recommendations = MovieService::getMovieRecommendations($movie);
+            
+            // Process recommendations to include image URLs and other needed data
+            $processedRecommendations = collect($recommendations)->map(function ($recommendation) {
+                return [
+                    'id' => $recommendation['id'],
+                    'title' => $recommendation['title'],
+                    'poster_path' => $recommendation['poster_path'],
+                    'backdrop_path' => $recommendation['backdrop_path'],
+                    'vote_average' => $recommendation['vote_average'],
+                    'release_date' => $recommendation['release_date'],
+                    'overview' => $recommendation['overview'],
+                    'poster_url' => $recommendation['poster_path'] 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $recommendation['poster_path']
+                        : null,
+                    'backdrop_url' => $recommendation['backdrop_path']
+                        ? env('TMDB_IMAGE_BASE_URL_780') . $recommendation['backdrop_path']
+                        : null,
+                ];
+            })->take(10); // Limit to 10 recommendations
+            
+            return response()->json([
+                'success' => true,
+                'recommendations' => $processedRecommendations
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch recommendations',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get similar movies asynchronously.
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSimilarMovies(Movie $movie)
+    {
+        try {
+            $similarMovies = MovieService::getSimilarMovies($movie);
+            
+            // Process similar movies to include image URLs and other needed data
+            $processedSimilarMovies = collect($similarMovies)->map(function ($movie) {
+                return [
+                    'id' => $movie['id'],
+                    'title' => $movie['title'],
+                    'poster_path' => $movie['poster_path'],
+                    'backdrop_path' => $movie['backdrop_path'],
+                    'vote_average' => $movie['vote_average'],
+                    'release_date' => $movie['release_date'],
+                    'overview' => $movie['overview'],
+                    'poster_url' => $movie['poster_path'] 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $movie['poster_path']
+                        : null,
+                    'backdrop_url' => $movie['backdrop_path']
+                        ? env('TMDB_IMAGE_BASE_URL_780') . $movie['backdrop_path']
+                        : null,
+                ];
+            })->take(10); // Limit to 10 similar movies
+            
+            return response()->json([
+                'success' => true,
+                'similar_movies' => $processedSimilarMovies
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch similar movies',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Initiate async job to fetch movie recommendations and similar movies.
+     * (Alternative Job Queue Approach)
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function initiateRecommendationsFetch(Movie $movie)
+    {
+        $cacheKey = "movie_recommendations_{$movie->id}";
+        
+        // Check if we already have cached data
+        $cachedData = Cache::get($cacheKey);
+        if ($cachedData) {
+            return response()->json([
+                'success' => true,
+                'status' => 'cached',
+                'data' => $cachedData
+            ]);
+        }
+
+        // Check if job is already running
+        $status = Cache::get($cacheKey . '_status');
+        if ($status === 'loading') {
+            return response()->json([
+                'success' => true,
+                'status' => 'loading',
+                'message' => 'Recommendations are being fetched'
+            ]);
+        }
+
+        // Dispatch the job
+        \App\Jobs\FetchMovieRecommendationsJob::dispatch($movie);
+        
+        return response()->json([
+            'success' => true,
+            'status' => 'initiated',
+            'message' => 'Recommendation fetch job initiated'
+        ]);
+    }
+
+    /**
+     * Poll for job status and results.
+     * (Alternative Job Queue Approach)
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function pollRecommendationsStatus(Movie $movie)
+    {
+        $cacheKey = "movie_recommendations_{$movie->id}";
+        $status = Cache::get($cacheKey . '_status', 'not_started');
+        
+        switch ($status) {
+            case 'completed':
+                $data = Cache::get($cacheKey);
+                return response()->json([
+                    'success' => true,
+                    'status' => 'completed',
+                    'data' => $data
+                ]);
+                
+            case 'loading':
+                return response()->json([
+                    'success' => true,
+                    'status' => 'loading',
+                    'message' => 'Still fetching recommendations...'
+                ]);
+                
+            case 'failed':
+                $error = Cache::get($cacheKey . '_error', 'Unknown error');
+                return response()->json([
+                    'success' => false,
+                    'status' => 'failed',
+                    'message' => $error
+                ]);
+                
+            default:
+                return response()->json([
+                    'success' => false,
+                    'status' => 'not_started',
+                    'message' => 'Job not initiated'
+                ]);
+        }
     }
 }

@@ -27,6 +27,20 @@ class MovieService
     }
 
     /**
+     * Get similar movies to a given movie
+     *
+     * @param Movie $movie
+     * @return array
+     */
+    public static function getSimilarMovies(Movie $movie): array
+    {
+        $baseUrl = env('TMDB_BASE_URL') . '/movie/' . $movie->id . '/similar?api_key=' . env('TMDB_API_KEY');
+        $response = Http::get($baseUrl);
+        $responseArrayData = $response->json();
+        return $responseArrayData['results'] ?? [];
+    }
+
+    /**
      * Get the Movie trailers from the database
      *
      * @param int $movieId
