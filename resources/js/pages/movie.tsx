@@ -1,6 +1,10 @@
 import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head } from "@inertiajs/react";
+import { Clapperboard, HeartIcon, MessageSquareText, Share2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
+import { CreditPoster } from "@/components/ui/credit-poster";
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {
   const breadcrumbs: BreadcrumbItem[] = [ 
@@ -106,40 +110,136 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
             <div className="p-3 md:p-5 lg:p-7 w-full">
               <div className="flex items-start justify-between gap-7 w-full">
                 <div className="flex flex-col gap-y-7 w-full">
-                  <div className="flex lg:flex-row flex-col w-full items-start justify-between gap-y-6 gap-x-7 bg-indigo-600">
-                    <div className="flex flex-col gap-y-4 bg-pink-500 w-full">
-                      <div className="text-gray-500 text-lg w-[70%]">
-                        #sci-fi
+                  <div className="flex lg:flex-row flex-col w-full items-start justify-between gap-y-6 gap-x-7">
+                    <div className="flex flex-col gap-y-4 w-full">
+                      {/* genres */}
+                      <div className="flex flex-wrap gap-2">
+                        {movie.genres.map((genre: any) => (
+                          <span key={genre.id} className="text-gray-500 text-sm lg:text-base">
+                            #{genre.name}
+                          </span>
+                        ))}
                       </div>
-                      <h1 className="text-3xl lg:text-4xl font-bold leading-tight w-full">
+                      
+                      <h1 className="text-[1.8rem] lg:text-[2.5rem] font-bold leading-tight w-full">
                         {movie.title}
                       </h1>
-                      <div className="text-lg lg:text-xl">
-                        1999, 1h 33m, CC, 88%
+                      <div className="text-base lg:text-lg text-gray-500">
+                        {movie.release_date.split('-')[0]}&nbsp;&nbsp;•&nbsp;&nbsp;{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m&nbsp;&nbsp;•&nbsp;&nbsp;CC&nbsp;&nbsp;•&nbsp;&nbsp;{Math.round((movie.vote_average) * 10)}%
                       </div>
                     </div>
                     
-                    <div className="flex flex-col lg:items-end items-start gap-y-6 bg-green-500 lg:w-[30%] w-full">
-                      <div className="bg-red-500 w-full lg:text-right">
-                        rating, views
+                    <div className="flex flex-row lg:flex-col lg:items-end items-start gap-y-6 lg:w-[30%] w-full">
+                      <div className="w-full lg:text-right text-sm lg:text-base text-gray-500">
+                        PG-13&nbsp;&nbsp;•&nbsp;&nbsp;0 views
                       </div>
-                      <div className="text-gray-500 text-base lg:text-lg bg-purple-300 w-full lg:text-right whitespace-nowrap">
-                        Likes, comments, share, etc.
+                      <div className="flex items-center justify-end gap-x-2 text-gray-500 text-base lg:text-lg w-full lg:text-right whitespace-nowrap">
+                        {/* Likes, comments, share, etc. */}
+                        <HeartIcon className="w-5 h-5 lg:w-6 lg:h-6" />
+                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
+                        <MessageSquareText className="w-5 h-5 lg:w-6 lg:h-6" />
+                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
+                        <Share2 className="w-5 h-5 lg:w-6 lg:h-6" />
+                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
+                        <Clapperboard className="w-5 h-5 lg:w-6 lg:h-6" />
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-y-7 w-full text-xl bg-yellow-300">
+                  <div className="flex flex-col gap-y-7 w-full text-xl">
                     <div className="flex lg:flex-row flex-col gap-y-7 gap-x-7 w-full">
-                      <div className="bg-pink-400 lg:w-[30%] w-full">
-                        Poster
-                      </div>
-                      <div className="bg-purple-600 lg:w-[70%] w-full">
-                        Tagline and Overview
+                      {movie.tagline && (
+                        <div className="lg:hidden w-full text-base lg:text-lg text-center italic">
+                          "{movie.tagline}"
+                        </div>
+                      )}
+
+                      {/* <div className="mx-auto">
+                        <img src={`${imgBaseUrl500}${movie.poster_path}`} alt={movie.title} className="w-[9em] h-[18rem] lg:w-[15rem] lg:h-[20rem] rounded-lg object-cover border-2 border-gray-100 dark:border-gray-700 shadow-lg shadow-gray-500 dark:shadow-gray-700 overflow-hidden" />
+                      </div> */}
+                      
+                      <div className="w-full">
+                        <div className="hidden lg:block">
+                          {movie.tagline && (
+                            <div className="text-base lg:text-lg italic mb-4">
+                              "{movie.tagline}"
+                            </div>
+                          )}
+                        </div>
+                        {movie.overview && (
+                          <div className="text-gray-500 text-base lg:text-lg">
+                            {movie.overview}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex gap-x-7 w-full bg-blue-500">
-                      Cast and crew ribbons and tabs
+                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2rem)] lg:w-full">
+                      <Tabs defaultValue="cast" className="w-full lg:w-[calc(100vw-var(--sidebar-width)-4rem)]">
+                        <TabsList className="w-full">
+                          {movie.credits?.cast && movie.credits.cast.length > 0 && (
+                            <TabsTrigger value="cast">Cast</TabsTrigger>
+                          )}
+                          {movie.credits?.crew && movie.credits.crew.length > 0 && (
+                            <TabsTrigger value="crew">Crew</TabsTrigger>
+                          )}
+                        </TabsList>
+                        
+                        <TabsContent value="cast">
+                          {/* cast ribbon */}
+                          {movie.credits?.cast && movie.credits.cast.length > 0 && (
+                            <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                              <Ribbon 
+                                align="start" 
+                                dragFree={true}
+                              >
+                                {movie.credits.cast.map((cast: any, index: number) => {
+                                  // Prioritize the first 8 cast members for better initial load
+                                  const isPriority = index < 8;
+                                  
+                                  return (
+                                    <RibbonItem key={`cast-${cast.id}-${index}`}>
+                                      <CreditPoster 
+                                        imageUrl={cast.profilePathUrl} 
+                                        name={cast.name}
+                                        characterName={cast.character} 
+                                        priority={isPriority}
+                                      />
+                                    </RibbonItem>
+                                  );
+                                })}
+                              </Ribbon>
+                            </div>
+                          )}
+                        </TabsContent>
+                        
+                        <TabsContent value="crew">
+                          {/* crew ribbon */}
+                          {movie.credits?.crew && movie.credits.crew.length > 0 && (
+                            <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
+                              <Ribbon 
+                                align="start" 
+                                dragFree={true}
+                              >
+                                {movie.credits.crew.map((crew: any, index: number) => {
+                                  // Prioritize the first 8 crew members for better initial load
+                                  const isPriority = index < 8;
+                                  
+                                  return (
+                                    <RibbonItem key={`crew-${crew.id}-${index}`}>
+                                      <CreditPoster 
+                                        imageUrl={crew.profilePathUrl} 
+                                        name={crew.name}
+                                        characterName={crew.job} 
+                                        priority={isPriority}
+                                      />
+                                    </RibbonItem>
+                                  );
+                                })}
+                              </Ribbon>
+                            </div>
+                          )}
+                        </TabsContent>
+                      </Tabs>
                     </div>
                     <div className="flex flex-col 2xl:flex-row gap-y-7 2xl:gap-x-7 w-full bg-green-500">
                       <div className="flex gap-x-7 w-full bg-violet-500">

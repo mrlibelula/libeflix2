@@ -46,7 +46,7 @@ class MovieController extends Controller
             });
 
         return Inertia::render('movies', [
-            'movies' => $movies,
+            'movies' => $movies->shuffle(),
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
         ]);
@@ -61,6 +61,32 @@ class MovieController extends Controller
         
         // Decode subtitles JSON to make it accessible in React
         $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+        $movie->genres = json_decode($movie->genres, true) ?: [];
+        
+        // Decode and process credits
+        $credits = json_decode($movie->credits, true) ?: [];
+        
+        // Add profile path URLs to cast and crew
+        if (isset($credits['cast'])) {
+            $credits['cast'] = array_map(function ($cast) {
+                $cast['profilePathUrl'] = isset($cast['profile_path']) && $cast['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $cast['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $cast;
+            }, $credits['cast']);
+        }
+        
+        if (isset($credits['crew'])) {
+            $credits['crew'] = array_map(function ($crew) {
+                $crew['profilePathUrl'] = isset($crew['profile_path']) && $crew['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $crew['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $crew;
+            }, $credits['crew']);
+        }
+        
+        // Assign the processed credits back to the movie
+        $movie->credits = $credits;
         
         return Inertia::render('movie', [
             'movie' => $movie,

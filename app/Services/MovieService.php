@@ -12,6 +12,19 @@ use App\Services\Tool;
 
 class MovieService
 {
+    /**
+     * Get the recommendations of a movie
+     *
+     * @param Movie $movie
+     * @return array
+     */
+    public static function getMovieRecommendations(Movie $movie): array
+    {
+        $baseUrl = env('TMDB_BASE_URL') . '/movie/' . $movie->id . '/recommendations?api_key=' . env('TMDB_API_KEY');
+        $response = Http::get($baseUrl);
+        $responseArrayData = $response->json();
+        return $responseArrayData['results'] ?? [];
+    }
 
     /**
      * Get the Movie trailers from the database
