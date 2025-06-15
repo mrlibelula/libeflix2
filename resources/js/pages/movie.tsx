@@ -28,6 +28,11 @@ interface MovieData {
   vote_average: number;
   release_date: string;
   overview?: string;
+  is_local?: boolean;
+  slug?: string;
+  is_watch_later?: boolean;
+  has_subtitles?: boolean;
+  subtitle_languages?: string[];
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {

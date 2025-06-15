@@ -47,7 +47,7 @@ class MovieController extends Controller
             });
 
         return Inertia::render('movies', [
-            'movies' => $movies->shuffle(),
+            'movies' => $movies,
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
         ]);
@@ -157,6 +157,39 @@ class MovieController extends Controller
     }
 
     /**
+     * Toggle watch later status for a movie by ID.
+     *
+     * @param Request $request
+     * @param int $movieId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleWatchLaterById(Request $request, int $movieId)
+    {
+        $movie = Movie::find($movieId);
+        
+        if (!$movie) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Movie not found'
+            ], 404);
+        }
+
+        $user = Auth::user();
+        $isWatchLater = MovieService::isWatchLater($movie, $user);
+
+        if ($isWatchLater) {
+            MovieService::removeWatchLater($movie, $user);
+        } else {
+            MovieService::addWatchLater($movie, $user);
+        }
+
+        return response()->json([
+            'success' => true,
+            'is_watch_later' => !$isWatchLater,
+        ]);
+    }
+
+    /**
      * Get movie trailers.
      *
      * @param Movie $movie
@@ -179,10 +212,14 @@ class MovieController extends Controller
     {
         try {
             $recommendations = MovieService::getMovieRecommendations($movie);
+            $user = Auth::user();
             
-            // Process recommendations to include image URLs and other needed data
-            $processedRecommendations = collect($recommendations)->map(function ($recommendation) {
-                return [
+            // Process recommendations to include image URLs and check for local availability
+            $processedRecommendations = collect($recommendations)->map(function ($recommendation) use ($user) {
+                // Check if this movie exists in our local database
+                $localMovie = Movie::where('id', $recommendation['id'])->first();
+                
+                $baseData = [
                     'id' => $recommendation['id'],
                     'title' => $recommendation['title'],
                     'poster_path' => $recommendation['poster_path'],
@@ -196,7 +233,21 @@ class MovieController extends Controller
                     'backdrop_url' => $recommendation['backdrop_path']
                         ? env('TMDB_IMAGE_BASE_URL_780') . $recommendation['backdrop_path']
                         : null,
+                    'is_local' => false,
                 ];
+
+                // If movie exists locally, add additional data
+                if ($localMovie) {
+                    $subtitles = json_decode($localMovie->subtitles, true) ?: [];
+                    
+                    $baseData['is_local'] = true;
+                    $baseData['slug'] = $localMovie->slug;
+                    $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
+                    $baseData['has_subtitles'] = !empty($subtitles);
+                    $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
+                }
+
+                return $baseData;
             })->take(10); // Limit to 10 recommendations
             
             return response()->json([
@@ -222,10 +273,14 @@ class MovieController extends Controller
     {
         try {
             $similarMovies = MovieService::getSimilarMovies($movie);
+            $user = Auth::user();
             
-            // Process similar movies to include image URLs and other needed data
-            $processedSimilarMovies = collect($similarMovies)->map(function ($movie) {
-                return [
+            // Process similar movies to include image URLs and check for local availability
+            $processedSimilarMovies = collect($similarMovies)->map(function ($movie) use ($user) {
+                // Check if this movie exists in our local database
+                $localMovie = Movie::where('id', $movie['id'])->first();
+                
+                $baseData = [
                     'id' => $movie['id'],
                     'title' => $movie['title'],
                     'poster_path' => $movie['poster_path'],
@@ -239,7 +294,21 @@ class MovieController extends Controller
                     'backdrop_url' => $movie['backdrop_path']
                         ? env('TMDB_IMAGE_BASE_URL_780') . $movie['backdrop_path']
                         : null,
+                    'is_local' => false,
                 ];
+
+                // If movie exists locally, add additional data
+                if ($localMovie) {
+                    $subtitles = json_decode($localMovie->subtitles, true) ?: [];
+                    
+                    $baseData['is_local'] = true;
+                    $baseData['slug'] = $localMovie->slug;
+                    $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
+                    $baseData['has_subtitles'] = !empty($subtitles);
+                    $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
+                }
+
+                return $baseData;
             })->take(10); // Limit to 10 similar movies
             
             return response()->json([
