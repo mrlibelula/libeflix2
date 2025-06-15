@@ -71,7 +71,7 @@ class MovieController extends Controller
             });
 
         return Inertia::render('movies', [
-            'movies' => $searchQuery ? $movies : $movies->shuffle(),
+            'movies' => $searchQuery ? $movies : $movies,
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
             'searchQuery' => $searchQuery,
