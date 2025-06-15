@@ -18,7 +18,7 @@ export function MovieSearchModal() {
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Search Movies</DialogTitle>
           <DialogDescription>
-            Search through your movie collection by title, actor, director, or keywords.
+            Search through our movie collection by title, actor, director, or keywords.
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-4">
