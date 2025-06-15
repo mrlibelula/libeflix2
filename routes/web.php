@@ -26,7 +26,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/movies/{movie}/recommendations', [MovieController::class, 'getRecommendations'])->name('api.movies.recommendations');
     Route::get('api/movies/{movie}/similar', [MovieController::class, 'getSimilarMovies'])->name('api.movies.similar');
     Route::get('api/movies/search', [MovieController::class, 'search'])->name('api.movies.search');
+    Route::post('api/movies/search/log', [MovieController::class, 'logSearch'])->name('api.movies.search.log');
     Route::post('api/movies/search/track-click', [MovieController::class, 'trackSearchClick'])->name('api.movies.search.track-click');
+    Route::post('api/movies/search/cleanup', [MovieController::class, 'cleanupSearchQueries'])->name('api.movies.search.cleanup');
+    Route::get('api/movies/search/popular-terms', [MovieController::class, 'getPopularSearchTerms'])->name('api.movies.search.popular-terms');
+    Route::get('api/movies/search/no-results', [MovieController::class, 'getNoResultSearches'])->name('api.movies.search.no-results');
+    Route::get('api/movies/search/analytics-summary', [MovieController::class, 'getAnalyticsSummary'])->name('api.movies.search.analytics-summary');
     
     // Alternative Job Queue Routes
     Route::post('api/movies/{movie}/recommendations/initiate', [MovieController::class, 'initiateRecommendationsFetch'])->name('api.movies.recommendations.initiate');

@@ -38,9 +38,10 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loggingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Debounced search function
-  const debouncedSearch = useCallback(async (searchQuery: string) => {
+  // Fast search function (no logging)
+  const performSearch = useCallback(async (searchQuery: string) => {
     if (searchQuery.length < 2) {
       setResults([]);
       setIsOpen(false);
@@ -50,7 +51,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
     setIsLoading(true);
     try {
       const response = await axios.get('/api/movies/search', {
-        params: { q: searchQuery, limit: 8 }
+        params: { q: searchQuery, limit: 8, log: 'false' } // Don't log this search
       });
       
       if (response.data.success) {
@@ -73,18 +74,42 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
     }
   }, []);
 
-  // Handle input change with debounce
+  // Log search after user stops typing (separate from search)
+  const logSearch = useCallback(async (searchQuery: string) => {
+    if (searchQuery.length < 3) return; // Only log meaningful searches
+    
+    try {
+      await axios.post('/api/movies/search/log', {
+        query: searchQuery,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to log search:', error);
+    }
+  }, []);
+
+  // Handle input change with dual debounce (fast search + delayed logging)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setQuery(value);
 
+    // Clear existing timeouts
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    if (loggingTimeoutRef.current) {
+      clearTimeout(loggingTimeoutRef.current);
+    }
 
+    // Fast search for UI responsiveness (300ms)
     timeoutRef.current = setTimeout(() => {
-      debouncedSearch(value);
+      performSearch(value);
     }, 300);
+
+    // Delayed logging when user stops typing (1500ms)
+    loggingTimeoutRef.current = setTimeout(() => {
+      logSearch(value);
+    }, 1500);
   };
 
   // Handle keyboard navigation
@@ -138,6 +163,9 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
       document.removeEventListener('mousedown', handleClickOutside);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+      }
+      if (loggingTimeoutRef.current) {
+        clearTimeout(loggingTimeoutRef.current);
       }
     };
   }, []);

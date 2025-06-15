@@ -475,6 +475,7 @@ class MovieController extends Controller
         try {
             $query = $request->get('q', '');
             $limit = $request->get('limit', 10);
+            $shouldLog = $request->get('log', 'true') !== 'false'; // Default to true, false only if explicitly set
             
             if (empty($query) || strlen($query) < 2) {
                 return response()->json([
@@ -539,37 +540,39 @@ class MovieController extends Controller
 
             $searchTime = round((microtime(true) - $startTime) * 1000, 2); // Convert to milliseconds
 
-            // Log the search query for analytics
-            try {
-                SearchQuery::create([
-                    'user_id' => $user->id,
-                    'query' => $query,
-                    'results_count' => $results->count(),
-                    'results_summary' => $results->take(5)->map(function ($movie) {
-                        return [
-                            'id' => $movie['id'],
-                            'title' => $movie['title'],
-                            'slug' => $movie['slug']
-                        ];
-                    })->toArray(),
-                    'has_results' => $results->count() > 0,
-                    'search_type' => 'real_time',
-                    'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->header('User-Agent'),
-                    'session_data' => [
-                        'search_time_ms' => $searchTime,
-                        'limit' => $limit,
-                        'timestamp' => now()->toISOString(),
-                    ],
-                ]);
-            } catch (\Exception $logError) {
-                // Don't fail the search if logging fails
-                Log::warning('Failed to log search query', [
-                    'query' => $query,
-                    'user_id' => $user->id,
-                    'error' => $logError->getMessage()
-                ]);
+            // Smart logging: Only log if requested and meaningful
+            if ($shouldLog && $this->shouldLogSearch($query, $user->id, $results->count())) {
+                try {
+                    SearchQuery::create([
+                        'user_id' => $user->id,
+                        'query' => $query,
+                        'results_count' => $results->count(),
+                        'results_summary' => $results->take(5)->map(function ($movie) {
+                            return [
+                                'id' => $movie['id'],
+                                'title' => $movie['title'],
+                                'slug' => $movie['slug']
+                            ];
+                        })->toArray(),
+                        'has_results' => $results->count() > 0,
+                        'search_type' => 'real_time',
+                        'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                        'ip_address' => $request->ip(),
+                        'user_agent' => $request->header('User-Agent'),
+                        'session_data' => [
+                            'search_time_ms' => $searchTime,
+                            'limit' => $limit,
+                            'timestamp' => now()->toISOString(),
+                        ],
+                    ]);
+                } catch (\Exception $logError) {
+                    // Don't fail the search if logging fails
+                    Log::warning('Failed to log search query', [
+                        'query' => $query,
+                        'user_id' => $user->id,
+                        'error' => $logError->getMessage()
+                    ]);
+                }
             }
 
             return response()->json([
@@ -689,5 +692,213 @@ class MovieController extends Controller
     {
         $queries = SearchQuery::withResults()->withClicks()->count();
         return response()->json($queries);
+    }
+
+    /**
+     * Log a search query without performing the search (for delayed logging).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logSearch(Request $request)
+    {
+        try {
+            $request->validate([
+                'query' => 'required|string|max:500',
+                'timestamp' => 'required|string',
+            ]);
+
+            $query = $request->input('query');
+            $user = Auth::user();
+            
+            // Only log if it meets our criteria
+            if (!$this->shouldLogSearch($query, $user->id, 0)) {
+                return response()->json(['success' => true, 'logged' => false]);
+            }
+
+            // Check if we already logged this exact query recently (avoid duplicates)
+            $recentLog = SearchQuery::where('user_id', $user->id)
+                ->where('query', $query)
+                ->where('created_at', '>=', now()->subMinutes(5))
+                ->first();
+
+            if ($recentLog) {
+                return response()->json(['success' => true, 'logged' => false, 'reason' => 'duplicate']);
+            }
+
+            // First get the total count of matching movies
+            $resultsCount = Movie::where(function ($q) use ($query) {
+                $q->where('title', 'LIKE', "%{$query}%")
+                  ->orWhere('original_name', 'LIKE', "%{$query}%")
+                  ->orWhere('tagline', 'LIKE', "%{$query}%")
+                  ->orWhere('overview', 'LIKE', "%{$query}%")
+                  ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                  ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                  ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+            })->count();
+
+            // Then get top 5 results for summary
+            $movies = Movie::select('id', 'title', 'slug')
+                ->where(function ($q) use ($query) {
+                    $q->where('title', 'LIKE', "%{$query}%")
+                      ->orWhere('original_name', 'LIKE', "%{$query}%")
+                      ->orWhere('tagline', 'LIKE', "%{$query}%")
+                      ->orWhere('overview', 'LIKE', "%{$query}%")
+                      ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                      ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                      ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                })
+                ->orderByRaw("CASE 
+                    WHEN title LIKE ? THEN 1
+                    WHEN original_name LIKE ? THEN 2
+                    WHEN tagline LIKE ? THEN 3
+                    WHEN overview LIKE ? THEN 4
+                    ELSE 5
+                END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
+                ->limit(5) // Get top 5 for summary
+                ->get();
+
+            $resultsSummary = $movies->map(function ($movie) {
+                return [
+                    'id' => $movie->id,
+                    'title' => $movie->title,
+                    'slug' => $movie->slug
+                ];
+            })->toArray();
+
+            SearchQuery::create([
+                'user_id' => $user->id,
+                'query' => $query,
+                'results_count' => $resultsCount,
+                'results_summary' => $resultsSummary,
+                'has_results' => $resultsCount > 0,
+                'search_type' => 'delayed_log',
+                'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->header('User-Agent'),
+                'session_data' => [
+                    'logged_at' => now()->toISOString(),
+                    'original_timestamp' => $request->input('timestamp'),
+                ],
+            ]);
+
+            return response()->json(['success' => true, 'logged' => true]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to log search query', [
+                'query' => $request->get('query'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to log search'
+            ], 500);
+        }
+    }
+
+    /**
+     * Determine if a search query should be logged to reduce noise from partial typing.
+     *
+     * @param string $query
+     * @param int $userId
+     * @param int $resultsCount
+     * @return bool
+     */
+    private function shouldLogSearch(string $query, int $userId, int $resultsCount): bool
+    {
+        // Always log if query is very short (likely intentional)
+        if (strlen($query) <= 2) {
+            return false;
+        }
+
+        // Always log if query is long enough (likely complete thought)
+        if (strlen($query) >= 5) {
+            return true;
+        }
+
+        // For medium length queries (3-4 chars), check for recent similar searches
+        $recentSearch = SearchQuery::where('user_id', $userId)
+            ->where('created_at', '>=', now()->subMinutes(2))
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($recentSearch) {
+            // Don't log if this query is just an extension of the recent search
+            // e.g., "kea" -> "kean" -> "keanu"
+            if (str_starts_with($query, $recentSearch->query) || str_starts_with($recentSearch->query, $query)) {
+                // Only log if this search has significantly more results (found something good)
+                return $resultsCount > 0 && ($recentSearch->results_count == 0 || $resultsCount > $recentSearch->results_count * 1.5);
+            }
+        }
+
+        // Log 3-4 character searches if they return results
+        return $resultsCount > 0;
+    }
+
+    /**
+     * Clean up partial/duplicate search queries to reduce noise in analytics.
+     * This can be run manually or scheduled to clean up existing data.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function cleanupSearchQueries()
+    {
+        try {
+            $deletedCount = 0;
+            
+            // Delete very short queries (1-2 characters) that are likely partial typing
+            $shortQueries = SearchQuery::whereRaw('LENGTH(query) <= 2')->count();
+            SearchQuery::whereRaw('LENGTH(query) <= 2')->delete();
+            $deletedCount += $shortQueries;
+            
+            // Find and delete progressive typing sequences
+            // e.g., keep "keanu reeves" but delete "kea", "kean", "keanu", "keanu r", "keanu ree"
+            $users = SearchQuery::distinct('user_id')->pluck('user_id');
+            
+            foreach ($users as $userId) {
+                $userSearches = SearchQuery::where('user_id', $userId)
+                    ->whereNull('clicked_result_at') // Don't delete searches that led to clicks
+                    ->orderBy('created_at')
+                    ->get();
+                
+                $toDelete = [];
+                $lastQuery = '';
+                
+                foreach ($userSearches as $search) {
+                    // If this query is a prefix of the last query, mark the shorter one for deletion
+                    if (!empty($lastQuery) && str_starts_with($lastQuery, $search->query) && strlen($search->query) < strlen($lastQuery)) {
+                        $toDelete[] = $search->id;
+                    } elseif (!empty($lastQuery) && str_starts_with($search->query, $lastQuery) && strlen($lastQuery) < strlen($search->query)) {
+                        // Current query extends the last one, so we can remove the previous shorter one
+                        $previousSearch = SearchQuery::where('user_id', $userId)
+                            ->where('query', $lastQuery)
+                            ->whereNull('clicked_result_at')
+                            ->first();
+                        if ($previousSearch) {
+                            $toDelete[] = $previousSearch->id;
+                        }
+                    }
+                    $lastQuery = $search->query;
+                }
+                
+                if (!empty($toDelete)) {
+                    SearchQuery::whereIn('id', $toDelete)->delete();
+                    $deletedCount += count($toDelete);
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Cleaned up {$deletedCount} partial/duplicate search queries",
+                'deleted_count' => $deletedCount
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cleanup search queries',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
