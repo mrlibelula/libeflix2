@@ -58,7 +58,7 @@ class FetchMovieRecommendationsJob implements ShouldQueue
                         ? env('TMDB_IMAGE_BASE_URL_780') . $recommendation['backdrop_path']
                         : null,
                 ];
-            })->take(10);
+            })->take(20);
 
             $processedSimilarMovies = collect($similarMovies)->map(function ($movie) {
                 return [
@@ -76,7 +76,7 @@ class FetchMovieRecommendationsJob implements ShouldQueue
                         ? env('TMDB_IMAGE_BASE_URL_780') . $movie['backdrop_path']
                         : null,
                 ];
-            })->take(10);
+            })->take(20);
 
             // Cache the results
             $data = [

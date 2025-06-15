@@ -302,7 +302,7 @@ class MovieController extends Controller
                 }
 
                 return $baseData;
-            })->take(10); // Limit to 10 recommendations
+            })->take(20); // Limit to 10 recommendations
             
             return response()->json([
                 'success' => true,
@@ -363,7 +363,7 @@ class MovieController extends Controller
                 }
 
                 return $baseData;
-            })->take(10); // Limit to 10 similar movies
+            })->take(20); // Limit to 10 similar movies
             
             return response()->json([
                 'success' => true,
