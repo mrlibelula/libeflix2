@@ -37,12 +37,20 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
     }
   }, [isOpen, movieId]);
 
+  // Reset selected trailer when modal opens or movie changes
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTrailer(null);
+      setTrailers([]);
+    }
+  }, [isOpen, movieId]);
+
   // Set first trailer as selected when trailers are loaded
   useEffect(() => {
-    if (trailers.length > 0 && !selectedTrailer) {
+    if (trailers.length > 0) {
       setSelectedTrailer(trailers[0]);
     }
-  }, [trailers, selectedTrailer]);
+  }, [trailers]);
 
   const fetchTrailers = async () => {
     setIsLoading(true);
