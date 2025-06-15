@@ -47,9 +47,17 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
   const fetchTrailers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/movies/${movieId}/trailers`);
+      const response = await fetch(`/api/movies/${movieId}/trailers-by-id`);
       if (response.ok) {
         const data = await response.json();
+        
+        // Handle error response
+        if (data.error) {
+          console.error('Error from API:', data.message);
+          setTrailers([]);
+          return;
+        }
+        
         // Filter only YouTube trailers
         const youtubeTrailers = data.filter((trailer: Trailer) => trailer.site === 'YouTube');
         // Sort to put trailers first, with official trailers at the very top
@@ -79,6 +87,7 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
       }
     } catch (error) {
       console.error('Error fetching trailers:', error);
+      setTrailers([]);
     } finally {
       setIsLoading(false);
     }

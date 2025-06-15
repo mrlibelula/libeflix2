@@ -22,15 +22,19 @@ interface MovieCardProps {
   onClick?: () => void;
   className?: string;
   onWatchLaterChange?: (movieId: number, isWatchLater: boolean) => void;
+  onTrailerClick?: (movieId: number, movieTitle: string) => void;
 }
 
-export function MovieCard({ movie, onClick, className = '', onWatchLaterChange }: MovieCardProps) {
+export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, onTrailerClick }: MovieCardProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
 
   const handleClick = (e: React.MouseEvent) => {
-    // Don't navigate if clicking on action buttons
-    if ((e.target as Element).closest('.action-button')) {
+    // Don't navigate if clicking on action buttons or their container
+    if ((e.target as Element).closest('.action-button') || 
+        (e.target as Element).closest('.action-buttons-container')) {
+      e.preventDefault();
+      e.stopPropagation();
       return;
     }
 
@@ -67,13 +71,23 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange }
     }
   };
 
+  const handleTrailerClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    
+    if (onTrailerClick) {
+      onTrailerClick(movie.id, movie.title);
+    }
+  };
+
   const imageUrl = movie.poster_url || movie.backdrop_url;
   const releaseYear = movie.release_date ? new Date(movie.release_date).getFullYear() : '';
   const rating = Math.round(movie.vote_average * 10);
 
   return (
     <div 
-      className={`group cursor-pointer transition-all duration-300 ${className}`}
+      className={`group transition-all duration-300 ${movie.is_local || onClick ? 'cursor-pointer' : 'cursor-default'} ${className}`}
       onClick={handleClick}
     >
       <div className="relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800">
@@ -100,62 +114,63 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange }
           </div>
         )}
 
-        {/* Local movie action buttons overlay */}
-        {movie.is_local && (
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-            {/* Left side - CC and subtitle languages */}
-            <div className="flex items-center gap-1">
-              {movie.has_subtitles && (
-                <>
-                  <div className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-bold">
-                    CC
-                  </div>
-                  {movie.subtitle_languages?.slice(0, 2).map((lang, index) => (
-                    <div key={lang} className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-bold">
-                      {lang}
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
+                {/* Movie action buttons overlay */}
+        <div 
+          className="absolute bottom-2 left-2 right-2 flex items-center justify-between"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          {/* Left side - CC indicator (only for local movies) */}
+          <div className="flex items-center gap-1">
+            {movie.is_local && movie.has_subtitles && (
+              <div className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-bold">
+                CC
+              </div>
+            )}
+          </div>
 
-            {/* Right side - Action buttons */}
-            <div className="flex items-center gap-1">
-              {/* Heart icon (like/love) */}
+                      {/* Right side - Action buttons */}
+            <div className="flex items-center gap-1 action-buttons-container">
+            {/* Watch Later icon (only for local movies) */}
+            {movie.is_local && (
+              <button 
+                className={`action-button p-1 rounded-full text-white transition-colors ${
+                  isWatchLater 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-black/70 hover:bg-black/90'
+                } ${isTogglingWatchLater ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={handleWatchLaterToggle}
+                disabled={isTogglingWatchLater}
+              >
+                {isWatchLater ? (
+                  <CheckIcon className="w-3 h-3" />
+                ) : (
+                  <PlusIcon className="w-3 h-3" />
+                )}
+              </button>
+            )}
+
+            {/* Heart icon (only for local movies) */}
+            {movie.is_local && (
               <button 
                 className="action-button p-1 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
                 <HeartIcon className="w-3 h-3" />
               </button>
+            )}
 
-                             {/* Watch Later icon */}
-               <button 
-                 className={`action-button p-1 rounded-full text-white transition-colors ${
-                   isWatchLater 
-                     ? 'bg-green-600 hover:bg-green-700' 
-                     : 'bg-black/70 hover:bg-black/90'
-                 } ${isTogglingWatchLater ? 'opacity-50 cursor-not-allowed' : ''}`}
-                 onClick={handleWatchLaterToggle}
-                 disabled={isTogglingWatchLater}
-               >
-                 {isWatchLater ? (
-                   <CheckIcon className="w-3 h-3" />
-                 ) : (
-                   <PlusIcon className="w-3 h-3" />
-                 )}
-               </button>
-
-              {/* Clapper icon */}
-              <button 
-                className="action-button p-1 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ClapperboardIcon className="w-3 h-3" />
-              </button>
-            </div>
+            {/* Clapper icon (for all movies) */}
+            <button 
+              className="action-button p-1 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
+              onClick={handleTrailerClick}
+            >
+              <ClapperboardIcon className="w-3 h-3" />
+            </button>
           </div>
-        )}
+        </div>
       </div>
       
       <div className="mt-2 space-y-1">
@@ -168,6 +183,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange }
           </p>
         )}
       </div>
+
     </div>
   );
 } 

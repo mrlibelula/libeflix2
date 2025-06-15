@@ -8,6 +8,7 @@ import { CreditPoster } from "@/components/ui/credit-poster";
 import { useEffect, useState } from "react";
 import { MovieCard } from "@/components/ui/movie-card";
 import { MovieCardSkeleton } from "@/components/ui/movie-card-skeleton";
+import { TrailerModal } from "@/components/trailer-modal";
 import axios from 'axios';
 
 // Interface for sidebar state event
@@ -69,6 +70,10 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const [loadingSimilarMovies, setLoadingSimilarMovies] = useState(true);
   const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
   const [similarMoviesError, setSimilarMoviesError] = useState<string | null>(null);
+  
+  // State for trailer modal
+  const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
+  const [selectedTrailerMovie, setSelectedTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
   // Function to fetch recommendations
   const fetchRecommendations = async () => {
@@ -129,6 +134,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     fetchRecommendations();
     fetchSimilarMovies();
   }, [movie.id]);
+
+  // Function to handle trailer clicks from movie cards
+  const handleTrailerClick = (movieId: number, movieTitle: string) => {
+    setSelectedTrailerMovie({ id: movieId, title: movieTitle });
+    setIsTrailerModalOpen(true);
+  };
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -391,6 +402,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                   <MovieCard
                                     movie={recommendation}
                                     className="w-[180px]"
+                                    onTrailerClick={handleTrailerClick}
                                   />
                                 </RibbonItem>
                               ))}
@@ -428,6 +440,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                   <MovieCard
                                     movie={similar}
                                     className="w-[180px]"
+                                    onTrailerClick={handleTrailerClick}
                                   />
                                 </RibbonItem>
                               ))}
@@ -455,6 +468,16 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
         </div>
       </div>
+
+      {/* Trailer Modal */}
+      {selectedTrailerMovie && (
+        <TrailerModal
+          isOpen={isTrailerModalOpen}
+          onOpenChange={setIsTrailerModalOpen}
+          movieTitle={selectedTrailerMovie.title}
+          movieId={selectedTrailerMovie.id}
+        />
+      )}
       
     </AppLayout>
   );

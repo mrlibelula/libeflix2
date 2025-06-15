@@ -203,6 +203,35 @@ class MovieController extends Controller
     }
 
     /**
+     * Get movie trailers by ID (works for both local and external movies).
+     *
+     * @param int $movieId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTrailersById(int $movieId)
+    {
+        try {
+            // First check if it's a local movie
+            $localMovie = Movie::find($movieId);
+            
+            if ($localMovie) {
+                // Use local movie trailers
+                $trailers = MovieService::getMovieTrailers($movieId);
+            } else {
+                // Fetch trailers from TMDB API for external movies
+                $trailers = MovieService::getTrailersFromTMDB($movieId);
+            }
+            
+            return response()->json($trailers);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to fetch trailers',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get movie recommendations asynchronously.
      *
      * @param Movie $movie

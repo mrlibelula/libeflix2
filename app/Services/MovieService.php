@@ -53,6 +53,20 @@ class MovieService
     }
 
     /**
+     * Get movie trailers from TMDB API (for external movies)
+     *
+     * @param int $movieId
+     * @return array
+     */
+    public static function getTrailersFromTMDB(int $movieId): array
+    {
+        $baseUrl = env('TMDB_BASE_URL') . '/movie/' . $movieId . '/videos?api_key=' . env('TMDB_API_KEY');
+        $response = Http::get($baseUrl);
+        $responseArrayData = $response->json();
+        return $responseArrayData['results'] ?? [];
+    }
+
+    /**
      * Get the subtitles of a movie in json format
      * 
      * @param Movie $movie
