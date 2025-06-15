@@ -4,50 +4,11 @@ import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 
-// Interface for sidebar state event
-interface SidebarStateDetail {
-  state: 'expanded' | 'collapsed';
-  width: string;
-  isMobile: boolean;
-}
-
 export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movies: Array<any>, imgBaseUrl: string, watchLaterMovies: Array<any> }) {
   const [allMovies, setAllMovies] = useState(movies);
   const [watchLaterMoviesList, setWatchLaterMoviesList] = useState(watchLaterMovies);
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Helper function to get initial sidebar width from cookie
-  const getInitialSidebarWidth = () => {
-    if (typeof document !== 'undefined') {
-      const cookies = document.cookie.split(';');
-      const sidebarCookie = cookies.find(cookie => cookie.trim().startsWith('sidebar_state='));
-      if (sidebarCookie) {
-        const isExpanded = sidebarCookie.split('=')[1] === 'true';
-        return isExpanded ? '12rem' : '3rem';
-      }
-    }
-    return '12rem'; // Default to expanded if no cookie found
-  };
-
-  // State to track sidebar width for dynamic CSS calculations
-  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth());
-
-  // Listen for sidebar state changes
-  useEffect(() => {
-    const handleSidebarStateChange = (event: CustomEvent<SidebarStateDetail>) => {
-      const { state, width, isMobile } = event.detail;
-      if (!isMobile) {
-        setSidebarWidth(width);
-      }
-    };
-
-    window.addEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
-    };
-  }, []);
 
   // Track which ribbon has focus
   useEffect(() => {
@@ -164,7 +125,6 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
           imgBaseUrl={imgBaseUrl}
           ribbonId="now-streaming"
           onWatchLaterToggle={handleWatchLaterToggle}
-          sidebarWidth={sidebarWidth}
         />
 
         <MovieRibbon
@@ -173,7 +133,6 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
           title={`Watch Later (${watchLaterMoviesList.length})`}
           ribbonId="watch-later"
           onWatchLaterToggle={handleWatchLaterToggle}
-          sidebarWidth={sidebarWidth}
         />
         
     </AppLayout>

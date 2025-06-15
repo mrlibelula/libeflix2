@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDownIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+
+// Interface for sidebar state event
+interface SidebarStateDetail {
+  state: 'expanded' | 'collapsed';
+  width: string;
+  isMobile: boolean;
+}
 
 interface MovieRibbonProps {
   movies: Array<any>;
@@ -10,7 +17,6 @@ interface MovieRibbonProps {
   title?: string;
   ribbonId?: string;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
-  sidebarWidth?: string;
 }
 
 export function MovieRibbon({ 
@@ -19,10 +25,41 @@ export function MovieRibbon({
   title = "Now Streaming" + (movies.length > 0 ? ` (${movies.length})` : ""),
   ribbonId,
   onWatchLaterToggle,
-  sidebarWidth = '12rem', // Default to expanded width
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
+
+  // Helper function to get initial sidebar width from cookie
+  const getInitialSidebarWidth = () => {
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const sidebarCookie = cookies.find(cookie => cookie.trim().startsWith('sidebar_state='));
+      if (sidebarCookie) {
+        const isExpanded = sidebarCookie.split('=')[1] === 'true';
+        return isExpanded ? '12rem' : '3rem';
+      }
+    }
+    return '12rem'; // Default to expanded if no cookie found
+  };
+
+  // State to track sidebar width for dynamic CSS calculations
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth());
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = (event: CustomEvent<SidebarStateDetail>) => {
+      const { state, width, isMobile } = event.detail;
+      if (!isMobile) {
+        setSidebarWidth(width);
+      }
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    };
+  }, []);
 
   const toggleRibbon = () => {
     setIsRibbonOpen(!isRibbonOpen);

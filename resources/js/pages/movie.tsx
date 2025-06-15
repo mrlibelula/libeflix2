@@ -289,7 +289,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     </div>
                     <div className="flex flex-col 2xl:flex-row gap-y-7 2xl:gap-x-7 w-full bg-green-500">
                       <div className="flex gap-x-7 w-full bg-violet-500">
-                        Suggested movies
+                        Recommended movies
                       </div>
                       <div className="flex gap-x-7 w-full bg-orange-500">
                         Similar movies

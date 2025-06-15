@@ -77,12 +77,45 @@ class MovieController extends Controller
         }
         
         if (isset($credits['crew'])) {
+            // Add profile path URLs to crew
             $credits['crew'] = array_map(function ($crew) {
                 $crew['profilePathUrl'] = isset($crew['profile_path']) && $crew['profile_path'] 
                     ? env('TMDB_IMAGE_BASE_URL_300') . $crew['profile_path'] 
                     : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $crew;
             }, $credits['crew']);
+            
+            // Define priority positions in order
+            $priorityPositions = ['director', 'executive producer', 'producer'];
+            
+            // Separate crew members by priority positions
+            $priorityCrew = [
+                'director' => [],
+                'executive producer' => [],
+                'producer' => [],
+            ];
+            $otherCrew = [];
+            
+            foreach ($credits['crew'] as $crewMember) {
+                if (isset($crewMember['job'])) {
+                    $jobLower = strtolower($crewMember['job']);
+                    
+                    if (in_array($jobLower, $priorityPositions)) {
+                        $priorityCrew[$jobLower][] = $crewMember;
+                    } else {
+                        $otherCrew[] = $crewMember;
+                    }
+                } else {
+                    $otherCrew[] = $crewMember;
+                }
+            }
+            
+            // Merge in priority order: Director, Executive Producer, Producer, then others
+            $sortedCrew = [];
+            foreach ($priorityPositions as $position) {
+                $sortedCrew = array_merge($sortedCrew, $priorityCrew[$position]);
+            }
+            $credits['crew'] = array_merge($sortedCrew, $otherCrew);
         }
         
         // Assign the processed credits back to the movie
