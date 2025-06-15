@@ -76,7 +76,31 @@ class SearchQuery extends Model
      */
     public function scopeInDateRange($query, $startDate, $endDate)
     {
+        // If dates are provided without time, assume full day range
+        if (strlen($startDate) === 10) { // Y-m-d format
+            $startDate = $startDate . ' 00:00:00';
+        }
+        if (strlen($endDate) === 10) { // Y-m-d format
+            $endDate = $endDate . ' 23:59:59';
+        }
+        
         return $query->whereBetween('created_at', [$startDate, $endDate]);
+    }
+
+    /**
+     * Scope for searches in the last N days.
+     */
+    public function scopeInLastDays($query, $days)
+    {
+        return $query->where('created_at', '>=', now()->subDays($days));
+    }
+
+    /**
+     * Scope for searches by a specific user.
+     */
+    public function scopeByUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
     }
 
     /**

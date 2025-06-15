@@ -15,12 +15,14 @@ This documentation covers the comprehensive search engine implementation with re
 - **Performance optimized** with relevance ranking
 
 ### 📊 Analytics & Tracking
-- **Automatic query logging** with performance metrics
+- **Smart delayed logging** - Only logs when user stops typing (1.5s delay)
+- **Dual-timeout system** - Fast search (300ms) + delayed logging (1500ms)
 - **Click tracking** with time-to-click measurements
 - **User behavior analysis** with session data
 - **Popular search terms** identification
 - **No-result searches** tracking for improvement opportunities
 - **Comprehensive analytics** dashboard data
+- **Automatic cleanup** of partial/duplicate searches
 
 ## Search Fields Indexed
 
@@ -84,6 +86,34 @@ CREATE TABLE search_queries (
 - **ip_address**: User's IP address
 - **user_agent**: User's browser information
 - **session_data**: Additional session and performance data
+
+## Smart Logging System
+
+### Dual-Timeout Architecture
+
+The search system uses a sophisticated dual-timeout approach to balance user experience with meaningful analytics:
+
+#### **Fast Search (300ms)**
+- Provides instant search results as user types
+- Uses `GET /api/movies/search?log=false` to skip logging
+- Ensures responsive UI without database overhead
+
+#### **Delayed Logging (1500ms)**
+- Only logs searches when user stops typing for 1.5 seconds
+- Uses `POST /api/movies/search/log` endpoint
+- Applies smart filtering to prevent noise from partial typing
+
+#### **Smart Filtering Rules**
+- **Skip**: Queries ≤ 2 characters (`"ke"`, `"kea"`)
+- **Skip**: Duplicate queries within 5 minutes
+- **Skip**: Progressive typing sequences (`"kea"` → `"kean"` → `"keanu"`)
+- **Log**: Complete searches ≥ 5 characters
+- **Log**: Meaningful short searches (3-4 chars) with results
+- **Log**: Any search that gets clicked
+
+### Search Types
+- `real_time`: Logged during immediate search (legacy)
+- `delayed_log`: Logged after user stops typing (current system)
 
 ## API Endpoints
 
@@ -196,11 +226,35 @@ GET /api/movies/search/analytics-summary
     "avg_results_per_search": 8.3,
     "searches_with_results": 1180,
     "searches_with_clicks": 756,
-    "overall_click_rate": 0.64,
-    "avg_time_to_click_ms": 2340,
-    "top_search_terms": [...],
-    "no_result_searches": [...],
-    "search_trends": [...]
+    "avg_time_to_click": 2340,
+    "most_clicked_movies": [
+        {
+            "clicked_movie_id": 123,
+            "clicked_movie_title": "The Matrix",
+            "click_count": 45
+        }
+    ]
+}
+```
+
+#### 4. Delayed Search Logging
+```http
+POST /api/movies/search/log
+```
+
+**Request Body:**
+```json
+{
+    "query": "search term",
+    "timestamp": "2023-12-15T10:30:00.000Z"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "logged": true
 }
 ```
 
@@ -237,16 +291,22 @@ Returns comprehensive analytics summary including:
 #### Query Scopes
 ```php
 // Get searches with results
-SearchQuery::withResults()
+SearchQuery::withResults()->get();
+
+// Get searches without results
+SearchQuery::withoutResults()->get();
 
 // Get searches with clicks
-SearchQuery::withClicks()
+SearchQuery::withClicks()->get();
 
 // Get searches from specific time period
-SearchQuery::inLastDays(30)
+SearchQuery::inLastDays(30)->get();
 
 // Get searches by specific user
-SearchQuery::byUser($userId)
+SearchQuery::byUser($userId)->get();
+
+// Get searches within date range
+SearchQuery::inDateRange($startDate, $endDate)->get();
 ```
 
 ## Available Analytics Functions
@@ -274,12 +334,19 @@ Method: MovieController@getAnalyticsSummary
 ```
 Returns comprehensive analytics summary for the last 30 days.
 
-#### 4. `getCustomQueries()`
+#### 4. `logSearch()`
 ```php
-Route: GET /api/movies/search/custom-queries
-Method: MovieController@getCustomQueries
+Route: POST /api/movies/search/log
+Method: MovieController@logSearch
 ```
-Returns count of searches with both results and clicks.
+Logs a search query without performing the search (for delayed logging when user stops typing).
+
+#### 5. `cleanupSearchQueries()`
+```php
+Route: POST /api/movies/search/cleanup
+Method: MovieController@cleanupSearchQueries
+```
+Cleans up partial/duplicate search queries to reduce noise in analytics.
 
 ### Model Static Methods (SearchQuery)
 
@@ -290,9 +357,7 @@ SearchQuery::getPopularSearchTerms(10, 30);
 **Returns:** Array of popular search terms with:
 - `query`: The search term
 - `search_count`: Number of times searched
-- `unique_users`: Number of unique users who searched
 - `avg_results`: Average number of results returned
-- `click_rate`: Percentage of searches that resulted in clicks
 
 #### 2. `getNoResultSearches($limit, $days)`
 ```php
@@ -301,8 +366,6 @@ SearchQuery::getNoResultSearches(20, 30);
 **Returns:** Array of searches with no results:
 - `query`: The search term
 - `search_count`: Number of times searched
-- `unique_users`: Number of unique users
-- `last_searched`: Most recent search timestamp
 
 #### 3. `getAnalyticsSummary($days)`
 ```php
@@ -311,14 +374,11 @@ SearchQuery::getAnalyticsSummary(30);
 **Returns:** Comprehensive analytics object:
 - `total_searches`: Total number of searches
 - `unique_users`: Number of unique users who searched
-- `avg_results_per_search`: Average results per search
 - `searches_with_results`: Number of searches that returned results
 - `searches_with_clicks`: Number of searches that resulted in clicks
-- `overall_click_rate`: Overall click-through rate
-- `avg_time_to_click_ms`: Average time from search to click
-- `top_search_terms`: Top 10 search terms
-- `no_result_searches`: Top 10 no-result searches
-- `search_trends`: Daily search counts for trend analysis
+- `avg_results_per_search`: Average results per search
+- `avg_time_to_click`: Average time from search to click in milliseconds
+- `most_clicked_movies`: Array of most clicked movies with click counts
 
 ### Query Scopes
 
@@ -328,23 +388,41 @@ SearchQuery::withResults()->get();
 ```
 Filters searches that returned at least one result.
 
-#### 2. `withClicks()`
+#### 2. `withoutResults()`
+```php
+SearchQuery::withoutResults()->get();
+```
+Filters searches that returned no results.
+
+#### 3. `withClicks()`
 ```php
 SearchQuery::withClicks()->get();
 ```
 Filters searches where user clicked on a result.
 
-#### 3. `inLastDays($days)`
+#### 4. `inLastDays($days)`
 ```php
 SearchQuery::inLastDays(7)->get();
 ```
 Filters searches from the last N days.
 
-#### 4. `byUser($userId)`
+#### 5. `byUser($userId)`
 ```php
 SearchQuery::byUser(123)->get();
 ```
 Filters searches by specific user ID.
+
+#### 6. `inDateRange($startDate, $endDate)`
+```php
+SearchQuery::inDateRange('2023-01-01', '2023-01-31')->get();
+```
+Filters searches within a specific date range. 
+
+**Note:** When using date-only strings (Y-m-d format), the scope automatically converts them to full day ranges:
+- Start date becomes `Y-m-d 00:00:00`
+- End date becomes `Y-m-d 23:59:59`
+
+This means `SearchQuery::inDateRange('2023-01-15', '2023-01-15')` will include all searches from that entire day.
 
 ### Custom Analytics Queries
 
