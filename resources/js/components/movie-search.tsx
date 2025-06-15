@@ -32,6 +32,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [searchTimestamp, setSearchTimestamp] = useState<string | null>(null);
   
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +56,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
         setResults(response.data.results);
         setIsOpen(true);
         setSelectedIndex(-1);
+        setSearchTimestamp(new Date().toISOString());
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -91,12 +93,13 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
         e.preventDefault();
         setSelectedIndex(prev => (prev > -1 ? prev - 1 : results.length - 1));
         break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0 && results[selectedIndex]) {
-          window.location.href = `/movie/${results[selectedIndex].slug}`;
-        }
-        break;
+              case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && results[selectedIndex]) {
+            trackClick(results[selectedIndex]);
+            window.location.href = `/movie/${results[selectedIndex].slug}`;
+          }
+          break;
       case 'Escape':
         setIsOpen(false);
         setSelectedIndex(-1);
@@ -140,6 +143,22 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
   // Format rating percentage
   const getRatingPercentage = (rating: number) => {
     return Math.round(rating * 10);
+  };
+
+  // Track click on search result
+  const trackClick = async (movie: MovieSearchResult) => {
+    if (!searchTimestamp) return;
+    
+    try {
+      await axios.post('/api/movies/search/track-click', {
+        query: query,
+        movie_id: movie.id,
+        movie_title: movie.title,
+        search_timestamp: searchTimestamp,
+      });
+    } catch (error) {
+      console.error('Failed to track search click:', error);
+    }
   };
 
   return (
@@ -186,7 +205,10 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
                   : 'hover:bg-accent hover:text-accent-foreground'
               }`}
               onMouseEnter={() => setSelectedIndex(index)}
-              onClick={() => onClose && onClose()}
+              onClick={() => {
+                trackClick(movie);
+                onClose && onClose();
+              }}
             >
               {/* Movie Poster */}
               <div className="flex-shrink-0">

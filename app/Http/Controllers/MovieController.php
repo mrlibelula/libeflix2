@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Movie;
+use App\Models\SearchQuery;
 use App\Services\MovieService;
 use Illuminate\Support\Facades\Auth;
 use App\Services\Tool;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class MovieController extends Controller
 {
@@ -482,6 +484,7 @@ class MovieController extends Controller
             }
 
             $user = Auth::user();
+            $startTime = microtime(true);
             
             // Search movies with comprehensive criteria
             $movies = Movie::select('id', 'title', 'original_name', 'slug', 'poster_path', 'release_date', 'vote_average', 'overview', 'tagline', 'subtitles')
@@ -534,6 +537,41 @@ class MovieController extends Controller
                 ];
             });
 
+            $searchTime = round((microtime(true) - $startTime) * 1000, 2); // Convert to milliseconds
+
+            // Log the search query for analytics
+            try {
+                SearchQuery::create([
+                    'user_id' => $user->id,
+                    'query' => $query,
+                    'results_count' => $results->count(),
+                    'results_summary' => $results->take(5)->map(function ($movie) {
+                        return [
+                            'id' => $movie['id'],
+                            'title' => $movie['title'],
+                            'slug' => $movie['slug']
+                        ];
+                    })->toArray(),
+                    'has_results' => $results->count() > 0,
+                    'search_type' => 'real_time',
+                    'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'session_data' => [
+                        'search_time_ms' => $searchTime,
+                        'limit' => $limit,
+                        'timestamp' => now()->toISOString(),
+                    ],
+                ]);
+            } catch (\Exception $logError) {
+                // Don't fail the search if logging fails
+                Log::warning('Failed to log search query', [
+                    'query' => $query,
+                    'user_id' => $user->id,
+                    'error' => $logError->getMessage()
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'results' => $results,
@@ -547,5 +585,109 @@ class MovieController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Track when a user clicks on a search result.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function trackSearchClick(Request $request)
+    {
+        try {
+            $request->validate([
+                'query' => 'required|string|max:500',
+                'movie_id' => 'required|integer',
+                'movie_title' => 'required|string|max:255',
+                'search_timestamp' => 'required|string', // ISO timestamp of when search was performed
+            ]);
+
+            $user = Auth::user();
+            $clickTimestamp = now();
+            
+            // Calculate time from search to click
+            $searchTime = \Carbon\Carbon::parse($request->input('search_timestamp'));
+            $timeToClickMs = $clickTimestamp->diffInMilliseconds($searchTime);
+
+            // Find the most recent search query to update
+            $searchQuery = SearchQuery::where('user_id', $user->id)
+                ->where('query', $request->input('query'))
+                ->where('created_at', '>=', $searchTime->subMinutes(5)) // Within 5 minutes
+                ->whereNull('clicked_result_at') // Haven't clicked yet
+                ->orderByDesc('created_at')
+                ->first();
+
+            if ($searchQuery) {
+                // Update existing search record
+                $searchQuery->update([
+                    'clicked_result_at' => $clickTimestamp,
+                    'clicked_movie_id' => $request->input('movie_id'),
+                    'clicked_movie_title' => $request->input('movie_title'),
+                    'time_to_click_ms' => $timeToClickMs,
+                ]);
+            } else {
+                // Create new search record if not found (fallback)
+                SearchQuery::create([
+                    'user_id' => $user->id,
+                    'query' => $request->input('query'),
+                    'results_count' => 1, // We know they found at least this one
+                    'has_results' => true,
+                    'search_type' => 'real_time',
+                    'clicked_result_at' => $clickTimestamp,
+                    'clicked_movie_id' => $request->input('movie_id'),
+                    'clicked_movie_title' => $request->input('movie_title'),
+                    'time_to_click_ms' => $timeToClickMs,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'session_data' => [
+                        'fallback_creation' => true,
+                        'timestamp' => $clickTimestamp->toISOString(),
+                    ],
+                ]);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to track search click', [
+                'query' => $request->get('query'),
+                'movie_id' => $request->get('movie_id'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track click'
+            ], 500);
+        }
+    }
+
+    // Popular searches in last 30 days
+    public function getPopularSearchTerms()
+    {
+        $terms = SearchQuery::getPopularSearchTerms(10, 30);
+        return response()->json($terms);
+    }
+
+    // Searches with no results (need to improve)
+    public function getNoResultSearches()
+    {
+        $searches = SearchQuery::getNoResultSearches(20, 30);
+        return response()->json($searches);
+    }
+
+    // Complete analytics summary
+    public function getAnalyticsSummary()
+    {
+        $summary = SearchQuery::getAnalyticsSummary(30);
+        return response()->json($summary);
+    }
+
+    // Custom queries
+    public function getCustomQueries()
+    {
+        $queries = SearchQuery::withResults()->withClicks()->count();
+        return response()->json($queries);
     }
 }
