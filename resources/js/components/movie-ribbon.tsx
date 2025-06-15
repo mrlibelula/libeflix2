@@ -10,6 +10,7 @@ interface MovieRibbonProps {
   title?: string;
   ribbonId?: string;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
+  sidebarWidth?: string;
 }
 
 export function MovieRibbon({ 
@@ -18,6 +19,7 @@ export function MovieRibbon({
   title = "Now Streaming" + (movies.length > 0 ? ` (${movies.length})` : ""),
   ribbonId,
   onWatchLaterToggle,
+  sidebarWidth = '12rem', // Default to expanded width
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
@@ -70,12 +72,13 @@ export function MovieRibbon({
 
   return (
     <div 
-      className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--sidebar-width,0px)-10px)] _md:group-data-[state=collapsed]/sidebar-wrapper:max-w-[calc(100vw-var(--sidebar-width-icon,0px))] focus:outline-none"
+      className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--dynamic-sidebar-width)-30px)] focus:outline-none"
       data-ribbon={ribbonId || title}
       tabIndex={movies.length === 0 ? 0 : -1}
       style={{
+        '--dynamic-sidebar-width': sidebarWidth,
         outline: 'none', // Remove default focus outline, rely on custom styling if needed
-      }}
+      } as React.CSSProperties}
     >
       {/* ribbon header */}
       <div onClick={toggleRibbon} className="flex w-full justify-start items-center select-none gap-x-4 pr-2 mb-3 mt-5 text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out">

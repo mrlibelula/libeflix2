@@ -111,6 +111,32 @@ function SidebarProvider({
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
 
+  // Helper function to dispatch sidebar state event
+  const dispatchSidebarEvent = React.useCallback(() => {
+    const event = new CustomEvent('sidebarStateChange', {
+      detail: { 
+        state,
+        width: state === 'expanded' ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON,
+        isMobile 
+      }
+    });
+    window.dispatchEvent(event);
+  }, [state, isMobile]);
+
+  // Dispatch custom event when sidebar state changes
+  React.useEffect(() => {
+    dispatchSidebarEvent();
+  }, [dispatchSidebarEvent])
+
+  // Dispatch initial state event on mount (with a slight delay to ensure proper initialization)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      dispatchSidebarEvent();
+    }, 0);
+    
+    return () => clearTimeout(timer);
+  }, [dispatchSidebarEvent])
+
   const contextValue = React.useMemo<SidebarContext>(
     () => ({
       state,

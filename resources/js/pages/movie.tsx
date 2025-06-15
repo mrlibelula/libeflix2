@@ -5,6 +5,14 @@ import { Clapperboard, HeartIcon, MessageSquareText, Share2 } from "lucide-react
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { CreditPoster } from "@/components/ui/credit-poster";
+import { useEffect, useState } from "react";
+
+// Interface for sidebar state event
+interface SidebarStateDetail {
+  state: 'expanded' | 'collapsed';
+  width: string;
+  isMobile: boolean;
+}
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {
   const breadcrumbs: BreadcrumbItem[] = [ 
@@ -16,6 +24,38 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
   // Parse subtitles if they exist
   const subtitles = Array.isArray(movie.subtitles) ? movie.subtitles : [];
+
+  // Helper function to get initial sidebar width from cookie
+  const getInitialSidebarWidth = () => {
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const sidebarCookie = cookies.find(cookie => cookie.trim().startsWith('sidebar_state='));
+      if (sidebarCookie) {
+        const isExpanded = sidebarCookie.split('=')[1] === 'true';
+        return isExpanded ? '12rem' : '3rem';
+      }
+    }
+    return '12rem'; // Default to expanded if no cookie found
+  };
+
+  // State to track sidebar width for dynamic CSS calculations
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth());
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = (event: CustomEvent<SidebarStateDetail>) => {
+      const { state, width, isMobile } = event.detail;
+      if (!isMobile) {
+        setSidebarWidth(width);
+      }
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    };
+  }, []);
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -174,7 +214,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       </div>
                     </div>
                     <div className="flex justify-center gap-x-7 w-[calc(100vw-2rem)] lg:w-full">
-                      <Tabs defaultValue="cast" className="w-full lg:w-[calc(100vw-var(--sidebar-width)-4rem)]">
+                      <Tabs 
+                        defaultValue="cast" 
+                        className="w-full lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]"
+                        style={{
+                          '--dynamic-sidebar-width': sidebarWidth
+                        } as React.CSSProperties}
+                      >
                         <TabsList className="w-full">
                           {movie.credits?.cast && movie.credits.cast.length > 0 && (
                             <TabsTrigger value="cast">Cast</TabsTrigger>
