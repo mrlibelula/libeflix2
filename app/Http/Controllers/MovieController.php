@@ -17,14 +17,36 @@ class MovieController extends Controller
      *
      * @return \Inertia\Response
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
+        $searchQuery = $request->get('search');
 
-        $movies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
-            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
-            ->orderBy('title', 'asc')
-            ->get();
+        $moviesQuery = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
+            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count');
+
+        // Apply search filter if search query exists
+        if ($searchQuery && strlen($searchQuery) >= 2) {
+            $moviesQuery->where(function ($q) use ($searchQuery) {
+                $q->where('title', 'LIKE', "%{$searchQuery}%")
+                  ->orWhere('original_name', 'LIKE', "%{$searchQuery}%")
+                  ->orWhere('tagline', 'LIKE', "%{$searchQuery}%")
+                  ->orWhere('overview', 'LIKE', "%{$searchQuery}%")
+                  ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$searchQuery}%"])
+                  ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$searchQuery}%"])
+                  ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$searchQuery}%"]);
+            })->orderByRaw("CASE 
+                WHEN title LIKE ? THEN 1
+                WHEN original_name LIKE ? THEN 2
+                WHEN tagline LIKE ? THEN 3
+                WHEN overview LIKE ? THEN 4
+                ELSE 5
+            END", ["{$searchQuery}%", "{$searchQuery}%", "{$searchQuery}%", "{$searchQuery}%"]);
+        } else {
+            $moviesQuery->orderBy('title', 'asc');
+        }
+
+        $movies = $moviesQuery->get();
 
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
@@ -47,9 +69,10 @@ class MovieController extends Controller
             });
 
         return Inertia::render('movies', [
-            'movies' => $movies->shuffle(),
+            'movies' => $searchQuery ? $movies : $movies->shuffle(),
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
             'watchLaterMovies' => $watchLaterMovies,
+            'searchQuery' => $searchQuery,
         ]);
     }
 
@@ -436,6 +459,93 @@ class MovieController extends Controller
                     'status' => 'not_started',
                     'message' => 'Job not initiated'
                 ]);
+        }
+    }
+
+    /**
+     * Search movies based on multiple criteria.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function search(Request $request)
+    {
+        try {
+            $query = $request->get('q', '');
+            $limit = $request->get('limit', 10);
+            
+            if (empty($query) || strlen($query) < 2) {
+                return response()->json([
+                    'success' => true,
+                    'results' => []
+                ]);
+            }
+
+            $user = Auth::user();
+            
+            // Search movies with comprehensive criteria
+            $movies = Movie::select('id', 'title', 'original_name', 'slug', 'poster_path', 'release_date', 'vote_average', 'overview', 'tagline', 'subtitles')
+                ->where(function ($q) use ($query) {
+                    // Search in title
+                    $q->where('title', 'LIKE', "%{$query}%")
+                      // Search in original_name
+                      ->orWhere('original_name', 'LIKE', "%{$query}%")
+                      // Search in tagline
+                      ->orWhere('tagline', 'LIKE', "%{$query}%")
+                      // Search in overview
+                      ->orWhere('overview', 'LIKE', "%{$query}%")
+                      // Search in alternative_titles JSON (convert to string and search)
+                      ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                      // Search in keywords JSON (convert to string and search)
+                      ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                      // Search in credits JSON (convert to string and search)
+                      ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                })
+                ->orderByRaw("CASE 
+                    WHEN title LIKE ? THEN 1
+                    WHEN original_name LIKE ? THEN 2
+                    WHEN tagline LIKE ? THEN 3
+                    WHEN overview LIKE ? THEN 4
+                    ELSE 5
+                END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
+                ->limit($limit)
+                ->get();
+
+            // Process results
+            $results = $movies->map(function ($movie) use ($user) {
+                $subtitles = json_decode($movie->subtitles, true) ?: [];
+                
+                return [
+                    'id' => $movie->id,
+                    'title' => $movie->title,
+                    'original_name' => $movie->original_name,
+                    'slug' => $movie->slug,
+                    'poster_path' => $movie->poster_path,
+                    'poster_url' => $movie->poster_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $movie->poster_path
+                        : null,
+                    'release_date' => $movie->release_date,
+                    'vote_average' => $movie->vote_average,
+                    'overview' => $movie->overview,
+                    'tagline' => $movie->tagline,
+                    'is_watch_later' => MovieService::isWatchLater($movie, $user),
+                    'has_subtitles' => !empty($subtitles),
+                    'subtitle_languages' => collect($subtitles)->pluck('languageCode')->take(3)->toArray(),
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'results' => $results,
+                'query' => $query,
+                'total' => $results->count()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search failed',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

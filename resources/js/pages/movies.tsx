@@ -4,7 +4,7 @@ import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 
-export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movies: Array<any>, imgBaseUrl: string, watchLaterMovies: Array<any> }) {
+export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQuery }: { movies: Array<any>, imgBaseUrl: string, watchLaterMovies: Array<any>, searchQuery?: string }) {
   const [allMovies, setAllMovies] = useState(movies);
   const [watchLaterMoviesList, setWatchLaterMoviesList] = useState(watchLaterMovies);
   const lastFocusedRibbonRef = useRef<string | null>(null);
@@ -112,7 +112,7 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies }: { movie
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
-      title: `Movies (${allMovies.length})`,
+      title: searchQuery ? `Search Results for "${searchQuery}" (${allMovies.length})` : `Movies (${allMovies.length})`,
       href: '/movies',
     },
   ];

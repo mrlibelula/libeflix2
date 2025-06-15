@@ -14,6 +14,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
+import { MovieSearchModal } from '@/components/movie-search-modal';
 
 const mainNavItems: NavItem[] = [
     {
@@ -46,6 +47,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     const page = usePage<SharedData>();
     const { auth } = page.props;
     const getInitials = useInitials();
+    
+    // Check if we should show movie search (on movies and movie pages)
+    const shouldShowMovieSearch = page.url === '/movies' || page.url.startsWith('/movie/');
     return (
         <>
             <div className="border-sidebar-border/80 border-b">
@@ -126,9 +130,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
 
                     <div className="ml-auto flex items-center space-x-2">
                         <div className="relative flex items-center space-x-1">
-                            <Button variant="ghost" size="icon" className="group h-9 w-9 cursor-pointer">
-                                <Search className="!size-5 opacity-80 group-hover:opacity-100" />
-                            </Button>
+                            {shouldShowMovieSearch && <MovieSearchModal />}
                             <div className="hidden lg:flex">
                                 {rightNavItems.map((item) => (
                                     <Tooltip key={item.title} text={item.title}>
