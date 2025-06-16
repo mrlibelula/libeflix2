@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MovieController;
+use App\Http\Controllers\PopularTopController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TvshowController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
     Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
+    Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
     Route::post('api/movies/{movieId}/toggle-watch-later', [MovieController::class, 'toggleWatchLaterById'])->name('api.movies.toggle-watch-later-by-id');
     Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'])->name('api.movies.trailers');
