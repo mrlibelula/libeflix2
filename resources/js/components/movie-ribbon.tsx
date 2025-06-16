@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+import { type CarouselApi } from "@/components/ui/carousel";
 
 // Interface for sidebar state event
 interface SidebarStateDetail {
@@ -29,6 +30,11 @@ interface SortOption {
   label: string;
 }
 
+// Performance optimization constants
+const INITIAL_LOAD_COUNT = 12; // Initial movies to load (mobile: ~3-4 visible, desktop: ~6-8)
+const LOAD_MORE_COUNT = 8; // Movies to load when scrolling
+const LOAD_THRESHOLD = 0.8; // Load more when 80% scrolled
+
 export function MovieRibbon({ 
   movies, 
   imgBaseUrl, 
@@ -39,6 +45,11 @@ export function MovieRibbon({
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
+  
+  // Progressive loading state
+  const [loadedCount, setLoadedCount] = useState(INITIAL_LOAD_COUNT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Sort options configuration
   const sortOptions: SortOption[] = [
@@ -133,6 +144,51 @@ export function MovieRibbon({
     ? sortMovies(shuffledMovies, currentSort.field, currentSort.direction)
     : shuffledMovies;
 
+  // Progressive loading: only show movies up to loadedCount
+  const visibleMovies = processedMovies.slice(0, loadedCount);
+  const hasMoreMovies = loadedCount < processedMovies.length;
+
+  // Load more movies function
+  const loadMoreMovies = useCallback(() => {
+    if (isLoadingMore || !hasMoreMovies) return;
+    
+    setIsLoadingMore(true);
+    
+    // Add a small delay to prevent too frequent loading
+    setTimeout(() => {
+      setLoadedCount(prev => Math.min(prev + LOAD_MORE_COUNT, processedMovies.length));
+      setIsLoadingMore(false);
+    }, 100);
+  }, [isLoadingMore, hasMoreMovies, processedMovies.length]);
+
+  // Handle carousel scroll to trigger loading more movies
+  const handleCarouselScroll = useCallback(() => {
+    if (!carouselApi || !hasMoreMovies) return;
+
+    const scrollProgress = carouselApi.scrollProgress();
+    
+    // When user has scrolled 80% through current content, load more
+    if (scrollProgress >= LOAD_THRESHOLD) {
+      loadMoreMovies();
+    }
+  }, [carouselApi, hasMoreMovies, loadMoreMovies]);
+
+  // Set up carousel scroll listener
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    carouselApi.on('scroll', handleCarouselScroll);
+
+    return () => {
+      carouselApi.off('scroll', handleCarouselScroll);
+    };
+  }, [carouselApi, handleCarouselScroll]);
+
+  // Reset loaded count when movies change (sorting, filtering, etc.)
+  useEffect(() => {
+    setLoadedCount(Math.min(INITIAL_LOAD_COUNT, processedMovies.length));
+  }, [processedMovies.length]);
+
   const toggleRibbon = () => {
     setIsRibbonOpen(!isRibbonOpen);
   };
@@ -217,6 +273,12 @@ export function MovieRibbon({
         >
           <div>
             {title}
+            {/* Show loading indicator when loading more */}
+            {hasMoreMovies && (
+              <span className="text-sm text-zinc-500 dark:text-zinc-400 ml-2">
+                ({loadedCount}/{processedMovies.length}{isLoadingMore ? ', loading...' : ''})
+              </span>
+            )}
           </div>
           <ChevronDownIcon className={`w-5 h-5 transition-transform duration-300 ease-in-out ${!isRibbonOpen ? 'rotate-[270deg]' : 'rotate-0'}`} />
         </div>
@@ -272,8 +334,9 @@ export function MovieRibbon({
           <Ribbon
             align="start"
             dragFree={true}
+            onApiInitialized={setCarouselApi}
           >
-            {processedMovies.map((movie: any, index: number) => {
+            {visibleMovies.map((movie: any, index: number) => {
               // Prioritize the first 8 movies for better initial load
               const isPriority = index < 8;
 
@@ -290,6 +353,17 @@ export function MovieRibbon({
                 </RibbonItem>
               );
             })}
+            {/* Loading indicator at the end of the ribbon */}
+            {hasMoreMovies && (
+              <RibbonItem>
+                <div className="flex-none w-[11rem] h-[17rem] flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-2 opacity-60">
+                    <div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin"></div>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Loading more...</span>
+                  </div>
+                </div>
+              </RibbonItem>
+            )}
           </Ribbon>
         )}
       </div>

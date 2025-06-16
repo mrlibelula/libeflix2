@@ -2,6 +2,8 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
+// For testing the optimized version, uncomment the line below:
+// import { MovieRibbon } from "@/components/movie-ribbon-optimized";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, searchQuery }: { movies: Array<any>, imgBaseUrl: string, recentlyAddedMovies: Array<any>, searchQuery?: string }) {
