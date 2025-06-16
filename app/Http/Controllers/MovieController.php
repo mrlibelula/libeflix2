@@ -58,6 +58,36 @@ class MovieController extends Controller
             return $movie;
         });
 
+        $recentlyAddedMovies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
+            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
+            ->orderBy('created_at', 'desc')
+            ->take(20)
+            ->get()
+            ->map(function ($movie) use ($user) {
+                $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+                $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+                if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
+                if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
+                return $movie;
+            });
+
+        return Inertia::render('movies', [
+            'movies' => $movies,
+            'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
+            'recentlyAddedMovies' => $recentlyAddedMovies,
+            'searchQuery' => $searchQuery,
+        ]);
+    }
+
+    /**
+     * Display the user's watch later movies.
+     *
+     * @return \Inertia\Response
+     */
+    public function watchLater()
+    {
+        $user = Auth::user();
+
         $watchLaterMovies = $user->watchLaterMovies()
             ->select('movies.id', 'movies.title', 'movies.poster_path', 'movies.vote_average', 'movies.release_date', 'movies.slug', 'movies.subtitles')
             ->selectRaw('COALESCE(json_array_length(movies.trailers), 0) as trailer_count')
@@ -70,11 +100,9 @@ class MovieController extends Controller
                 return $movie;
             });
 
-        return Inertia::render('movies', [
-            'movies' => $searchQuery ? $movies : $movies,
-            'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
+        return Inertia::render('watch-later', [
             'watchLaterMovies' => $watchLaterMovies,
-            'searchQuery' => $searchQuery,
+            'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
         ]);
     }
 

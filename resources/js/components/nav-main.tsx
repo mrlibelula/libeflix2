@@ -19,7 +19,12 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                 {items.map((item) => (
                     <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={isItemActive(item)}>
-                            <Link href={item.href} prefetch>
+                            <Link 
+                                href={item.href} 
+                                prefetch={item.title !== 'Watch Later'}
+                                preserveScroll={false}
+                                preserveState={item.title !== 'Watch Later'}
+                            >
                                 {item.icon && <item.icon />}
                                 <span>{item.title}</span>
                             </Link>

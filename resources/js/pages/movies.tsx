@@ -4,9 +4,9 @@ import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 
-export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQuery }: { movies: Array<any>, imgBaseUrl: string, watchLaterMovies: Array<any>, searchQuery?: string }) {
+export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, searchQuery }: { movies: Array<any>, imgBaseUrl: string, recentlyAddedMovies: Array<any>, searchQuery?: string }) {
   const [allMovies, setAllMovies] = useState(movies);
-  const [watchLaterMoviesList, setWatchLaterMoviesList] = useState(watchLaterMovies);
+  const [recentlyAddedMoviesList, setRecentlyAddedMoviesList] = useState(recentlyAddedMovies);
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -35,7 +35,7 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQue
 
   const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
 
-    // Update the is_watch_later status in both lists
+    // Update the is_watch_later status in all lists
     setAllMovies(prevMovies => 
       prevMovies.map(movie => 
         movie.id === movieId 
@@ -44,23 +44,17 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQue
       )
     );
 
-    if (newStatus) {
-      // Add to watch later list if not already there (prepend to maintain DESC order)
-      setWatchLaterMoviesList(prev => {
-        const movieToAdd = allMovies.find(movie => movie.id === movieId);
-        if (movieToAdd && !prev.find(movie => movie.id === movieId)) {
-          return [{ ...movieToAdd, is_watch_later: true }, ...prev];
-        }
-        return prev;
-      });
-    } else {
-      // Remove from watch later list
-      setWatchLaterMoviesList(prev => prev.filter(movie => movie.id !== movieId));
-    }
-  }, [allMovies]);
+    setRecentlyAddedMoviesList(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_watch_later: newStatus }
+          : movie
+      )
+    );
+  }, []);
 
-  // Restore focus after state changes
-  useEffect(() => {
+  // Restore focus after state changes - only when specifically needed, not on every movie data change
+  const restoreFocus = useCallback(() => {
     if (lastFocusedRibbonRef.current) {
       
       // Clear any existing timeout
@@ -102,13 +96,16 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQue
         }
       }, 100); // Increased delay
     }
+  }, []);
 
+  // Cleanup timeouts on unmount
+  useEffect(() => {
     return () => {
       if (restoreFocusTimeoutRef.current) {
         clearTimeout(restoreFocusTimeoutRef.current);
       }
     };
-  }, [allMovies, watchLaterMoviesList]);
+  }, []);
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -128,10 +125,10 @@ export default function Movies({ movies, imgBaseUrl, watchLaterMovies, searchQue
         />
 
         <MovieRibbon
-          movies={watchLaterMoviesList}
+          movies={recentlyAddedMoviesList}
           imgBaseUrl={imgBaseUrl}
-          title={`Watch Later (${watchLaterMoviesList.length})`}
-          ribbonId="watch-later"
+          title={`Recently Added (${recentlyAddedMoviesList.length})`}
+          ribbonId="recently-added"
           onWatchLaterToggle={handleWatchLaterToggle}
         />
         

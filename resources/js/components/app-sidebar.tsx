@@ -24,20 +24,15 @@ const mainNavItems: NavItem[] = [
         icon: Film,
     },
     {
-        title: 'Music',
-        href: '/music',
-        icon: Music,
+        title: 'Watch Later',
+        href: '/watch-later',
+        icon: Clock,
     },
-    // {
-    //     title: 'Watch Later',
-    //     href: '/watch-later',
-    //     icon: Clock,
-    // },
-    // {
-    //     title: 'Popular',
-    //     href: '/popular',
-    //     icon: TrendingUp,
-    // },
+    {
+        title: 'Popular/Top',
+        href: '/popular-top',
+        icon: TrendingUp,
+    },
     // {
     //     title: 'Top',
     //     href: '/top',
@@ -47,6 +42,11 @@ const mainNavItems: NavItem[] = [
         title: 'Vintage Games',
         href: '/vintage-games',
         icon: Gamepad2,
+    },
+    {
+        title: 'Music',
+        href: '/music',
+        icon: Music,
     },
     // {
     //     title: 'History',
