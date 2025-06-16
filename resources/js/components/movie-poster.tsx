@@ -28,12 +28,6 @@ interface MoviePosterProps {
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
 }
 
-// Mobile detection utility
-const isMobile = () => {
-  if (typeof window === 'undefined') return false;
-  return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-};
-
 export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLaterToggle }: MoviePosterProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isToggling, setIsToggling] = useState(false);
@@ -41,21 +35,6 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   const [isAnimating, setIsAnimating] = useState(false);
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
   const { props } = usePage<{ csrf_token: string }>();
-
-  // Mobile-specific state
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
-
-  // Detect mobile device
-  useEffect(() => {
-    setIsMobileDevice(isMobile());
-    
-    const handleResize = () => {
-      setIsMobileDevice(isMobile());
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Sync local state with movie prop changes
   useEffect(() => {
@@ -159,12 +138,6 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           alt={movie.title}
           className="w-full h-full object-cover"
           priority={isPriority}
-          // Mobile optimization: reduce image quality on mobile
-          style={isMobileDevice ? {
-            imageRendering: 'auto',
-            WebkitTransform: 'translateZ(0)', // Force hardware acceleration
-            transform: 'translateZ(0)',
-          } : undefined}
         />
       </div>
     </div>
@@ -200,18 +173,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
                 <button
                   onClick={handleToggleWatchLater}
                   disabled={isToggling || !isReady}
-                  className={`transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer ${
-                    isMobileDevice ? 'touch-manipulation' : ''
-                  }`}
+                  className="transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
                   title={isWatchLater ? "Remove from watch later" : "Add to watch later"}
-                  // Mobile optimization: larger touch target
-                  style={isMobileDevice ? {
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  } : undefined}
                 >
                   <div 
                     className={`transition-all duration-300 ease-in-out ${
@@ -232,8 +195,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
                 </button>
               )}
 
-              {/* Heart button - Only show for local movies, hide on mobile to reduce clutter */}
-              {isLocalMovie && !isMobileDevice && (
+              {/* Heart button - Only show for local movies */}
+              {isLocalMovie && (
                 <button
                   className="transition-all duration-200 ease-in-out hover:scale-110 cursor-pointer"
                   title="Like movie"
@@ -245,18 +208,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               {/* Trailer button - Always show (for both local and external movies) */}
               <button
                 onClick={handleTrailerClick}
-                className={`hover:scale-110 transition-transform duration-200 cursor-pointer ${
-                  isMobileDevice ? 'touch-manipulation' : ''
-                }`}
+                className="hover:scale-110 transition-transform duration-200 cursor-pointer"
                 title="Watch trailers"
-                // Mobile optimization: larger touch target
-                style={isMobileDevice ? {
-                  minWidth: '44px',
-                  minHeight: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                } : undefined}
               >
                 <ClapperboardIcon className="text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
               </button>
@@ -268,7 +221,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
             </div>
           </div>
         </div>
-        {/* subtitles - Only show for local movies, simplified on mobile */}
+        {/* subtitles - Only show for local movies */}
         {isLocalMovie && (
           <div className="w-full h-full flex items-end justify-start gap-x-0.5 pt-1">
             {movie.subtitles && movie.subtitles.length > 0 && (
@@ -276,18 +229,11 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
                 CC
               </div>
             )}
-            {/* Show fewer subtitle badges on mobile */}
-            {Array.isArray(movie.subtitles) && movie.subtitles.slice(0, isMobileDevice ? 2 : movie.subtitles.length).map((subtitle) => (
+            {Array.isArray(movie.subtitles) && movie.subtitles.map((subtitle) => (
               <div key={subtitle.languageCode} className="text-zinc-500 dark:text-zinc-300 text-[0.55rem] px-0.5 border border-zinc-400 font-bold">
                 {subtitle.languageCode}
               </div>
             ))}
-            {/* Show indicator if there are more subtitles on mobile */}
-            {isMobileDevice && movie.subtitles && movie.subtitles.length > 2 && (
-              <div className="text-zinc-500 dark:text-zinc-300 text-[0.55rem] px-0.5 border border-zinc-400 font-bold">
-                +{movie.subtitles.length - 2}
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
-import { type CarouselApi } from "@/components/ui/carousel";
 
 // Interface for sidebar state event
 interface SidebarStateDetail {
@@ -30,10 +29,10 @@ interface SortOption {
   label: string;
 }
 
-// Performance optimization constants
-const INITIAL_LOAD_COUNT = 12; // Initial movies to load (mobile: ~3-4 visible, desktop: ~6-8)
-const LOAD_MORE_COUNT = 8; // Movies to load when scrolling
-const LOAD_THRESHOLD = 0.8; // Load more when 80% scrolled
+// Configuration for progressive loading
+const INITIAL_LOAD_COUNT = 24; // Load 24 items initially (good for various screen sizes)
+const LOAD_MORE_COUNT = 12; // Load 12 more items when approaching end
+const LOAD_MORE_THRESHOLD = 8; // Start loading when user is 8 items from the end
 
 export function MovieRibbon({ 
   movies, 
@@ -45,11 +44,12 @@ export function MovieRibbon({
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
-  const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
-  
-  // Progressive loading state
-  const [loadedCount, setLoadedCount] = useState(INITIAL_LOAD_COUNT);
+  const [loadedCount, setLoadedCount] = useState(Math.min(INITIAL_LOAD_COUNT, movies.length));
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
+  // Ref for the loading trigger element
+  const loadingTriggerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   // Sort options configuration
   const sortOptions: SortOption[] = [
@@ -144,50 +144,55 @@ export function MovieRibbon({
     ? sortMovies(shuffledMovies, currentSort.field, currentSort.direction)
     : shuffledMovies;
 
-  // Progressive loading: only show movies up to loadedCount
+  // Get the currently visible movies based on loadedCount
   const visibleMovies = processedMovies.slice(0, loadedCount);
-  const hasMoreMovies = loadedCount < processedMovies.length;
+  const hasMoreToLoad = loadedCount < processedMovies.length;
 
-  // Load more movies function
+  // Function to load more movies
   const loadMoreMovies = useCallback(() => {
-    if (isLoadingMore || !hasMoreMovies) return;
+    if (isLoadingMore || !hasMoreToLoad) return;
     
     setIsLoadingMore(true);
     
-    // Add a small delay to prevent too frequent loading
+    // Simulate a small delay for smooth UX (optional)
     setTimeout(() => {
       setLoadedCount(prev => Math.min(prev + LOAD_MORE_COUNT, processedMovies.length));
       setIsLoadingMore(false);
-    }, 100);
-  }, [isLoadingMore, hasMoreMovies, processedMovies.length]);
+    }, 150);
+  }, [isLoadingMore, hasMoreToLoad, processedMovies.length]);
 
-  // Handle carousel scroll to trigger loading more movies
-  const handleCarouselScroll = useCallback(() => {
-    if (!carouselApi || !hasMoreMovies) return;
-
-    const scrollProgress = carouselApi.scrollProgress();
-    
-    // When user has scrolled 80% through current content, load more
-    if (scrollProgress >= LOAD_THRESHOLD) {
-      loadMoreMovies();
-    }
-  }, [carouselApi, hasMoreMovies, loadMoreMovies]);
-
-  // Set up carousel scroll listener
+  // Set up intersection observer for progressive loading
   useEffect(() => {
-    if (!carouselApi) return;
+    if (!hasMoreToLoad || !loadingTriggerRef.current) return;
 
-    carouselApi.on('scroll', handleCarouselScroll);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          loadMoreMovies();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '200px', // Start loading 200px before the trigger comes into view
+        threshold: 0.1,
+      }
+    );
+
+    observerRef.current = observer;
+    observer.observe(loadingTriggerRef.current);
 
     return () => {
-      carouselApi.off('scroll', handleCarouselScroll);
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
     };
-  }, [carouselApi, handleCarouselScroll]);
+  }, [hasMoreToLoad, loadMoreMovies]);
 
-  // Reset loaded count when movies change (sorting, filtering, etc.)
+  // Reset loaded count when movies change or sort changes
   useEffect(() => {
     setLoadedCount(Math.min(INITIAL_LOAD_COUNT, processedMovies.length));
-  }, [processedMovies.length]);
+  }, [processedMovies.length, currentSort]);
 
   const toggleRibbon = () => {
     setIsRibbonOpen(!isRibbonOpen);
@@ -273,12 +278,6 @@ export function MovieRibbon({
         >
           <div>
             {title}
-            {/* Show loading indicator when loading more */}
-            {hasMoreMovies && (
-              <span className="text-sm text-zinc-500 dark:text-zinc-400 ml-2">
-                ({loadedCount}/{processedMovies.length}{isLoadingMore ? ', loading...' : ''})
-              </span>
-            )}
           </div>
           <ChevronDownIcon className={`w-5 h-5 transition-transform duration-300 ease-in-out ${!isRibbonOpen ? 'rotate-[270deg]' : 'rotate-0'}`} />
         </div>
@@ -334,7 +333,6 @@ export function MovieRibbon({
           <Ribbon
             align="start"
             dragFree={true}
-            onApiInitialized={setCarouselApi}
           >
             {visibleMovies.map((movie: any, index: number) => {
               // Prioritize the first 8 movies for better initial load
@@ -353,13 +351,27 @@ export function MovieRibbon({
                 </RibbonItem>
               );
             })}
-            {/* Loading indicator at the end of the ribbon */}
-            {hasMoreMovies && (
-              <RibbonItem>
-                <div className="flex-none w-[11rem] h-[17rem] flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-2 opacity-60">
-                    <div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin"></div>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Loading more...</span>
+            
+            {/* Loading trigger - positioned near the end of loaded items */}
+            {hasMoreToLoad && (
+              <RibbonItem key="loading-trigger">
+                <div 
+                  ref={loadingTriggerRef}
+                  className="flex items-center justify-center w-[11rem] h-[17rem] opacity-0 pointer-events-none"
+                  aria-hidden="true"
+                >
+                  {/* Invisible trigger element */}
+                </div>
+              </RibbonItem>
+            )}
+            
+            {/* Loading indicator */}
+            {isLoadingMore && (
+              <RibbonItem key="loading-indicator">
+                <div className="flex items-center justify-center w-[11rem] h-[17rem] rounded-[10px] bg-zinc-100 dark:bg-zinc-800">
+                  <div className="flex flex-col items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                    <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin"></div>
+                    <span className="text-sm font-medium">Loading...</span>
                   </div>
                 </div>
               </RibbonItem>
