@@ -2,21 +2,34 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
-export default function Tvshows({ tvshows }: { tvshows: Array<any> }) {
+export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>, searchQuery?: string }) {
   const imgUrl = 'https://image.tmdb.org/t/p/w500/';
   const breadcrumbs: BreadcrumbItem[] = [
     {
-      title: `TV Shows (${tvshows.length})`,
+      title: searchQuery 
+        ? `TV Shows (${tvshows.length}) - Search: "${searchQuery}"`
+        : `TV Shows (${tvshows.length})`,
       href: '/tvshows',
     },
   ];
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="TV Shows" />
+      <Head title={searchQuery ? `TV Shows - Search: "${searchQuery}"` : "TV Shows"} />
       {/* hero */}
 
       <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-5">
+        {searchQuery && (
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold mb-2">
+              Search results for: "<span className="text-rose-500">{searchQuery}</span>"
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Found {tvshows.length} TV {tvshows.length === 1 ? 'show' : 'shows'}
+            </p>
+          </div>
+        )}
+        
         <div className="grid auto-rows-min gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {tvshows.map((tvshow) => (
             <Link href={`/tvshow/${tvshow.slug}`} className="relative group rounded-xl overflow-hidden shadow-lg shadow-neutral-600 dark:shadow-black transition-all duration-[250ms] touch-manipulation" key={tvshow.id}>
@@ -48,6 +61,23 @@ export default function Tvshows({ tvshows }: { tvshows: Array<any> }) {
             </Link>
           ))}
         </div>
+
+        {tvshows.length === 0 && searchQuery && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-lg font-semibold mb-2">No TV shows found</h3>
+            <p className="text-muted-foreground max-w-md">
+              We couldn't find any TV shows matching "<span className="font-medium">{searchQuery}</span>". 
+              Try adjusting your search terms or browse all TV shows.
+            </p>
+            <Link 
+              href="/tvshows" 
+              className="mt-4 px-4 py-2 bg-rose-500 text-white rounded-md hover:bg-rose-600 transition-colors"
+            >
+              View All TV Shows
+            </Link>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

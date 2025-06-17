@@ -21,7 +21,7 @@ const TVSHOW_OVERVIEW_STR_LIMIT = 260;
 const SEASON_OVERVIEW_STR_LIMIT = 200;
 const EPISODE_OVERVIEW_STR_LIMIT = 160;
 
-export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }: { tvshow: any, backdropUrl: string, selectedSeasonNumber?: number }) {
+export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, selectedEpisodeNumber = null }: { tvshow: any, backdropUrl: string, selectedSeasonNumber?: number, selectedEpisodeNumber?: number | null }) {
   const [selectedSeason, setSelectedSeason] = useState<any>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const isInitialMount = useRef(true);
@@ -163,6 +163,30 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
       href: '/tvshow',
     },
   ];
+
+  // Auto-play episode if specified in URL parameters (before early return to ensure hooks order)
+  useEffect(() => {
+    if (!selectedEpisodeNumber || !selectedSeason) return;
+    
+    const currentEpisodes = seasonEpisodes[selectedSeason.season_number] || [];
+    if (!currentEpisodes.length) return;
+    
+    // Find the episode that matches the selected episode number
+    const targetEpisode = currentEpisodes.find(
+      (episode: any) => episode.episode_number === selectedEpisodeNumber
+    );
+    
+    if (targetEpisode && targetEpisode.is_in_storage && targetEpisode.encFilePath) {
+      // Automatically open the episode dialog
+      setSelectedEpisode(targetEpisode);
+      setIsDialogOpen(true);
+      
+      // Remove the episode parameter from URL to prevent auto-play on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('episode');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedEpisodeNumber, selectedSeason, seasonEpisodes]);
 
   // Make sure we have a selected season before rendering
   if (!selectedSeason) return null;

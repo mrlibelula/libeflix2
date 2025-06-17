@@ -2,13 +2,17 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 import { MovieSearchModal } from '@/components/movie-search-modal';
+import { TvshowSearchModal } from '@/components/tvshow-search-modal';
 import { usePage } from '@inertiajs/react';
 
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const page = usePage();
     
     // Check if we should show movie search (on movies and movie pages)
-    const shouldShowMovieSearch = page.url === '/movies' || page.url.startsWith('/movie/');
+    const shouldShowMovieSearch = page.url.startsWith('/movies') || page.url.startsWith('/movie/');
+    
+    // Check if we should show TV show search (on tvshows and tvshow pages)
+    const shouldShowTvshowSearch = page.url.startsWith('/tvshows') || page.url.startsWith('/tvshow/');
     
     return (
         <header className="border-sidebar-border/50 flex h-16 shrink-0 items-center gap-2 border-b px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
@@ -19,6 +23,11 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             {shouldShowMovieSearch && (
                 <div className="flex items-center">
                     <MovieSearchModal />
+                </div>
+            )}
+            {shouldShowTvshowSearch && (
+                <div className="flex items-center">
+                    <TvshowSearchModal />
                 </div>
             )}
         </header>

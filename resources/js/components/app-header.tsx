@@ -15,6 +15,7 @@ import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
 import { MovieSearchModal } from '@/components/movie-search-modal';
+import { TvshowSearchModal } from '@/components/tvshow-search-modal';
 
 const mainNavItems: NavItem[] = [
     {
@@ -49,7 +50,10 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     const getInitials = useInitials();
     
     // Check if we should show movie search (on movies and movie pages)
-    const shouldShowMovieSearch = page.url === '/movies' || page.url.startsWith('/movie/');
+    const shouldShowMovieSearch = page.url.startsWith('/movies') || page.url.startsWith('/movie/');
+    
+    // Check if we should show TV show search (on tvshows and tvshow pages)
+    const shouldShowTvshowSearch = page.url.startsWith('/tvshows') || page.url.startsWith('/tvshow/');
     return (
         <>
             <div className="border-sidebar-border/80 border-b">
@@ -131,6 +135,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                     <div className="ml-auto flex items-center space-x-2">
                         <div className="relative flex items-center space-x-1">
                             {shouldShowMovieSearch && <MovieSearchModal />}
+                            {shouldShowTvshowSearch && <TvshowSearchModal />}
                             <div className="hidden lg:flex">
                                 {rightNavItems.map((item) => (
                                     <Tooltip key={item.title} text={item.title}>

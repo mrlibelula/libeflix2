@@ -41,6 +41,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/movies/search/no-results', [MovieController::class, 'getNoResultSearches'])->name('api.movies.search.no-results');
     Route::get('api/movies/search/analytics-summary', [MovieController::class, 'getAnalyticsSummary'])->name('api.movies.search.analytics-summary');
     
+    // TV show routes and API
+    Route::get('api/tvshows/search', [TvshowController::class, 'search'])->name('api.tvshows.search');
+    Route::post('api/tvshows/search/log', [TvshowController::class, 'logSearch'])->name('api.tvshows.search.log');
+    Route::post('api/tvshows/search/track-click', [TvshowController::class, 'trackSearchClick'])->name('api.tvshows.search.track-click');
+    Route::get('api/tvshows/search/popular-terms', [TvshowController::class, 'getPopularSearchTerms'])->name('api.tvshows.search.popular-terms');
+    Route::get('api/tvshows/search/no-results', [TvshowController::class, 'getNoResultSearches'])->name('api.tvshows.search.no-results');
+    Route::get('api/tvshows/search/analytics-summary', [TvshowController::class, 'getAnalyticsSummary'])->name('api.tvshows.search.analytics-summary');
+    
     // Alternative Job Queue Routes
     Route::post('api/movies/{movie}/recommendations/initiate', [MovieController::class, 'initiateRecommendationsFetch'])->name('api.movies.recommendations.initiate');
     Route::get('api/movies/{movie}/recommendations/status', [MovieController::class, 'pollRecommendationsStatus'])->name('api.movies.recommendations.status');

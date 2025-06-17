@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tvshow;
+use App\Models\SearchQueryTvshow;
 use App\Services\TvshowService;
 use App\Services\SeasonService;
 use App\Services\Tool;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -19,16 +23,26 @@ class TvshowController extends Controller
      *
      * @return Response
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $tvshows = Tvshow::select('id', 'name', 'backdrop_path', 'poster_path', 'vote_average', 'vote_count', 'first_air_date', 'videos', 'images', 'selected_logo', 'slug')
-            ->orderBy('name', 'asc')
+        $searchQuery = $request->get('search');
+
+        $tvshowsQuery = Tvshow::select('id', 'name', 'backdrop_path', 'poster_path', 'vote_average', 'vote_count', 'first_air_date', 'videos', 'images', 'selected_logo', 'slug')
             ->withCount('seasons')
-            ->withCount('episodes')
-            ->get();
+            ->withCount('episodes');
+
+        // Apply search filter if search query exists
+        if ($searchQuery && strlen($searchQuery) >= 2) {
+            $tvshowsQuery = $this->applyTvshowSearchFilters($tvshowsQuery, $searchQuery);
+        } else {
+            $tvshowsQuery->orderBy('name', 'asc');
+        }
+
+        $tvshows = $tvshowsQuery->get();
 
         return Inertia::render('tvshows', [
             'tvshows' => $tvshows,
+            'searchQuery' => $searchQuery,
         ]);
     }
 
@@ -44,6 +58,9 @@ class TvshowController extends Controller
 
         // Get selected season number from request or use 0 (which will default to first season in React)
         $selectedSeasonNumber = $request->input('season', 0);
+        
+        // Get selected episode number for auto-play functionality
+        $selectedEpisodeNumber = $request->input('episode', null);
 
         // Append the season poster URL to the season's posterPathUrl property and check if seasonExists in storage, as a folder
         $tvshow->seasons = $tvshow->seasons->map(function ($season) use ($tvshow) {
@@ -90,6 +107,7 @@ class TvshowController extends Controller
             'tvshow' => $tvshow,
             'backdropUrl' => TvshowService::getRandomTvshowImages($tvshow, 'backdrops'),
             'selectedSeasonNumber' => (int)$selectedSeasonNumber,
+            'selectedEpisodeNumber' => $selectedEpisodeNumber ? (int)$selectedEpisodeNumber : null,
         ]);
     }
 
@@ -362,5 +380,792 @@ class TvshowController extends Controller
         }
         
         return $result;
+    }
+
+    /**
+     * Apply comprehensive search filters to TV shows query
+     *
+     * @param $query
+     * @param string $searchQuery
+     * @return mixed
+     */
+    private function applyTvshowSearchFilters($query, string $searchQuery)
+    {
+        return $query->where(function ($q) use ($searchQuery) {
+            // Search in TV show fields
+            $q->where('tvshows.name', 'LIKE', "%{$searchQuery}%")
+              ->orWhere('tvshows.original_name', 'LIKE', "%{$searchQuery}%")
+              ->orWhere('tvshows.overview', 'LIKE', "%{$searchQuery}%")
+              ->orWhere('tvshows.tagline', 'LIKE', "%{$searchQuery}%")
+              ->orWhere('tvshows.type', 'LIKE', "%{$searchQuery}%");
+              
+            // Search in networks (JSON field)
+            if (config('database.default') === 'mysql') {
+                $q->orWhereRaw("JSON_SEARCH(LOWER(tvshows.networks), 'one', LOWER(?)) IS NOT NULL", ["%{$searchQuery}%"]);
+            } else {
+                // For SQLite, search in networks as text
+                $q->orWhere('tvshows.networks', 'LIKE', "%{$searchQuery}%");
+            }
+            
+            // Search in cast (JSON field)
+            if (config('database.default') === 'mysql') {
+                $q->orWhereRaw("JSON_SEARCH(LOWER(tvshows.cast), 'one', LOWER(?)) IS NOT NULL", ["%{$searchQuery}%"]);
+            } else {
+                // For SQLite, search in cast as text
+                $q->orWhere('tvshows.cast', 'LIKE', "%{$searchQuery}%");
+            }
+        })->orderBy('tvshows.name', 'asc');
+    }
+
+    /**
+     * Search TV shows, seasons, and episodes based on multiple criteria (API endpoint).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function search(Request $request)
+    {
+        try {
+            $query = $request->get('q', '');
+            $limit = $request->get('limit', 10);
+            $shouldLog = $request->get('log', 'true') !== 'false'; // Default to true, false only if explicitly set
+            
+            if (empty($query) || strlen($query) < 2) {
+                return response()->json([
+                    'success' => true,
+                    'results' => []
+                ]);
+            }
+
+            $user = Auth::user();
+            $startTime = microtime(true);
+            
+            $allResults = collect();
+            
+            // 1. Search TV shows directly
+            $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo')
+                ->with(['seasons' => function($seasonQuery) {
+                    $seasonQuery->select('id', 'tvshow_id', 'name', 'overview');
+                }]);
+
+            $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)
+                ->limit($limit)
+                ->get();
+
+            // Add TV show results
+            foreach ($tvshows as $tvshow) {
+                $logoUrl = null;
+                if (!empty($tvshow->images) && isset($tvshow->images['logos']) && !empty($tvshow->images['logos'])) {
+                    $selectedLogoIndex = $tvshow->selected_logo ?? 0;
+                    if (isset($tvshow->images['logos'][$selectedLogoIndex])) {
+                        $logoUrl = env('TMDB_IMAGE_BASE_URL_300') . $tvshow->images['logos'][$selectedLogoIndex]['file_path'];
+                    }
+                }
+                
+                $allResults->push([
+                    'type' => 'tvshow',
+                    'id' => $tvshow->id,
+                    'name' => $tvshow->name,
+                    'original_name' => $tvshow->original_name,
+                    'slug' => $tvshow->slug,
+                    'poster_path' => $tvshow->poster_path,
+                    'poster_url' => $tvshow->poster_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $tvshow->poster_path
+                        : null,
+                    'first_air_date' => $tvshow->first_air_date,
+                    'vote_average' => $tvshow->vote_average,
+                    'overview' => $tvshow->overview,
+                    'tagline' => $tvshow->tagline,
+                    'logo_url' => $logoUrl,
+                    'seasons_count' => $tvshow->seasons->count(),
+                    'relevance_score' => 100, // TV show matches get highest score
+                ]);
+            }
+            
+            // 2. Search episodes (with season and TV show info)
+            $episodeResults = $this->searchEpisodes($query, $limit);
+            foreach ($episodeResults as $episode) {
+                $allResults->push($episode);
+            }
+            
+            // 3. Search seasons (with TV show info)
+            $seasonResults = $this->searchSeasons($query, $limit);
+            foreach ($seasonResults as $season) {
+                $allResults->push($season);
+            }
+
+            // Sort by relevance score and type priority, then limit
+            $sortedResults = $allResults
+                ->sortByDesc(function ($item) {
+                    // Primary sort by type: tvshow > episode > season
+                    $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
+                    return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
+                })
+                ->take($limit)
+                ->values();
+
+            $searchTime = round((microtime(true) - $startTime) * 1000, 2);
+
+            // Smart logging: Only log if requested and meaningful
+            if ($shouldLog && $this->shouldLogTvshowSearch($query, $user->id, $sortedResults->count())) {
+                try {
+                    $searchRecord = SearchQueryTvshow::create([
+                        'user_id' => $user->id,
+                        'query' => $query,
+                        'results_count' => $sortedResults->count(),
+                        'results_summary' => $sortedResults->take(5)->map(function ($result) {
+                            $summary = [
+                                'type' => $result['type'],
+                                'id' => $result['id'],
+                                'name' => $result['name'],
+                            ];
+                            
+                            // Add type-specific information
+                            if ($result['type'] === 'tvshow') {
+                                $summary['slug'] = $result['slug'];
+                            } else {
+                                $summary['tvshow_slug'] = $result['tvshow_slug'];
+                                $summary['tvshow_name'] = $result['tvshow_name'];
+                                
+                                if ($result['type'] === 'season') {
+                                    $summary['season_number'] = $result['season_number'];
+                                } elseif ($result['type'] === 'episode') {
+                                    $summary['season_number'] = $result['season_number'];
+                                    $summary['episode_number'] = $result['episode_number'];
+                                }
+                            }
+                            
+                            return $summary;
+                        })->toArray(),
+                        'has_results' => $sortedResults->count() > 0,
+                        'search_type' => 'comprehensive',
+                        'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                        'ip_address' => $request->ip(),
+                        'user_agent' => $request->header('User-Agent'),
+                        'session_data' => [
+                            'search_time_ms' => $searchTime,
+                            'limit' => $limit,
+                            'timestamp' => now()->toISOString(),
+                            'tvshow_matches' => $tvshows->count(),
+                            'episode_matches' => count($episodeResults),
+                            'season_matches' => count($seasonResults),
+                        ],
+                    ]);
+
+                    Log::info('Created TV show search record', [
+                        'search_record_id' => $searchRecord->id,
+                        'user_id' => $user->id,
+                        'query' => $query,
+                        'results_count' => $sortedResults->count(),
+                        'search_type' => 'comprehensive',
+                    ]);
+                } catch (\Exception $logError) {
+                    Log::warning('Failed to log TV show search query', [
+                        'query' => $query,
+                        'user_id' => $user->id,
+                        'error' => $logError->getMessage()
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'results' => $sortedResults,
+                'query' => $query,
+                'total' => $sortedResults->count(),
+                'breakdown' => [
+                    'tvshows' => $tvshows->count(),
+                    'episodes' => count($episodeResults),
+                    'seasons' => count($seasonResults),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('TV show search error', [
+                'query' => $request->get('q'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Search failed'
+            ], 500);
+        }
+    }
+
+    /**
+     * Log a TV show search query (delayed logging endpoint).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logSearch(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $query = $request->input('query');
+            $timestamp = $request->input('timestamp');
+
+            if (empty($query) || strlen($query) < 3) {
+                return response()->json(['success' => true, 'message' => 'Query too short to log']);
+            }
+
+            // Check if this search should be logged (avoid duplicates and noise)
+            if (!$this->shouldLogTvshowSearch($query, $user->id, null)) {
+                return response()->json(['success' => true, 'message' => 'Search not logged (duplicate or noise)']);
+            }
+
+            // Get comprehensive search results for summary (same logic as main search)
+            $allResults = collect();
+            
+            // 1. Search TV shows
+            $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo');
+            $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)->limit(3)->get();
+            
+            foreach ($tvshows as $tvshow) {
+                $allResults->push([
+                    'type' => 'tvshow',
+                    'id' => $tvshow->id,
+                    'name' => $tvshow->name,
+                    'slug' => $tvshow->slug,
+                    'relevance_score' => 100,
+                ]);
+            }
+            
+            // 2. Search episodes (limited for summary)
+            $episodeResults = $this->searchEpisodes($query, 2);
+            foreach ($episodeResults as $episode) {
+                $allResults->push($episode);
+            }
+            
+            // 3. Search seasons (limited for summary)
+            $seasonResults = $this->searchSeasons($query, 2);
+            foreach ($seasonResults as $season) {
+                $allResults->push($season);
+            }
+
+            // Sort and limit to top 5 for summary
+            $sortedResults = $allResults
+                ->sortByDesc(function ($item) {
+                    $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
+                    return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
+                })
+                ->take(5)
+                ->values();
+
+            $resultsCount = $allResults->count();
+            $resultsSummary = $sortedResults->map(function ($result) {
+                $summary = [
+                    'type' => $result['type'],
+                    'id' => $result['id'],
+                    'name' => $result['name'],
+                ];
+                
+                if ($result['type'] === 'tvshow') {
+                    $summary['slug'] = $result['slug'];
+                } else {
+                    $summary['tvshow_slug'] = $result['tvshow_slug'] ?? null;
+                    $summary['tvshow_name'] = $result['tvshow_name'] ?? null;
+                    
+                    if ($result['type'] === 'season') {
+                        $summary['season_number'] = $result['season_number'] ?? null;
+                    } elseif ($result['type'] === 'episode') {
+                        $summary['season_number'] = $result['season_number'] ?? null;
+                        $summary['episode_number'] = $result['episode_number'] ?? null;
+                    }
+                }
+                
+                return $summary;
+            })->toArray();
+
+            SearchQueryTvshow::create([
+                'user_id' => $user->id,
+                'query' => $query,
+                'results_count' => $resultsCount,
+                'results_summary' => $resultsSummary,
+                'has_results' => $resultsCount > 0,
+                'search_type' => 'delayed_log',
+                'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->header('User-Agent'),
+                'session_data' => [
+                    'original_timestamp' => $timestamp,
+                    'logged_at' => now()->toISOString(),
+                ],
+            ]);
+
+            return response()->json(['success' => true]);
+
+        } catch (\Exception $e) {
+            Log::warning('Failed to log TV show search', [
+                'query' => $request->get('query'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to log search'
+            ], 500);
+        }
+    }
+
+    /**
+     * Track a click on a TV show search result.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function trackSearchClick(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $query = $request->input('query');
+            $resultType = $request->input('result_type'); // 'tvshow', 'season', 'episode'
+            $resultData = $request->input('result_data'); // Full result object
+            $searchTimestamp = $request->input('search_timestamp');
+
+            // Log incoming request for debugging
+            Log::info('TV show search click tracking request', [
+                'user_id' => $user->id,
+                'query' => $query,
+                'result_type' => $resultType,
+                'result_data_keys' => $resultData ? array_keys($resultData) : null,
+                'search_timestamp' => $searchTimestamp,
+            ]);
+
+            // Parse the search timestamp
+            $searchTime = \Carbon\Carbon::parse($searchTimestamp);
+            $clickTimestamp = now();
+            $timeToClickMs = $clickTimestamp->diffInMilliseconds($searchTime);
+
+            // Extract data based on result type
+            $clickData = [
+                'clicked_result_at' => $clickTimestamp,
+                'clicked_result_type' => $resultType,
+                'time_to_click_ms' => $timeToClickMs,
+                'clicked_result_data' => $resultData,
+            ];
+
+            // Always extract TV show information (present in all result types)
+            if ($resultType === 'tvshow') {
+                $clickData['clicked_tvshow_id'] = $resultData['id'];
+                $clickData['clicked_tvshow_title'] = $resultData['name'];
+                $clickData['clicked_tvshow_slug'] = $resultData['slug'];
+            } else {
+                // For episodes and seasons, TV show info is in tvshow_* fields
+                $clickData['clicked_tvshow_id'] = $resultData['tvshow_id'];
+                $clickData['clicked_tvshow_title'] = $resultData['tvshow_name'];
+                $clickData['clicked_tvshow_slug'] = $resultData['tvshow_slug'];
+            }
+
+            // Extract season information for season and episode results
+            if ($resultType === 'season' || $resultType === 'episode') {
+                $clickData['clicked_season_id'] = $resultData['season_id'] ?? null;
+                $clickData['clicked_season_name'] = $resultData['season_name'] ?? null;
+                $clickData['clicked_season_number'] = $resultData['season_number'] ?? null;
+            }
+
+            // Extract episode information for episode results
+            if ($resultType === 'episode') {
+                $clickData['clicked_episode_id'] = $resultData['id'];
+                $clickData['clicked_episode_name'] = $resultData['name'];
+                $clickData['clicked_episode_number'] = $resultData['episode_number'];
+            }
+
+            // Expand the search window and add fallback logic
+            $searchQuery = null;
+            
+            // First, try to find exact match with expanded time window
+            $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
+                ->where('query', $query)
+                ->whereBetween('created_at', [$searchTime->subMinutes(10), $searchTime->addMinutes(10)])
+                ->orderByDesc('created_at')
+                ->first();
+
+            // If not found, try to find any recent search with the same query (last 15 minutes)
+            if (!$searchQuery) {
+                $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
+                    ->where('query', $query)
+                    ->where('created_at', '>', now()->subMinutes(15))
+                    ->orderByDesc('created_at')
+                    ->first();
+            }
+
+            // If still not found, try to find any search record without click data
+            if (!$searchQuery) {
+                $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
+                    ->where('query', $query)
+                    ->whereNull('clicked_result_at')
+                    ->where('created_at', '>', now()->subHours(1))
+                    ->orderByDesc('created_at')
+                    ->first();
+            }
+
+            Log::info('Search query lookup result', [
+                'user_id' => $user->id,
+                'query' => $query,
+                'result_type' => $resultType,
+                'search_query_found' => $searchQuery ? true : false,
+                'search_query_id' => $searchQuery ? $searchQuery->id : null,
+                'search_time' => $searchTime->toISOString(),
+                'time_to_click_ms' => $timeToClickMs,
+            ]);
+
+            if ($searchQuery) {
+                // Update the existing search record
+                $searchQuery->update($clickData);
+
+                Log::info('Updated existing search record with click data', [
+                    'search_query_id' => $searchQuery->id,
+                    'user_id' => $user->id,
+                    'query' => $query,
+                    'result_type' => $resultType,
+                    'clicked_at' => $clickTimestamp->toISOString(),
+                ]);
+            } else {
+                // Create new search record if not found (fallback)
+                $newSearchQuery = SearchQueryTvshow::create(array_merge([
+                    'user_id' => $user->id,
+                    'query' => $query,
+                    'results_count' => 1, // We know they found at least this one
+                    'results_summary' => [
+                        [
+                            'type' => $resultType,
+                            'id' => $resultData['id'],
+                            'name' => $resultData['name'],
+                            'tvshow_slug' => $clickData['clicked_tvshow_slug'],
+                        ]
+                    ],
+                    'has_results' => true,
+                    'search_type' => 'click_fallback',
+                    'source_page' => $request->header('Referer') ? parse_url($request->header('Referer'), PHP_URL_PATH) : null,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'session_data' => [
+                        'fallback_creation' => true,
+                        'original_search_timestamp' => $searchTimestamp,
+                        'click_timestamp' => $clickTimestamp->toISOString(),
+                    ],
+                ], $clickData));
+
+                Log::info('Created new search record with click data (fallback)', [
+                    'search_query_id' => $newSearchQuery->id,
+                    'user_id' => $user->id,
+                    'query' => $query,
+                    'result_type' => $resultType,
+                    'clicked_at' => $clickTimestamp->toISOString(),
+                ]);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            Log::error('Failed to track TV show search click', [
+                'query' => $request->get('query'),
+                'result_type' => $request->get('result_type'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track click'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get popular TV show search terms
+     */
+    public function getPopularSearchTerms()
+    {
+        $terms = SearchQueryTvshow::getPopularSearchTerms(10, 30);
+        return response()->json($terms);
+    }
+
+    /**
+     * Get TV show searches with no results
+     */
+    public function getNoResultSearches()
+    {
+        $searches = SearchQueryTvshow::getNoResultSearches(20, 30);
+        return response()->json($searches);
+    }
+
+    /**
+     * Get complete TV show analytics summary
+     */
+    public function getAnalyticsSummary()
+    {
+        $summary = SearchQueryTvshow::getAnalyticsSummary(30);
+        return response()->json($summary);
+    }
+
+    /**
+     * Determine if a TV show search should be logged to reduce noise.
+     */
+    private function shouldLogTvshowSearch(string $query, int $userId, ?int $resultsCount): bool
+    {
+        // Skip very short queries
+        if (strlen($query) <= 2) {
+            return false;
+        }
+
+        // Don't log the same query multiple times in a short period for the same user
+        $recentLog = SearchQueryTvshow::where('user_id', $userId)
+            ->where('query', $query)
+            ->where('created_at', '>', now()->subMinutes(5))
+            ->exists();
+
+        if ($recentLog) {
+            return false;
+        }
+
+        // Always log if results count is explicitly provided and > 0, or if it's a substantial query
+        if (($resultsCount !== null && $resultsCount > 0) || strlen($query) >= 5) {
+            return true;
+        }
+
+        // For shorter queries (3-4 chars), be more selective
+        if (strlen($query) >= 3) {
+            // Check if this might be a progressive typing pattern
+            $recentSearches = SearchQueryTvshow::where('user_id', $userId)
+                ->where('created_at', '>', now()->subMinutes(2))
+                ->orderByDesc('created_at')
+                ->limit(3)
+                ->pluck('query')
+                ->toArray();
+
+            // If this looks like progressive typing (e.g., "ga" -> "gam" -> "game"), skip intermediate ones
+            foreach ($recentSearches as $recentQuery) {
+                if (strlen($recentQuery) < strlen($query) && strpos($query, $recentQuery) === 0) {
+                    return false; // This is likely progressive typing
+                }
+            }
+
+            return true; // Probably a standalone short search
+        }
+
+        return false;
+    }
+
+    /**
+     * Get the count of search results for a query (for logging purposes)
+     */
+    private function getTvshowSearchResultsCount(string $query): int
+    {
+        $tvshowsQuery = Tvshow::select('id');
+        return $this->applyTvshowSearchFilters($tvshowsQuery, $query)->count();
+    }
+
+    /**
+     * Search episodes with their TV show and season context
+     *
+     * @param string $query
+     * @param int $limit
+     * @return array
+     */
+    private function searchEpisodes(string $query, int $limit = 10): array
+    {
+        $results = [];
+        
+        try {
+            // Search episodes using a more direct approach to avoid complex joins
+            $episodes = DB::table('episodes')
+                ->join('seasons', 'episodes.season_id', '=', 'seasons.id')
+                ->join('tvshows', 'seasons.tvshow_id', '=', 'tvshows.id')
+                ->select(
+                    'episodes.id as episode_id',
+                    'episodes.name as episode_name',
+                    'episodes.overview as episode_overview',
+                    'episodes.episode_number',
+                    'episodes.still_path',
+                    'episodes.air_date as episode_air_date',
+                    'episodes.vote_average as episode_vote_average',
+                    'episodes.credits as episode_credits',
+                    'seasons.id as season_id',
+                    'seasons.name as season_name',
+                    'seasons.season_number',
+                    'tvshows.id as tvshow_id',
+                    'tvshows.name as tvshow_name',
+                    'tvshows.slug as tvshow_slug',
+                    'tvshows.poster_path as tvshow_poster_path',
+                    'tvshows.images as tvshow_images',
+                    'tvshows.selected_logo as tvshow_selected_logo'
+                )
+                ->where(function ($q) use ($query) {
+                    $q->where('episodes.name', 'LIKE', "%{$query}%")
+                      ->orWhere('episodes.overview', 'LIKE', "%{$query}%");
+                    
+                    // Search in episode credits (JSON field)
+                    if (config('database.default') === 'mysql') {
+                        $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$query}%"]);
+                    } else {
+                        // For SQLite, search in credits as text
+                        $q->orWhere('episodes.credits', 'LIKE', "%{$query}%");
+                    }
+                })
+                ->orderBy('tvshows.name')
+                ->orderBy('seasons.season_number')
+                ->orderBy('episodes.episode_number')
+                ->limit($limit)
+                ->get();
+
+            foreach ($episodes as $episode) {
+                // Calculate relevance score
+                $relevanceScore = 0;
+                if (stripos($episode->episode_name, $query) !== false) {
+                    $relevanceScore += 50;
+                }
+                if (stripos($episode->episode_overview, $query) !== false) {
+                    $relevanceScore += 30;
+                }
+                if (stripos($episode->episode_credits, $query) !== false) {
+                    $relevanceScore += 20;
+                }
+
+                // Get TV show logo
+                $logoUrl = null;
+                $tvshowImages = json_decode($episode->tvshow_images, true);
+                if (!empty($tvshowImages) && isset($tvshowImages['logos']) && !empty($tvshowImages['logos'])) {
+                    $selectedLogoIndex = $episode->tvshow_selected_logo ?? 0;
+                    if (isset($tvshowImages['logos'][$selectedLogoIndex])) {
+                        $logoUrl = env('TMDB_IMAGE_BASE_URL_300') . $tvshowImages['logos'][$selectedLogoIndex]['file_path'];
+                    }
+                }
+
+                $results[] = [
+                    'type' => 'episode',
+                    'id' => $episode->episode_id,
+                    'name' => $episode->episode_name,
+                    'overview' => $episode->episode_overview,
+                    'episode_number' => $episode->episode_number,
+                    'still_path' => $episode->still_path,
+                    'still_url' => $episode->still_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path
+                        : null,
+                    'air_date' => $episode->episode_air_date,
+                    'vote_average' => $episode->episode_vote_average,
+                    'season_id' => $episode->season_id,
+                    'season_name' => $episode->season_name,
+                    'season_number' => $episode->season_number,
+                    'tvshow_id' => $episode->tvshow_id,
+                    'tvshow_name' => $episode->tvshow_name,
+                    'tvshow_slug' => $episode->tvshow_slug,
+                    'tvshow_poster_url' => $episode->tvshow_poster_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $episode->tvshow_poster_path
+                        : null,
+                    'tvshow_logo_url' => $logoUrl,
+                    'relevance_score' => $relevanceScore,
+                    'display_text' => "S{$episode->season_number}E{$episode->episode_number}: {$episode->episode_name}",
+                    'context_text' => "from {$episode->tvshow_name}",
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Episode search error', [
+                'query' => $query,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Search seasons with their TV show context
+     *
+     * @param string $query
+     * @param int $limit
+     * @return array
+     */
+    private function searchSeasons(string $query, int $limit = 10): array
+    {
+        $results = [];
+        
+        try {
+            // Search seasons
+            $seasons = DB::table('seasons')
+                ->join('tvshows', 'seasons.tvshow_id', '=', 'tvshows.id')
+                ->select(
+                    'seasons.id as season_id',
+                    'seasons.name as season_name',
+                    'seasons.overview as season_overview',
+                    'seasons.season_number',
+                    'seasons.poster_path as season_poster_path',
+                    'seasons.air_date as season_air_date',
+                    'seasons.vote_average as season_vote_average',
+                    'seasons.episode_count',
+                    'tvshows.id as tvshow_id',
+                    'tvshows.name as tvshow_name',
+                    'tvshows.slug as tvshow_slug',
+                    'tvshows.poster_path as tvshow_poster_path',
+                    'tvshows.images as tvshow_images',
+                    'tvshows.selected_logo as tvshow_selected_logo'
+                )
+                ->where(function ($q) use ($query) {
+                    $q->where('seasons.name', 'LIKE', "%{$query}%")
+                      ->orWhere('seasons.overview', 'LIKE', "%{$query}%");
+                })
+                ->orderBy('tvshows.name')
+                ->orderBy('seasons.season_number')
+                ->limit($limit)
+                ->get();
+
+            foreach ($seasons as $season) {
+                // Calculate relevance score
+                $relevanceScore = 0;
+                if (stripos($season->season_name, $query) !== false) {
+                    $relevanceScore += 40;
+                }
+                if (stripos($season->season_overview, $query) !== false) {
+                    $relevanceScore += 25;
+                }
+
+                // Get TV show logo
+                $logoUrl = null;
+                $tvshowImages = json_decode($season->tvshow_images, true);
+                if (!empty($tvshowImages) && isset($tvshowImages['logos']) && !empty($tvshowImages['logos'])) {
+                    $selectedLogoIndex = $season->tvshow_selected_logo ?? 0;
+                    if (isset($tvshowImages['logos'][$selectedLogoIndex])) {
+                        $logoUrl = env('TMDB_IMAGE_BASE_URL_300') . $tvshowImages['logos'][$selectedLogoIndex]['file_path'];
+                    }
+                }
+
+                $results[] = [
+                    'type' => 'season',
+                    'id' => $season->season_id,
+                    'name' => $season->season_name,
+                    'overview' => $season->season_overview,
+                    'season_number' => $season->season_number,
+                    'poster_path' => $season->season_poster_path,
+                    'poster_url' => $season->season_poster_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $season->season_poster_path
+                        : null,
+                    'air_date' => $season->season_air_date,
+                    'vote_average' => $season->season_vote_average,
+                    'episode_count' => $season->episode_count,
+                    'tvshow_id' => $season->tvshow_id,
+                    'tvshow_name' => $season->tvshow_name,
+                    'tvshow_slug' => $season->tvshow_slug,
+                    'tvshow_poster_url' => $season->tvshow_poster_path 
+                        ? env('TMDB_IMAGE_BASE_URL_300') . $season->tvshow_poster_path
+                        : null,
+                    'tvshow_logo_url' => $logoUrl,
+                    'relevance_score' => $relevanceScore,
+                    'display_text' => $season->season_name,
+                    'context_text' => "from {$season->tvshow_name}",
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Season search error', [
+                'query' => $query,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $results;
     }
 }
