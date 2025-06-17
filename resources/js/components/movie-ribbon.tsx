@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon } from "lucide-react";
+import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
@@ -29,10 +29,9 @@ interface SortOption {
   label: string;
 }
 
-// Configuration for progressive loading
-const INITIAL_LOAD_COUNT = 24; // Load 24 items initially (good for various screen sizes)
-const LOAD_MORE_COUNT = 12; // Load 12 more items when approaching end
-const LOAD_MORE_THRESHOLD = 8; // Start loading when user is 8 items from the end
+// Configuration for pagination
+const ITEMS_PER_PAGE = 30; // Show 30 items per page
+const PAGINATION_THRESHOLD = 30; // Use pagination if more than 30 items
 
 export function MovieRibbon({ 
   movies, 
@@ -44,13 +43,13 @@ export function MovieRibbon({
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
-  const [loadedCount, setLoadedCount] = useState(Math.min(INITIAL_LOAD_COUNT, movies.length));
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   
-  // Ref for the loading trigger element
-  const loadingTriggerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-
+  // Ref for the ribbon container to control scroll position
+  const ribbonContainerRef = useRef<HTMLDivElement>(null);
+  // Carousel API for controlling scroll position
+  const [carouselApi, setCarouselApi] = useState<any>(null);
+  
   // Sort options configuration
   const sortOptions: SortOption[] = [
     { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
@@ -144,55 +143,50 @@ export function MovieRibbon({
     ? sortMovies(shuffledMovies, currentSort.field, currentSort.direction)
     : shuffledMovies;
 
-  // Get the currently visible movies based on loadedCount
-  const visibleMovies = processedMovies.slice(0, loadedCount);
-  const hasMoreToLoad = loadedCount < processedMovies.length;
+  // Determine if we should use pagination
+  const shouldPaginate = processedMovies.length > PAGINATION_THRESHOLD;
+  
+  // Calculate pagination values
+  const totalPages = shouldPaginate ? Math.ceil(processedMovies.length / ITEMS_PER_PAGE) : 1;
+  const startIndex = shouldPaginate ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+  const endIndex = shouldPaginate ? startIndex + ITEMS_PER_PAGE : processedMovies.length;
+  
+  // Get the currently visible movies
+  const visibleMovies = processedMovies.slice(startIndex, endIndex);
 
-  // Function to load more movies
-  const loadMoreMovies = useCallback(() => {
-    if (isLoadingMore || !hasMoreToLoad) return;
-    
-    setIsLoadingMore(true);
-    
-    // Simulate a small delay for smooth UX (optional)
-    setTimeout(() => {
-      setLoadedCount(prev => Math.min(prev + LOAD_MORE_COUNT, processedMovies.length));
-      setIsLoadingMore(false);
-    }, 150);
-  }, [isLoadingMore, hasMoreToLoad, processedMovies.length]);
-
-  // Set up intersection observer for progressive loading
+  // Reset to page 1 when movies change or sort changes
   useEffect(() => {
-    if (!hasMoreToLoad || !loadingTriggerRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting) {
-          loadMoreMovies();
-        }
-      },
-      {
-        root: null,
-        rootMargin: '200px', // Start loading 200px before the trigger comes into view
-        threshold: 0.1,
-      }
-    );
-
-    observerRef.current = observer;
-    observer.observe(loadingTriggerRef.current);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [hasMoreToLoad, loadMoreMovies]);
-
-  // Reset loaded count when movies change or sort changes
-  useEffect(() => {
-    setLoadedCount(Math.min(INITIAL_LOAD_COUNT, processedMovies.length));
+    setCurrentPage(1);
   }, [processedMovies.length, currentSort]);
+
+  // Reset ribbon scroll position when page changes
+  useEffect(() => {
+    if (carouselApi) {
+      // Use carousel API to scroll to the beginning
+      carouselApi.scrollTo(0);
+    }
+  }, [currentPage, carouselApi]);
+
+  // Restore focus to ribbon after pagination
+  const restoreFocusToRibbon = useCallback(() => {
+    // Add a small delay to ensure DOM has updated
+    setTimeout(() => {
+      if (ribbonContainerRef.current) {
+        // Try to find the carousel element using multiple selectors
+        let carouselElement = ribbonContainerRef.current.querySelector('[tabindex="0"]');
+        if (!carouselElement) {
+          carouselElement = ribbonContainerRef.current.querySelector('[role="region"][aria-roledescription="carousel"]');
+        }
+        if (!carouselElement) {
+          carouselElement = ribbonContainerRef.current.querySelector('[data-slot="carousel"]');
+        }
+        
+        if (carouselElement) {
+          (carouselElement as HTMLElement).focus();
+        }
+      }
+    }, 100);
+  }, []);
 
   const toggleRibbon = () => {
     setIsRibbonOpen(!isRibbonOpen);
@@ -207,6 +201,27 @@ export function MovieRibbon({
       // Set new field with default direction
       const defaultDirection = sortOptions.find(opt => opt.field === field)?.direction || 'asc';
       setCurrentSort({ field, direction: defaultDirection });
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+      restoreFocusToRibbon();
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+      restoreFocusToRibbon();
+    }
+  };
+
+  const handlePageJump = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      restoreFocusToRibbon();
     }
   };
 
@@ -260,6 +275,45 @@ export function MovieRibbon({
     return null;
   };
 
+  // Generate page numbers for pagination display
+  const getVisiblePageNumbers = () => {
+    const pages = [];
+    // Responsive max pages: 3 on mobile, 5 on desktop
+    const isMobile = window.innerWidth < 768;
+    const maxVisiblePages = isMobile ? 3 : 5;
+    const sidePages = isMobile ? 1 : 2; // Pages around current page
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show current page and surrounding pages
+      const start = Math.max(1, currentPage - sidePages);
+      const end = Math.min(totalPages, currentPage + sidePages);
+      
+      // Always show first page
+      if (start > 1) {
+        pages.push(1);
+        if (start > 2) pages.push('...');
+      }
+      
+      // Show middle pages
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      // Always show last page
+      if (end < totalPages) {
+        if (end < totalPages - 1) pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
   return (
     <div 
       className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--dynamic-sidebar-width)-30px)] focus:outline-none"
@@ -278,41 +332,46 @@ export function MovieRibbon({
         >
           <div>
             {title}
+            {shouldPaginate && (
+              <span className="text-sm font-normal ml-2 text-zinc-600 dark:text-zinc-400">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
           </div>
           <ChevronDownIcon className={`w-5 h-5 transition-transform duration-300 ease-in-out ${!isRibbonOpen ? 'rotate-[270deg]' : 'rotate-0'}`} />
         </div>
 
-                 {/* Sort Controls */}
-         {movies.length > 0 && (
-           <div className="flex items-center gap-1">
-             {sortOptions.map((option) => {
-               const isActive = getCurrentSortDirection(option.field) !== null;
-               const direction = getCurrentSortDirection(option.field);
-               
-               return (
-                 <button
-                   key={option.field}
-                   onClick={() => handleSortToggle(option.field)}
-                   className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium ${
-                     isActive
-                       ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                       : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100'
-                   }`}
-                   title={`Sort by ${option.label}${isActive ? ` (${direction === 'asc' ? 'ascending' : 'descending'})` : ''}`}
-                 >
-                   <option.icon className="w-4 h-4" />
-                   {isActive && (
-                     direction === 'asc' ? (
-                       <ArrowUpIcon className="w-3 h-3" />
-                     ) : (
-                       <ArrowDownIcon className="w-3 h-3" />
-                     )
-                   )}
-                 </button>
-               );
-             })}
-           </div>
-         )}
+        {/* Sort Controls */}
+        {movies.length > 0 && (
+          <div className="flex items-center gap-1">
+            {sortOptions.map((option) => {
+              const isActive = getCurrentSortDirection(option.field) !== null;
+              const direction = getCurrentSortDirection(option.field);
+              
+              return (
+                <button
+                  key={option.field}
+                  onClick={() => handleSortToggle(option.field)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                  title={`Sort by ${option.label}${isActive ? ` (${direction === 'asc' ? 'ascending' : 'descending'})` : ''}`}
+                >
+                  <option.icon className="w-4 h-4" />
+                  {isActive && (
+                    direction === 'asc' ? (
+                      <ArrowUpIcon className="w-3 h-3" />
+                    ) : (
+                      <ArrowDownIcon className="w-3 h-3" />
+                    )
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ribbon content */}
@@ -330,53 +389,93 @@ export function MovieRibbon({
             onAction={getEmptyStateAction(title)}
           />
         ) : (
-          <Ribbon
-            align="start"
-            dragFree={true}
-          >
-            {visibleMovies.map((movie: any, index: number) => {
-              // Prioritize the first 8 movies for better initial load
-              const isPriority = index < 8;
+          <>
+            <div ref={ribbonContainerRef}>
+              <Ribbon
+                align="start"
+                dragFree={true}
+                onApiInitialized={setCarouselApi}
+              >
+              {visibleMovies.map((movie: any, index: number) => {
+                // Prioritize all visible movies for better performance
+                const isPriority = true;
 
-              return (
-                <RibbonItem
-                  key={movie.id}
-                >
-                  <MoviePoster
-                    movie={movie}
-                    imgBaseUrl={imgBaseUrl}
-                    isPriority={isPriority}
-                    onWatchLaterToggle={onWatchLaterToggle}
-                  />
-                </RibbonItem>
-              );
-            })}
-            
-            {/* Loading trigger - positioned near the end of loaded items */}
-            {hasMoreToLoad && (
-              <RibbonItem key="loading-trigger">
-                <div 
-                  ref={loadingTriggerRef}
-                  className="flex items-center justify-center w-[11rem] h-[17rem] opacity-0 pointer-events-none"
-                  aria-hidden="true"
-                >
-                  {/* Invisible trigger element */}
-                </div>
-              </RibbonItem>
-            )}
-            
-            {/* Loading indicator */}
-            {isLoadingMore && (
-              <RibbonItem key="loading-indicator">
-                <div className="flex items-center justify-center w-[11rem] h-[17rem] rounded-[10px] bg-zinc-100 dark:bg-zinc-800">
-                  <div className="flex flex-col items-center gap-2 text-zinc-500 dark:text-zinc-400">
-                    <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin"></div>
-                    <span className="text-sm font-medium">Loading...</span>
+                return (
+                  <RibbonItem
+                    key={movie.id}
+                  >
+                    <MoviePoster
+                      movie={movie}
+                      imgBaseUrl={imgBaseUrl}
+                      isPriority={isPriority}
+                      onWatchLaterToggle={onWatchLaterToggle}
+                    />
+                  </RibbonItem>
+                );
+              })}
+            </Ribbon>
+            </div>
+
+            {/* Pagination Controls */}
+            {shouldPaginate && (
+              <div className="flex items-center justify-center mt-4 md:mt-6 pb-2">
+                {/* Fixed width container to keep arrow buttons in consistent positions */}
+                <div className="flex items-center gap-1 md:gap-2 w-[380px] md:w-[500px] justify-center">
+                  {/* Previous Button */}
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                      currentPage === 1
+                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                    }`}
+                    title="Previous page"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeftIcon className="w-4 h-4" />
+                  </button>
+
+                  {/* Page Numbers - centered within fixed space */}
+                  <div className="flex items-center justify-center gap-1 flex-1 min-w-0">
+                    {getVisiblePageNumbers().map((page, index) => (
+                      <button
+                        key={index}
+                        onClick={() => typeof page === 'number' ? handlePageJump(page) : undefined}
+                        disabled={page === '...'}
+                        className={`min-w-[2rem] w-8 h-8 md:min-w-[2.5rem] md:w-9 md:h-9 rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
+                          page === currentPage
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-default'
+                            : page === '...'
+                            ? 'bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                        }`}
+                        title={typeof page === 'number' ? `Go to page ${page}` : undefined}
+                        aria-label={typeof page === 'number' ? `Go to page ${page}` : undefined}
+                      >
+                        {page}
+                      </button>
+                    ))}
                   </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                      currentPage === totalPages
+                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                    }`}
+                    title="Next page"
+                    aria-label="Next page"
+                  >
+                    <ChevronRightIcon className="w-4 h-4" />
+                  </button>
                 </div>
-              </RibbonItem>
+              </div>
             )}
-          </Ribbon>
+          </>
         )}
       </div>
     </div>

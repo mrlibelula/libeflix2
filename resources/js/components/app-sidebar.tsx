@@ -38,16 +38,16 @@ const mainNavItems: NavItem[] = [
     //     href: '/top',
     //     icon: ListFilter,
     // },
-    {
-        title: 'Vintage Games',
-        href: '/vintage-games',
-        icon: Gamepad2,
-    },
-    {
-        title: 'Music',
-        href: '/music',
-        icon: Music,
-    },
+    // {
+    //     title: 'Vintage Games',
+    //     href: '/vintage-games',
+    //     icon: Gamepad2,
+    // },
+    // {
+    //     title: 'Music',
+    //     href: '/music',
+    //     icon: Music,
+    // },
     // {
     //     title: 'History',
     //     href: '/history',

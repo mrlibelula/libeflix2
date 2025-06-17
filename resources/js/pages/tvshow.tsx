@@ -7,6 +7,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { LoaderCircle, Play } from 'lucide-react';
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
+import { PaginatedRibbon } from "@/components/ui/paginated-ribbon"
 import { useState, useEffect, useRef } from 'react';
 import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
@@ -226,26 +227,27 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               {/* cast ribbon */}
                               {Object.entries(tvshow.credits.cast).length > 0 && (
                                 <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                                  <Ribbon 
-                                    align="start" 
+                                  <PaginatedRibbon
+                                    align="start"
                                     dragFree={true}
+                                    itemsPerPage={20}
+                                    paginationThreshold={20}
                                   >
                                     {Object.entries(tvshow.credits.cast).map(([key, cast]: [string, any], index) => {
-                                      // Prioritize the first 8 cast members for better initial load
-                                      const isPriority = index < 8;
+                                      // Prioritize visible cast members for better performance
+                                      const isPriority = true;
                                       
                                       return (
-                                        <RibbonItem key={cast.id || key}>
-                                          <CreditPoster 
-                                            imageUrl={cast.profilePathUrl} 
-                                            name={cast.name}
-                                            characterName={cast.character} 
-                                            priority={isPriority}
-                                          />
-                                        </RibbonItem>
+                                        <CreditPoster 
+                                          key={cast.id || key}
+                                          imageUrl={cast.profilePathUrl} 
+                                          name={cast.name}
+                                          characterName={cast.character} 
+                                          priority={isPriority}
+                                        />
                                       );
                                     })}
-                                  </Ribbon>
+                                  </PaginatedRibbon>
                                 </div>
                               )}
                             </TabsContent>
@@ -253,26 +255,27 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               {/* guest stars ribbon */}
                               {tvshow.credits.guestStars && Object.entries(tvshow.credits.guestStars).length > 0 && (
                                 <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                                  <Ribbon 
-                                    align="start" 
+                                  <PaginatedRibbon
+                                    align="start"
                                     dragFree={true}
+                                    itemsPerPage={20}
+                                    paginationThreshold={20}
                                   >
                                     {Object.entries(tvshow.credits.guestStars).map(([key, guestStar]: [string, any], index) => {
-                                      // Prioritize the first 8 guest stars for better initial load
-                                      const isPriority = index < 8;
+                                      // Prioritize visible guest stars for better performance
+                                      const isPriority = true;
                                       
                                       return (
-                                        <RibbonItem key={guestStar.id || key}>
-                                          <CreditPoster 
-                                            imageUrl={guestStar.profilePathUrl} 
-                                            name={guestStar.name}
-                                            characterName={guestStar.character} 
-                                            priority={isPriority}
-                                          />
-                                        </RibbonItem>
+                                        <CreditPoster 
+                                          key={guestStar.id || key}
+                                          imageUrl={guestStar.profilePathUrl} 
+                                          name={guestStar.name}
+                                          characterName={guestStar.character} 
+                                          priority={isPriority}
+                                        />
                                       );
                                     })}
-                                  </Ribbon>
+                                  </PaginatedRibbon>
                                 </div>
                               )}
                             </TabsContent>
@@ -306,26 +309,27 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0 }
                               {/* crew ribbon */}
                               {Object.entries(tvshow.credits.crew).length > 0 && (
                                 <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                                  <Ribbon 
-                                    align="start" 
+                                  <PaginatedRibbon
+                                    align="start"
                                     dragFree={true}
+                                    itemsPerPage={20}
+                                    paginationThreshold={20}
                                   >
                                     {Object.entries(tvshow.credits.crew).map(([key, crew]: [string, any], index) => {
-                                      // Prioritize the first 8 cast members for better initial load
-                                      const isPriority = index < 8;
+                                      // Prioritize visible crew members for better performance
+                                      const isPriority = true;
                                       
                                       return (
-                                        <RibbonItem key={crew.id || key}>
-                                          <CreditPoster 
-                                            imageUrl={crew.profilePathUrl} 
-                                            name={crew.name}
-                                            characterName={crew.job} 
-                                            priority={isPriority}
-                                          />
-                                        </RibbonItem>
+                                        <CreditPoster 
+                                          key={crew.id || key}
+                                          imageUrl={crew.profilePathUrl} 
+                                          name={crew.name}
+                                          characterName={crew.job} 
+                                          priority={isPriority}
+                                        />
                                       );
                                     })}
-                                  </Ribbon>
+                                  </PaginatedRibbon>
                                 </div>
                               )}
                             </TabsContent>
