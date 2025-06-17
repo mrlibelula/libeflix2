@@ -19,6 +19,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
     Route::get('tvshow/stream/{encFilePath}/{disk?}', [StorageController::class, 'tvshowEpisodeServe'])->name('tvshow.episode.serve');
     Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
+    
+    // TV Show API endpoints for lazy loading
+    Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/episodes', [TvshowController::class, 'getSeasonEpisodes'])->name('api.tvshows.season.episodes');
+    Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/credits', [TvshowController::class, 'getSeasonCredits'])->name('api.tvshows.season.credits');
+    
     Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
     Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');

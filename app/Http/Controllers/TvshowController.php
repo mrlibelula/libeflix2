@@ -35,8 +35,7 @@ class TvshowController extends Controller
     public function show(Request $request, string $slug): Response
     {
         $tvshow = Tvshow::where('slug', $slug)
-            ->with('seasons')
-            ->with('seasons.episodes')
+            ->with('seasons') // Only load seasons, not episodes
             ->first();
         
         if (!$tvshow) {
@@ -47,25 +46,12 @@ class TvshowController extends Controller
         $selectedSeasonNumber = $request->input('season', 0);
 
         // Append the season poster URL to the season's posterPathUrl property and check if seasonExists in storage, as a folder
-        // and string limit each episode's overview
         $tvshow->seasons = $tvshow->seasons->map(function ($season) use ($tvshow) {
             $season->posterPathUrl = $season->poster_path 
                 ? env('TMDB_IMAGE_BASE_URL_300') . $season->poster_path 
                 : env('DEFAULT_POSTER_IMAGE_URL');
             // Check if season folder exists in storage
             $season->seasonFolderExists = SeasonService::isThereSeasonFolder($season->season_number, $tvshow);
-            // Add still image URL and append vote avarage to stars method to each episode
-            $season->episodes->each(function ($episode) {
-                $episode->stillUrl = $episode->still_path 
-                    ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
-                    : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
-                $episode->voteAverageStars = Tool::voteAvarageToStars($episode->vote_average, $episode->vote_count);
-                
-                // Pre-encode the file path if it's a string (means it's a valid file path)
-                if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
-                    $episode->encFilePath = Tool::encode($episode->is_in_storage);
-                }
-            });
             return $season;
         });
 
@@ -87,17 +73,64 @@ class TvshowController extends Controller
         // Append voteAvarageStars to the TV show
         $tvshow->voteAverageStars = Tool::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
 
-        // Append credits to the TV show
-        $tvshow->credits = TvshowService::getTvshowCredits($tvshow, withCrew: true);
+        // For credits, we need to load episodes on demand, so we'll use the API endpoint
+        // For now, let's load credits from the cast stored in the tvshow table
+        $tvshow->credits = [
+            'cast' => array_map(function ($cast) {
+                $cast['profilePathUrl'] = isset($cast['profile_path']) && $cast['profile_path'] 
+                    ? env('TMDB_IMAGE_BASE_URL_92') . $cast['profile_path'] 
+                    : env('DEFAULT_CREDIT_IMAGE_URL');
+                return $cast;
+            }, $tvshow->cast ?? []),
+            'crew' => [],
+            'guestStars' => [],
+        ];
 
-        // Encode episodes file paths via is_in_storage and use prop encFilePath as final prop
-        $tvshow->episodes = $tvshow->episodes->map(function ($episode) {
-            // If is_in_storage contains the file path (fallbacks as a boolean (truthy or falsy)), encode it
-            $episode->encFilePath = (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) 
-                ? Tool::encode($episode->is_in_storage) 
-                : null;
+        return Inertia::render('tvshow', [
+            'tvshow' => $tvshow,
+            'backdropUrl' => TvshowService::getRandomTvshowImages($tvshow, 'backdrops'),
+            'selectedSeasonNumber' => (int)$selectedSeasonNumber,
+        ]);
+    }
+
+    /**
+     * Get episodes for a specific season (API endpoint for lazy loading)
+     *
+     * @param Request $request
+     * @param string $slug
+     * @param int $seasonNumber
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSeasonEpisodes(Request $request, string $slug, int $seasonNumber)
+    {
+        $tvshow = Tvshow::where('slug', $slug)->first();
+        
+        if (!$tvshow) {
+            return response()->json(['error' => 'TV Show not found'], 404);
+        }
+
+        $season = $tvshow->seasons()
+            ->where('season_number', $seasonNumber)
+            ->with('episodes')
+            ->first();
+
+        if (!$season) {
+            return response()->json(['error' => 'Season not found'], 404);
+        }
+
+        // Process episodes with the same logic as before
+        $season->episodes->each(function ($episode) {
+            $episode->stillUrl = $episode->still_path 
+                ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
+                : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
+            $episode->voteAverageStars = Tool::voteAvarageToStars($episode->vote_average, $episode->vote_count);
             
-            // Check for subtitles in database or on disk
+            // Pre-encode the file path if it's a string (means it's a valid file path)
+            if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
+                $episode->encFilePath = Tool::encode($episode->is_in_storage);
+            }
+
+            // Handle subtitles
             if (!empty($episode->subtitles)) {
                 // Parse the subtitles JSON string if needed
                 $subtitlesData = is_string($episode->subtitles) 
@@ -145,14 +178,138 @@ class TvshowController extends Controller
                     $episode->subtitles = [];
                 }
             }
-            
-            return $episode;
         });
 
-        return Inertia::render('tvshow', [
-            'tvshow' => $tvshow,
-            'backdropUrl' => TvshowService::getRandomTvshowImages($tvshow, 'backdrops'),
-            'selectedSeasonNumber' => (int)$selectedSeasonNumber,
+        return response()->json([
+            'season' => $season,
+            'episodes' => $season->episodes
+        ]);
+    }
+
+    /**
+     * Get credits for a specific season (API endpoint for lazy loading)
+     *
+     * @param Request $request
+     * @param string $slug
+     * @param int $seasonNumber
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSeasonCredits(Request $request, string $slug, int $seasonNumber)
+    {
+        $tvshow = Tvshow::where('slug', $slug)->first();
+        
+        if (!$tvshow) {
+            return response()->json(['error' => 'TV Show not found'], 404);
+        }
+
+        $season = $tvshow->seasons()
+            ->where('season_number', $seasonNumber)
+            ->with('episodes')
+            ->first();
+
+        if (!$season) {
+            return response()->json(['error' => 'Season not found'], 404);
+        }
+
+        // Get season-specific credits - load ALL credits without any limits
+        $episodes = collect($season->episodes);
+        
+        // Debug info
+        $debugInfo = [
+            'total_episodes' => $episodes->count(),
+            'episodes_with_credits' => 0,
+            'episodes_with_guest_stars' => 0,
+            'total_guest_star_entries' => 0,
+        ];
+        
+        // Collect all credits from all episodes first
+        $allCast = [];
+        $allCrew = [];
+        $allGuestStars = [];
+        
+        foreach ($episodes as $episode) {
+            if (isset($episode->credits) && is_array($episode->credits)) {
+                $debugInfo['episodes_with_credits']++;
+                
+                // Cast
+                if (isset($episode->credits['cast']) && is_array($episode->credits['cast'])) {
+                    foreach ($episode->credits['cast'] as $cast) {
+                        if (is_array($cast) && isset($cast['name'])) {
+                            $key = $cast['id'] ?? $cast['name'] . '_' . ($cast['character'] ?? '');
+                            $allCast[$key] = $cast;
+                        }
+                    }
+                }
+                
+                // Crew
+                if (isset($episode->credits['crew']) && is_array($episode->credits['crew'])) {
+                    foreach ($episode->credits['crew'] as $crew) {
+                        if (is_array($crew) && isset($crew['name'])) {
+                            $key = $crew['id'] ?? $crew['name'] . '_' . ($crew['job'] ?? '');
+                            $allCrew[$key] = $crew;
+                        }
+                    }
+                }
+                
+                // Guest Stars
+                if (isset($episode->credits['guest_stars']) && is_array($episode->credits['guest_stars'])) {
+                    $debugInfo['episodes_with_guest_stars']++;
+                    $debugInfo['total_guest_star_entries'] += count($episode->credits['guest_stars']);
+                    
+                    foreach ($episode->credits['guest_stars'] as $guestStar) {
+                        if (is_array($guestStar) && isset($guestStar['name'])) {
+                            $key = $guestStar['id'] ?? $guestStar['name'] . '_' . ($guestStar['character'] ?? '');
+                            $allGuestStars[$key] = $guestStar;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Convert back to arrays
+        $cast = array_values($allCast);
+        $crew = array_values($allCrew);
+        $guestStars = array_values($allGuestStars);
+        
+        // Append profilePathUrl to each credit or fallback to default image
+        $cast = array_map(function ($credit) {
+            $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $cast);
+        
+        $crew = array_map(function ($credit) {
+            $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $crew);
+        
+        $guestStars = array_map(function ($credit) {
+            $credit['profilePathUrl'] = isset($credit['profile_path']) && $credit['profile_path'] 
+                ? env('TMDB_IMAGE_BASE_URL_92') . $credit['profile_path'] 
+                : env('DEFAULT_CREDIT_IMAGE_URL');
+            return $credit;
+        }, $guestStars);
+
+        // Apply the same crew sorting as in the original TvshowService
+        // Order crew list placing "production" department at the top of the list
+        $productionCrew = array_filter($crew, function ($credit) {
+            return isset($credit['department']) && strtolower($credit['department']) === 'production';
+        });
+        
+        $otherCrew = array_filter($crew, function ($credit) {
+            return !isset($credit['department']) || strtolower($credit['department']) !== 'production';
+        });
+        
+        $crew = array_merge($productionCrew, $otherCrew);
+
+        return response()->json([
+            'cast' => array_values($cast), // Re-index arrays to ensure proper JSON encoding
+            'crew' => array_values($crew),
+            'guestStars' => array_values($guestStars),
+            'debug' => $debugInfo, // Temporary debug info
         ]);
     }
 
