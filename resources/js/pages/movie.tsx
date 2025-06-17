@@ -4,6 +4,7 @@ import { Head } from "@inertiajs/react";
 import { Clapperboard, HeartIcon, MessageSquareText, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
+import { PaginatedRibbon } from "@/components/ui/paginated-ribbon";
 import { CreditPoster } from "@/components/ui/credit-poster";
 import { useEffect, useState } from "react";
 import { MovieCard } from "@/components/ui/movie-card";
@@ -256,26 +257,27 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                           {/* cast ribbon */}
                           {movie.credits?.cast && movie.credits.cast.length > 0 && (
                             <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                              <Ribbon 
-                                align="start" 
+                              <PaginatedRibbon
+                                align="start"
                                 dragFree={true}
+                                itemsPerPage={20}
+                                paginationThreshold={20}
                               >
                                 {movie.credits.cast.map((cast: any, index: number) => {
-                                  // Prioritize the first 8 cast members for better initial load
-                                  const isPriority = index < 8;
+                                  // Prioritize visible cast members for better performance
+                                  const isPriority = true;
                                   
                                   return (
-                                    <RibbonItem key={`cast-${cast.id}-${index}`}>
-                                      <CreditPoster 
-                                        imageUrl={cast.profilePathUrl} 
-                                        name={cast.name}
-                                        characterName={cast.character} 
-                                        priority={isPriority}
-                                      />
-                                    </RibbonItem>
+                                    <CreditPoster 
+                                      key={`cast-${cast.id}-${index}`}
+                                      imageUrl={cast.profilePathUrl} 
+                                      name={cast.name}
+                                      characterName={cast.character} 
+                                      priority={isPriority}
+                                    />
                                   );
                                 })}
-                              </Ribbon>
+                              </PaginatedRibbon>
                             </div>
                           )}
                         </TabsContent>
@@ -284,26 +286,27 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                           {/* crew ribbon */}
                           {movie.credits?.crew && movie.credits.crew.length > 0 && (
                             <div className="mt-10 text-base text-neutral-700 dark:text-neutral-300 w-full">
-                              <Ribbon 
-                                align="start" 
+                              <PaginatedRibbon
+                                align="start"
                                 dragFree={true}
+                                itemsPerPage={20}
+                                paginationThreshold={20}
                               >
                                 {movie.credits.crew.map((crew: any, index: number) => {
-                                  // Prioritize the first 8 crew members for better initial load
-                                  const isPriority = index < 8;
+                                  // Prioritize visible crew members for better performance
+                                  const isPriority = true;
                                   
                                   return (
-                                    <RibbonItem key={`crew-${crew.id}-${index}`}>
-                                      <CreditPoster 
-                                        imageUrl={crew.profilePathUrl} 
-                                        name={crew.name}
-                                        characterName={crew.job} 
-                                        priority={isPriority}
-                                      />
-                                    </RibbonItem>
+                                    <CreditPoster 
+                                      key={`crew-${crew.id}-${index}`}
+                                      imageUrl={crew.profilePathUrl} 
+                                      name={crew.name}
+                                      characterName={crew.job} 
+                                      priority={isPriority}
+                                    />
                                   );
                                 })}
-                              </Ribbon>
+                              </PaginatedRibbon>
                             </div>
                           )}
                         </TabsContent>
