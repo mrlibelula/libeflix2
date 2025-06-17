@@ -8,8 +8,8 @@ import { usePage } from '@inertiajs/react';
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const page = usePage();
     
-    // Check if we should show movie search (on movies and movie pages)
-    const shouldShowMovieSearch = page.url.startsWith('/movies') || page.url.startsWith('/movie/');
+    // Check if we should show movie search (on movies, movie pages, popular-top, and watch-later pages)
+    const shouldShowMovieSearch = page.url.startsWith('/movies') || page.url.startsWith('/movie/') || page.url.startsWith('/popular-top') || page.url.startsWith('/watch-later');
     
     // Check if we should show TV show search (on tvshows and tvshow pages)
     const shouldShowTvshowSearch = page.url.startsWith('/tvshows') || page.url.startsWith('/tvshow/');

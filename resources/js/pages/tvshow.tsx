@@ -25,6 +25,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   const [selectedSeason, setSelectedSeason] = useState<any>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const isInitialMount = useRef(true);
+  const hasAutoPlayedEpisode = useRef(false);
+  const [autoPlayEpisodeNumber, setAutoPlayEpisodeNumber] = useState<number | null>(selectedEpisodeNumber);
   const [expandedEpisodes, setExpandedEpisodes] = useState<Record<number, boolean>>({});
   const [expandedTvshowOverview, setExpandedTvshowOverview] = useState(false);
   const [expandedSeasonOverview, setExpandedSeasonOverview] = useState(false);
@@ -165,15 +167,16 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   ];
 
   // Auto-play episode if specified in URL parameters (before early return to ensure hooks order)
+  // This should only happen once when the page initially loads with episode parameters from search
   useEffect(() => {
-    if (!selectedEpisodeNumber || !selectedSeason) return;
+    if (!autoPlayEpisodeNumber || !selectedSeason || hasAutoPlayedEpisode.current) return;
     
     const currentEpisodes = seasonEpisodes[selectedSeason.season_number] || [];
     if (!currentEpisodes.length) return;
     
     // Find the episode that matches the selected episode number
     const targetEpisode = currentEpisodes.find(
-      (episode: any) => episode.episode_number === selectedEpisodeNumber
+      (episode: any) => episode.episode_number === autoPlayEpisodeNumber
     );
     
     if (targetEpisode && targetEpisode.is_in_storage && targetEpisode.encFilePath) {
@@ -181,12 +184,18 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
       setSelectedEpisode(targetEpisode);
       setIsDialogOpen(true);
       
+      // Mark that auto-play has been triggered to prevent it from happening again
+      hasAutoPlayedEpisode.current = true;
+      
+      // Clear the local auto-play episode number so it doesn't trigger again
+      setAutoPlayEpisodeNumber(null);
+      
       // Remove the episode parameter from URL to prevent auto-play on refresh
       const url = new URL(window.location.href);
       url.searchParams.delete('episode');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedEpisodeNumber, selectedSeason, seasonEpisodes]);
+  }, [autoPlayEpisodeNumber, selectedSeason, seasonEpisodes]);
 
   // Make sure we have a selected season before rendering
   if (!selectedSeason) return null;
@@ -330,8 +339,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                                     paginationThreshold={30}
                                   >
                                     {seasonCredits.cast.map((cast: any, index: number) => {
-                                      // Prioritize visible cast members for better performance
-                                      const isPriority = index < 60; // First 60 items get priority loading
+                                      // Only prioritize the first 6-8 cast members for initial viewport
+                                      const isPriority = index < 8;
                                       
                                       return (
                                         <CreditPoster 
@@ -358,8 +367,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                                     paginationThreshold={30}
                                   >
                                     {seasonCredits.guestStars.map((guestStar: any, index: number) => {
-                                      // Prioritize visible guest stars for better performance
-                                      const isPriority = index < 60;
+                                      // Only prioritize the first 6-8 guest stars for initial viewport
+                                      const isPriority = index < 8;
                                       
                                       return (
                                         <CreditPoster 
@@ -412,8 +421,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                                     paginationThreshold={30}
                                   >
                                     {seasonCredits.crew.map((crew: any, index: number) => {
-                                      // Prioritize visible crew members for better performance
-                                      const isPriority = index < 60;
+                                      // Only prioritize the first 6-8 crew members for initial viewport
+                                      const isPriority = index < 8;
                                       
                                       return (
                                         <CreditPoster 
@@ -460,6 +469,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       if (!open) {
                         // Clear the selected episode when dialog closes
                         setSelectedEpisode(null);
+                        // Reset auto-play flag so it can work again if user comes from search later
+                        hasAutoPlayedEpisode.current = false;
                       }
                     }}
                     onError={(err) => console.error(err.message)}

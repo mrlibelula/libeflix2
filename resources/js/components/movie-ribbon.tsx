@@ -397,8 +397,9 @@ export function MovieRibbon({
                 onApiInitialized={setCarouselApi}
               >
               {visibleMovies.map((movie: any, index: number) => {
-                // Prioritize all visible movies for better performance
-                const isPriority = true;
+                // Only prioritize the first 6-8 items (typical viewport on desktop)
+                // This provides good initial load performance while still lazy loading the rest
+                const isPriority = index < 8;
 
                 return (
                   <RibbonItem

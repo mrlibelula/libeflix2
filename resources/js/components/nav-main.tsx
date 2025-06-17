@@ -9,6 +9,9 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
         if (item.title === 'TV Shows') {
             return page.url === item.href || page.url.startsWith('/tvshow');
         }
+        if (item.title === 'Movies') {
+            return page.url === item.href || page.url.startsWith('/movie');
+        }
         return item.href === page.url;
     };
 

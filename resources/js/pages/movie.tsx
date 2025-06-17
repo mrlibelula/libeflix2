@@ -264,8 +264,8 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                 paginationThreshold={20}
                               >
                                 {movie.credits.cast.map((cast: any, index: number) => {
-                                  // Prioritize visible cast members for better performance
-                                  const isPriority = true;
+                                  // Only prioritize the first 6-8 cast members for initial viewport
+                                  const isPriority = index < 8;
                                   
                                   return (
                                     <CreditPoster 
@@ -293,8 +293,8 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                 paginationThreshold={20}
                               >
                                 {movie.credits.crew.map((crew: any, index: number) => {
-                                  // Prioritize visible crew members for better performance
-                                  const isPriority = true;
+                                  // Only prioritize the first 6-8 crew members for initial viewport
+                                  const isPriority = index < 8;
                                   
                                   return (
                                     <CreditPoster 

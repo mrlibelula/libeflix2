@@ -1,6 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
+import { LazyImage } from '@/components/ui/lazy-image';
 
 export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>, searchQuery?: string }) {
   const imgUrl = 'https://image.tmdb.org/t/p/w500/';
@@ -31,11 +32,19 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
         )}
         
         <div className="grid auto-rows-min gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {tvshows.map((tvshow) => (
-            <Link href={`/tvshow/${tvshow.slug}`} className="relative group rounded-xl overflow-hidden shadow-lg shadow-neutral-600 dark:shadow-black transition-all duration-[250ms] touch-manipulation" key={tvshow.id}>
-              <div className="relative cursor-pointer w-full rounded-xl aspect-video overflow-hidden opacity-[93%] dark:opacity-[80%] hover:opacity-100 hover:dark:opacity-100 active:opacity-100 active:dark:opacity-100 focus:opacity-100 focus:dark:opacity-100 transition-all duration-[250ms]">
-                <img loading="lazy" src={tvshow.backdrop_path ? imgUrl + tvshow.backdrop_path : imgUrl + tvshow.poster_path} alt={tvshow.name}
-                  className="absolute w-full h-full object-cover" />
+          {tvshows.map((tvshow, index) => {
+            // Prioritize the first 8-10 TV shows for initial viewport (typical grid on desktop)
+            const isPriority = index < 10;
+            
+            return (
+              <Link href={`/tvshow/${tvshow.slug}`} className="relative group rounded-xl overflow-hidden shadow-lg shadow-neutral-600 dark:shadow-black transition-all duration-[250ms] touch-manipulation" key={tvshow.id}>
+                <div className="relative cursor-pointer w-full rounded-xl aspect-video overflow-hidden opacity-[93%] dark:opacity-[80%] hover:opacity-100 hover:dark:opacity-100 active:opacity-100 active:dark:opacity-100 focus:opacity-100 focus:dark:opacity-100 transition-all duration-[250ms]">
+                  <LazyImage 
+                    src={tvshow.backdrop_path ? imgUrl + tvshow.backdrop_path : imgUrl + tvshow.poster_path} 
+                    alt={tvshow.name}
+                    className="absolute w-full h-full object-cover"
+                    priority={isPriority}
+                  />
                 
                 <div className="dark-gradient absolute inset-0 size-full" />
 
@@ -59,7 +68,8 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
                 </div>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
 
         {tvshows.length === 0 && searchQuery && (

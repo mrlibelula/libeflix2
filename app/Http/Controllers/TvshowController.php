@@ -148,53 +148,12 @@ class TvshowController extends Controller
                 $episode->encFilePath = Tool::encode($episode->is_in_storage);
             }
 
-            // Handle subtitles
-            if (!empty($episode->subtitles)) {
-                // Parse the subtitles JSON string if needed
-                $subtitlesData = is_string($episode->subtitles) 
-                    ? json_decode($episode->subtitles, true)
-                    : $episode->subtitles;
-                
-                $mappedSubtitles = collect($subtitlesData)->map(function ($subtitle) {
-                    // Handle both new and old subtitle formats
-                    $languageCode = null;
-                    $filePath = null;
-                    
-                    // Check which format this subtitle uses
-                    if (isset($subtitle['language_code'])) {
-                        $languageCode = $subtitle['language_code'];
-                    } elseif (isset($subtitle['lang'])) {
-                        $languageCode = $subtitle['lang'];
-                    } else {
-                        $languageCode = 'EN'; // Default
-                    }
-                    
-                    // Check which file path format this subtitle uses
-                    if (isset($subtitle['file_path'])) {
-                        $filePath = $subtitle['file_path'];
-                    } elseif (isset($subtitle['subtFilePath'])) {
-                        $filePath = $subtitle['subtFilePath'];
-                    } else {
-                        return null; // Skip this subtitle if no valid file path
-                    }
-                    
-                    return [
-                        'language_code' => $languageCode,
-                        'language_name' => Tool::getLanguageForSubtitleLabel($languageCode),
-                        'encFilePath' => Tool::encode($filePath),
-                    ];
-                })->filter()->toArray(); // Remove any null values
-                
-                $episode->subtitles = $mappedSubtitles;
-            } else {
+            // Handle subtitles - check if we need to find subtitle files from disk
+            // The Episode model accessor already handles subtitle formatting
+            if (empty($episode->subtitles) && is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
                 // If no subtitles in database but we have a valid episode file, check the disk for subtitle files
-                if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
-                    // Get potential subtitles
-                    $diskSubtitles = $this->findSubtitlesForEpisode($episode->is_in_storage);
-                    $episode->subtitles = $diskSubtitles;
-                } else {
-                    $episode->subtitles = [];
-                }
+                $diskSubtitles = $this->findSubtitlesForEpisode($episode->is_in_storage);
+                $episode->subtitles = $diskSubtitles;
             }
         });
 
@@ -552,13 +511,7 @@ class TvshowController extends Controller
                         ],
                     ]);
 
-                    Log::info('Created TV show search record', [
-                        'search_record_id' => $searchRecord->id,
-                        'user_id' => $user->id,
-                        'query' => $query,
-                        'results_count' => $sortedResults->count(),
-                        'search_type' => 'comprehensive',
-                    ]);
+
                 } catch (\Exception $logError) {
                     Log::warning('Failed to log TV show search query', [
                         'query' => $query,
@@ -727,14 +680,7 @@ class TvshowController extends Controller
             $resultData = $request->input('result_data'); // Full result object
             $searchTimestamp = $request->input('search_timestamp');
 
-            // Log incoming request for debugging
-            Log::info('TV show search click tracking request', [
-                'user_id' => $user->id,
-                'query' => $query,
-                'result_type' => $resultType,
-                'result_data_keys' => $resultData ? array_keys($resultData) : null,
-                'search_timestamp' => $searchTimestamp,
-            ]);
+
 
             // Parse the search timestamp
             $searchTime = \Carbon\Carbon::parse($searchTimestamp);
@@ -804,27 +750,13 @@ class TvshowController extends Controller
                     ->first();
             }
 
-            Log::info('Search query lookup result', [
-                'user_id' => $user->id,
-                'query' => $query,
-                'result_type' => $resultType,
-                'search_query_found' => $searchQuery ? true : false,
-                'search_query_id' => $searchQuery ? $searchQuery->id : null,
-                'search_time' => $searchTime->toISOString(),
-                'time_to_click_ms' => $timeToClickMs,
-            ]);
+
 
             if ($searchQuery) {
                 // Update the existing search record
                 $searchQuery->update($clickData);
 
-                Log::info('Updated existing search record with click data', [
-                    'search_query_id' => $searchQuery->id,
-                    'user_id' => $user->id,
-                    'query' => $query,
-                    'result_type' => $resultType,
-                    'clicked_at' => $clickTimestamp->toISOString(),
-                ]);
+
             } else {
                 // Create new search record if not found (fallback)
                 $newSearchQuery = SearchQueryTvshow::create(array_merge([
@@ -851,13 +783,7 @@ class TvshowController extends Controller
                     ],
                 ], $clickData));
 
-                Log::info('Created new search record with click data (fallback)', [
-                    'search_query_id' => $newSearchQuery->id,
-                    'user_id' => $user->id,
-                    'query' => $query,
-                    'result_type' => $resultType,
-                    'clicked_at' => $clickTimestamp->toISOString(),
-                ]);
+
             }
 
             return response()->json(['success' => true]);
