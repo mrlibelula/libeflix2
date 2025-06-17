@@ -18,7 +18,7 @@ export function TvshowSearchModal() {
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Search TV Shows</DialogTitle>
           <DialogDescription>
-            Search through our TV show collection by title, actor, director, or keywords.
+            Search through our TV show collection by title, episode, actor, director, or keywords.
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-4">
