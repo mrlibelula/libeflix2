@@ -354,8 +354,8 @@ export function MovieRibbon({
                   onClick={() => handleSortToggle(option.field)}
                   className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium cursor-pointer ${
                     isActive
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100'
+                      ? 'bg-blue-100_ _dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200_ _dark:hover:bg-blue-900/50'
+                      : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100'
                   }`}
                   title={`Sort by ${option.label}${isActive ? ` (${direction === 'asc' ? 'ascending' : 'descending'})` : ''}`}
                 >
@@ -426,10 +426,10 @@ export function MovieRibbon({
                   <button
                     onClick={handlePreviousPage}
                     disabled={currentPage === 1}
-                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                    className={`flex items-center justify-center w-8 h-8 md:w-9_ md:h-9_ rounded-md transition-colors duration-200 ${
                       currentPage === 1
-                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                        ? 'bg-zinc-100_ dark:bg-zinc-800_ text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-100_ dark:bg-zinc-800_ text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
                     }`}
                     title="Previous page"
                     aria-label="Previous page"
@@ -444,12 +444,12 @@ export function MovieRibbon({
                         key={index}
                         onClick={() => typeof page === 'number' ? handlePageJump(page) : undefined}
                         disabled={page === '...'}
-                        className={`min-w-[2rem] w-8 h-8 md:min-w-[2.5rem] md:w-9 md:h-9 rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
+                        className={`min-w-[2rem] w-8 h-8 md:min-w-[2.5rem] md:w-9_ md:h-9_ rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
                           page === currentPage
                             ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-default'
                             : page === '...'
                             ? 'bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                            : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-500 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
                         }`}
                         title={typeof page === 'number' ? `Go to page ${page}` : undefined}
                         aria-label={typeof page === 'number' ? `Go to page ${page}` : undefined}
@@ -463,10 +463,10 @@ export function MovieRibbon({
                   <button
                     onClick={handleNextPage}
                     disabled={currentPage === totalPages}
-                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                    className={`flex items-center justify-center w-8 h-8 md:w-9_ md:h-9_ rounded-md transition-colors duration-200 ${
                       currentPage === totalPages
-                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                        ? 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
                     }`}
                     title="Next page"
                     aria-label="Next page"

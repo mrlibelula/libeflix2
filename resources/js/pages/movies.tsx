@@ -33,26 +33,6 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
     };
   }, []);
 
-  const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
-
-    // Update the is_watch_later status in all lists
-    setAllMovies(prevMovies => 
-      prevMovies.map(movie => 
-        movie.id === movieId 
-          ? { ...movie, is_watch_later: newStatus }
-          : movie
-      )
-    );
-
-    setRecentlyAddedMoviesList(prevMovies => 
-      prevMovies.map(movie => 
-        movie.id === movieId 
-          ? { ...movie, is_watch_later: newStatus }
-          : movie
-      )
-    );
-  }, []);
-
   // Restore focus after state changes - only when specifically needed, not on every movie data change
   const restoreFocus = useCallback(() => {
     if (lastFocusedRibbonRef.current) {
@@ -97,6 +77,29 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
       }, 100); // Increased delay
     }
   }, []);
+
+  const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
+
+    // Update the is_watch_later status in all lists
+    setAllMovies(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_watch_later: newStatus }
+          : movie
+      )
+    );
+
+    setRecentlyAddedMoviesList(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_watch_later: newStatus }
+          : movie
+      )
+    );
+
+    // Restore focus to the last focused ribbon after state update
+    restoreFocus();
+  }, [restoreFocus]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
