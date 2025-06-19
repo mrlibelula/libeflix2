@@ -23,6 +23,24 @@ export default function Welcome() {
             ) : (
               <>
                 <Link
+                  href={route('tvshows.index')}
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                >
+                  TV Shows
+                </Link>
+                <Link
+                  href={route('movies.index')}
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                >
+                  Movies
+                </Link>
+                <Link
+                  href={route('subscription.plans.public')}
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                >
+                  Plans
+                </Link>
+                <Link
                   href={route('login')}
                   className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
                 >

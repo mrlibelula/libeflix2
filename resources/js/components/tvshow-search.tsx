@@ -3,8 +3,9 @@ import { Search, X, Tv, Star, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { type SharedData } from '@/types';
 
 interface TvshowSearchResult {
   type: 'tvshow' | 'episode' | 'season';
@@ -48,6 +49,7 @@ interface TvshowSearchProps {
 }
 
 export function TvshowSearch({ onClose }: TvshowSearchProps) {
+  const { auth } = usePage<SharedData>().props;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TvshowSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,7 +99,7 @@ export function TvshowSearch({ onClose }: TvshowSearchProps) {
 
   // Log search after user stops typing (separate from search)
   const logSearch = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 3) return; // Only log meaningful searches
+    if (searchQuery.length < 3 || !auth?.user) return; // Only log meaningful searches for authenticated users
     
     try {
       await axios.post('/api/tvshows/search/log', {
@@ -107,7 +109,7 @@ export function TvshowSearch({ onClose }: TvshowSearchProps) {
     } catch (error) {
       console.error('Failed to log search:', error);
     }
-  }, []);
+  }, [auth?.user]);
 
   // Handle input change with dual debounce (fast search + delayed logging)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -204,6 +206,9 @@ export function TvshowSearch({ onClose }: TvshowSearchProps) {
 
   // Track click on search result
   const trackClick = async (result: TvshowSearchResult) => {
+    // Only track clicks for authenticated users
+    if (!auth?.user) return;
+    
     // Use the timestamp for the current query, fallback to general timestamp
     const relevantTimestamp = resultTimestamps.get(query) || searchTimestamp;
     if (!relevantTimestamp) {

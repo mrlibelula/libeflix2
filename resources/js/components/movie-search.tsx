@@ -3,8 +3,9 @@ import { Search, X, Film, Star, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { type SharedData } from '@/types';
 
 interface MovieSearchResult {
   id: number;
@@ -27,6 +28,7 @@ interface MovieSearchProps {
 }
 
 export function MovieSearch({ onClose }: MovieSearchProps) {
+  const { auth } = usePage<SharedData>().props;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MovieSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,7 +78,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
 
   // Log search after user stops typing (separate from search)
   const logSearch = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 3) return; // Only log meaningful searches
+    if (searchQuery.length < 3 || !auth?.user) return; // Only log meaningful searches for authenticated users
     
     try {
       await axios.post('/api/movies/search/log', {
@@ -86,7 +88,7 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
     } catch (error) {
       console.error('Failed to log search:', error);
     }
-  }, []);
+  }, [auth?.user]);
 
   // Handle input change with dual debounce (fast search + delayed logging)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,6 +184,9 @@ export function MovieSearch({ onClose }: MovieSearchProps) {
 
   // Track click on search result
   const trackClick = async (movie: MovieSearchResult) => {
+    // Only track clicks for authenticated users
+    if (!auth?.user) return;
+    
     // Use the timestamp for the current query, fallback to general timestamp
     const relevantTimestamp = resultTimestamps.get(query) || searchTimestamp;
     if (!relevantTimestamp) return;

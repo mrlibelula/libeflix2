@@ -186,12 +186,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
               {/* Premium Content Overlay */}
               {!canAccessMovie && (
-                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
-                  <div className="text-center text-white p-8 max-w-md">
-                    <div className="mb-6">
-                      <LockIcon className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
-                      <h3 className="text-2xl font-bold mb-2">Premium Content</h3>
-                      <p className="text-gray-300">
+                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10 p-3 sm:p-4">
+                  <div className="text-center text-white p-3 sm:p-4 md:p-6 lg:p-8 max-w-[280px] sm:max-w-sm md:max-w-md lg:max-w-lg w-full">
+                    <div className="mb-3 sm:mb-4 md:mb-6">
+                      <LockIcon className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 mx-auto mb-2 sm:mb-3 md:mb-4 text-yellow-500" />
+                      <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-1 sm:mb-2">Premium Content</h3>
+                      <p className="text-gray-300 text-xs sm:text-sm md:text-base leading-tight sm:leading-normal">
                         {!isAuthenticated 
                           ? "Please register and log in to watch this movie."
                           : "This movie requires a premium subscription to watch."
@@ -199,19 +199,19 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       </p>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-2 md:space-y-3">
                       {!isAuthenticated ? (
                         <>
                           <a 
                             href="/register" 
-                            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
-                            <UserIcon className="w-5 h-5 inline mr-2" />
+                            <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
                             Create Account
                           </a>
                           <a 
                             href="/login" 
-                            className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                            className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
                             Already have an account? Log In
                           </a>
@@ -219,9 +219,9 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       ) : (
                         <a 
                           href="/subscription/plans" 
-                          className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                          className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                         >
-                          <CreditCardIcon className="w-5 h-5 inline mr-2" />
+                          <CreditCardIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
                           Get Premium Access
                         </a>
                       )}
