@@ -28,6 +28,9 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         remember: false,
     });
 
+    // Get redirect parameter from URL
+    const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+
     // Clear browser storage when login page loads to prevent cross-user data leakage
     useEffect(() => {
         try {
@@ -45,7 +48,11 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('login'), {
+        const loginUrl = redirectParam 
+            ? route('login') + '?redirect=' + encodeURIComponent(redirectParam)
+            : route('login');
+        
+        post(loginUrl, {
             onFinish: () => reset('password'),
         });
     };

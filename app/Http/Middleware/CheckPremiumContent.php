@@ -77,8 +77,8 @@ class CheckPremiumContent
                 ], 401);
             }
             
-            // For web requests, redirect to login with intended URL
-            return redirect()->route('login')
+            // For web requests, redirect to login with intended URL properly stored
+            return redirect()->guest(route('login'))
                 ->with('message', 'Please log in to access premium content.');
         }
         

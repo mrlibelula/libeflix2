@@ -107,7 +107,7 @@ export function AppSidebar() {
                     <SidebarMenu>
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild>
-                                <Link href="/login">
+                                <Link href={'/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)}>
                                     <LogIn className="size-4" />
                                     <span>Sign in</span>
                                 </Link>
@@ -115,7 +115,7 @@ export function AppSidebar() {
                         </SidebarMenuItem>
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild>
-                                <Link href="/register">
+                                <Link href={'/register?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)}>
                                     <UserPlus className="size-4" />
                                     <span>Sign up</span>
                                 </Link>

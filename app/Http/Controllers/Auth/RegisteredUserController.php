@@ -46,6 +46,16 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return to_route('dashboard');
+        // Check if there's a redirect parameter in the request
+        $redirectUrl = $request->get('redirect');
+        if ($redirectUrl && filter_var($redirectUrl, FILTER_VALIDATE_URL) === false) {
+            // If it's not a full URL, treat it as a path and validate it starts with /
+            if (str_starts_with($redirectUrl, '/')) {
+                // Store the redirect URL as the intended URL
+                $request->session()->put('url.intended', url($redirectUrl));
+            }
+        }
+
+        return redirect()->intended(route('dashboard'));
     }
 }

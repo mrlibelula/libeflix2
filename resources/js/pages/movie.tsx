@@ -1,6 +1,6 @@
 import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
-import { Head, usePage } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import { Clapperboard, HeartIcon, MessageSquareText, Share2, LockIcon, UserIcon, CreditCardIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
@@ -202,19 +202,19 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     <div className="space-y-2 sm:space-y-2 md:space-y-3">
                       {!isAuthenticated ? (
                         <>
-                          <a 
-                            href="/register" 
+                          <Link 
+                            href={route('register') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
                             className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
                             <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
                             Create Account
-                          </a>
-                          <a 
-                            href="/login" 
+                          </Link>
+                          <Link 
+                            href={route('login') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
                             className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
                             Already have an account? Log In
-                          </a>
+                          </Link>
                         </>
                       ) : (
                         <a 

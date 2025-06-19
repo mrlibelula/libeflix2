@@ -28,4 +28,18 @@ class RegistrationTest extends TestCase
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
     }
+
+    public function test_new_users_redirect_with_query_parameter()
+    {
+        $moviePageUrl = '/movie/some-movie-slug';
+        $response = $this->post('/register?redirect=' . urlencode($moviePageUrl), [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ]);
+
+        $this->assertAuthenticated();
+        $response->assertRedirect($moviePageUrl);
+    }
 }

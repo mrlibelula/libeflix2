@@ -24,9 +24,16 @@ export default function Register() {
         password_confirmation: '',
     });
 
+    // Get redirect parameter from URL
+    const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('register'), {
+        const registerUrl = redirectParam 
+            ? route('register') + '?redirect=' + encodeURIComponent(redirectParam)
+            : route('register');
+        
+        post(registerUrl, {
             onFinish: () => reset('password', 'password_confirmation'),
         });
     };
