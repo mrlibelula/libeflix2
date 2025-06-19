@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { usePage } from '@inertiajs/react';
 
 interface Episode {
   id: number;
@@ -38,6 +39,7 @@ interface Credits {
 interface CacheData {
   episodes: Record<number, Episode[]>;
   credits: Record<number, Credits>;
+  userId?: number; // Add user ID to cache
 }
 
 // Get CSRF token from the page
@@ -47,6 +49,9 @@ function getCSRFToken(): string {
 }
 
 export function useSeasonData(tvshowSlug: string) {
+  const { auth } = usePage().props as any;
+  const currentUserId = auth?.user?.id;
+  
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [creditsLoading, setCreditsLoading] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -54,8 +59,18 @@ export function useSeasonData(tvshowSlug: string) {
   // Use refs for caching to avoid re-renders when cache updates
   const cache = useRef<CacheData>({
     episodes: {},
-    credits: {}
+    credits: {},
+    userId: currentUserId
   });
+
+  // Clear cache if user changed (prevents cross-user data leakage)
+  if (cache.current.userId !== currentUserId) {
+    cache.current = {
+      episodes: {},
+      credits: {},
+      userId: currentUserId
+    };
+  }
 
   const loadSeasonEpisodes = useCallback(async (seasonNumber: number): Promise<Episode[]> => {
     // Return cached data if available
@@ -78,7 +93,6 @@ export function useSeasonData(tvshowSlug: string) {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': getCSRFToken(),
         },
         credentials: 'same-origin'
       });
@@ -124,7 +138,6 @@ export function useSeasonData(tvshowSlug: string) {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': getCSRFToken(),
         },
         credentials: 'same-origin'
       });

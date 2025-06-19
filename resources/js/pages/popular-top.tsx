@@ -1,6 +1,6 @@
 import AppLayout from "@/layouts/app-layout";
-import { BreadcrumbItem } from "@/types";
-import { Head } from "@inertiajs/react";
+import { BreadcrumbItem, SharedData } from "@/types";
+import { Head, usePage } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AlertCircle } from "lucide-react";
@@ -31,10 +31,14 @@ interface PopularTopProps {
 }
 
 export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, error }: PopularTopProps) {
+  const { auth } = usePage<SharedData>().props;
   const [popularMoviesList, setPopularMoviesList] = useState(popularMovies);
   const [topRatedMoviesList, setTopRatedMoviesList] = useState(topRatedMovies);
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Check if user is authenticated
+  const isAuthenticated = !!auth?.user;
 
   // Track which ribbon has focus
   useEffect(() => {
@@ -154,7 +158,7 @@ export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, 
         imgBaseUrl={imgBaseUrl}
         title={`Popular Movies (${popularMoviesList.length})`}
         ribbonId="popular-movies"
-        onWatchLaterToggle={handleWatchLaterToggle}
+        onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
       />
 
       {/* Top Rated Movies Ribbon */}
@@ -163,7 +167,7 @@ export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, 
         imgBaseUrl={imgBaseUrl}
         title={`Top Rated Movies (${topRatedMoviesList.length})`}
         ribbonId="top-rated-movies"
-        onWatchLaterToggle={handleWatchLaterToggle}
+        onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
       />
         
     </AppLayout>

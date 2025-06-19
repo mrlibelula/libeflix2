@@ -1,7 +1,7 @@
 import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
-import { Head } from "@inertiajs/react";
-import { Clapperboard, HeartIcon, MessageSquareText, Share2 } from "lucide-react";
+import { Head, usePage } from "@inertiajs/react";
+import { Clapperboard, HeartIcon, MessageSquareText, Share2, LockIcon, UserIcon, CreditCardIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { PaginatedRibbon } from "@/components/ui/paginated-ribbon";
@@ -38,6 +38,18 @@ interface MovieData {
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {
+  const { props } = usePage<{
+    auth: {
+      user: any;
+      canAccessPremium: boolean;
+      isAdmin: boolean;
+    };
+  }>();
+
+  // Check if user can access this movie
+  const canAccessMovie = movie.is_free || props.auth.canAccessPremium || props.auth.isAdmin;
+  const isAuthenticated = !!props.auth.user;
+
   const breadcrumbs: BreadcrumbItem[] = [ 
     {
       title: `${movie.title}`,
@@ -148,10 +160,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       <div>
         <div className="flex flex-col items-start justify-between">
           <div className="flex flex-col w-full">
-            <div className="bg-black text-white focus:outline-none">
+            <div className="bg-black text-white focus:outline-none relative">
               <video 
                 className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none"  
-                controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()}
+                controls={canAccessMovie ? true : false}
+                controlsList="nodownload" 
+                onContextMenu={(e) => e.preventDefault()}
                 poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
               >
                 <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
@@ -169,6 +183,52 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                 
                 Your browser does not support the video tag.
               </video>
+
+              {/* Premium Content Overlay */}
+              {!canAccessMovie && (
+                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
+                  <div className="text-center text-white p-8 max-w-md">
+                    <div className="mb-6">
+                      <LockIcon className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+                      <h3 className="text-2xl font-bold mb-2">Premium Content</h3>
+                      <p className="text-gray-300">
+                        {!isAuthenticated 
+                          ? "Please register and log in to watch this movie."
+                          : "This movie requires a premium subscription to watch."
+                        }
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {!isAuthenticated ? (
+                        <>
+                          <a 
+                            href="/register" 
+                            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                          >
+                            <UserIcon className="w-5 h-5 inline mr-2" />
+                            Create Account
+                          </a>
+                          <a 
+                            href="/login" 
+                            className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                          >
+                            Already have an account? Log In
+                          </a>
+                        </>
+                      ) : (
+                        <a 
+                          href="/subscription/plans" 
+                          className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                        >
+                          <CreditCardIcon className="w-5 h-5 inline mr-2" />
+                          Get Premium Access
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-3 md:p-5 lg:p-7 w-full">
               <div className="flex items-start justify-between gap-7 w-full">

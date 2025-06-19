@@ -13,6 +13,66 @@ use App\Services\Tool;
 class MovieService
 {
     /**
+     * Update the free movies in the database
+     *
+     * @param array $freeMovieIds
+     * @return bool
+     */
+    public static function updateFreeMoviesInDB(array $freeMovieIds = [
+        284470, // Atari: Game Over
+        293310, // Citizenfour
+        24972,  // Classic Albums: Pink Floyd - The Making of The Dark Side of the Moon
+        653734, // Coded Bias
+        702738, // Cryptopia: Bitcoin, Blockchains & the Future of the Internet
+        321769, // Deep Web
+        80215,  // Indie Game: The Movie
+        250658, // The Internet's Own Boy: The Story of Aaron Swartz
+        50275,  // TPB AFK: The Pirate Bay - Away from Keyboard
+        97690,  // We Are Legion: The Story of the Hacktivists
+        13016,  // Zeitgeist
+        13180,  // Zeitgeist: Addendum
+        54293   // Zeitgeist: Moving Forward
+    ]): bool
+    {
+        // run only in console
+        if (!app()->runningInConsole()) {
+            throw new Exception('This script can only be run from the command line');
+        }
+
+        echo "Updating free movies in the database..." . PHP_EOL;
+
+        try {
+            $freeMovies = Movie::whereIn('id', $freeMovieIds)->get();
+            $updatedMovies = 0;
+            foreach ($freeMovies as $movie) {
+                $movie->is_free = true;
+                if ($movie->save()) {
+                    $updatedMovies++;
+                }
+            }
+            echo "Updated " . $updatedMovies . " free movies in the database" . PHP_EOL;
+            $freeMovies->each(function ($movie) {
+                echo "  - " . $movie->title . " (" . $movie->release_date . ")" . PHP_EOL;
+            });
+            return true;
+        } catch (\Throwable $th) {
+            echo "Error updating free movies in the database: " . $th->getMessage() . PHP_EOL;
+            return false;
+        }
+
+    }
+
+    /**
+     * Get the free movies from the database
+     *
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public static function getFreeMovies(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Movie::where('is_free', true)->get();
+    }
+
+    /**
      * Get the recommendations of a movie
      *
      * @param Movie $movie
@@ -150,11 +210,15 @@ class MovieService
      * Check if a movie is in the User's watch later list.
      *
      * @param Movie $movie
-     * @param User $user
+     * @param User|null $user
      * @return bool
      */
-    public static function isWatchLater(Movie $movie, User $user): bool
+    public static function isWatchLater(Movie $movie, ?User $user): bool
     {
+        if (!$user) {
+            return false;
+        }
+        
         return $user->watchLaterMovies()->where('movies.id', $movie->id)->exists();
     }
 
@@ -394,6 +458,9 @@ class MovieService
                 'Execution time' => round($executionTime / 60, 2) . " minutes",
             ],
         ], JSON_PRETTY_PRINT));
+
+        // update free movies in the database
+        self::updateFreeMoviesInDB();
 
         echo PHP_EOL;
         echo '---------------------------------------------' . PHP_EOL;

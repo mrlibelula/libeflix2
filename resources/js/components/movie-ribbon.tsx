@@ -202,6 +202,9 @@ export function MovieRibbon({
       const defaultDirection = sortOptions.find(opt => opt.field === field)?.direction || 'asc';
       setCurrentSort({ field, direction: defaultDirection });
     }
+    
+    // Restore focus to ribbon after sorting
+    restoreFocusToRibbon();
   };
 
   const handlePreviousPage = () => {

@@ -1,14 +1,18 @@
 import AppLayout from "@/layouts/app-layout";
-import { BreadcrumbItem } from "@/types";
-import { Head } from "@inertiajs/react";
+import { BreadcrumbItem, SharedData } from "@/types";
+import { Head, usePage } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, searchQuery }: { movies: Array<any>, imgBaseUrl: string, recentlyAddedMovies: Array<any>, searchQuery?: string }) {
+  const { auth } = usePage<SharedData>().props;
   const [allMovies, setAllMovies] = useState(movies);
   const [recentlyAddedMoviesList, setRecentlyAddedMoviesList] = useState(recentlyAddedMovies);
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Check if user is authenticated
+  const isAuthenticated = !!auth?.user;
 
   // Track which ribbon has focus
   useEffect(() => {
@@ -124,7 +128,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           movies={allMovies}
           imgBaseUrl={imgBaseUrl}
           ribbonId="now-streaming"
-          onWatchLaterToggle={handleWatchLaterToggle}
+          onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
         />
 
         <MovieRibbon
@@ -132,7 +136,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           imgBaseUrl={imgBaseUrl}
           title={`Recently Added (${recentlyAddedMoviesList.length})`}
           ribbonId="recently-added"
-          onWatchLaterToggle={handleWatchLaterToggle}
+          onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
         />
         
     </AppLayout>

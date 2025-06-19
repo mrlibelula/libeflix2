@@ -697,6 +697,11 @@ class MovieController extends Controller
     // Popular searches in last 30 days
     public function getPopularSearchTerms()
     {
+        // Check if user has permission to view analytics
+        if (!Auth::user()->hasPermissionTo('view analytics')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $terms = SearchQuery::getPopularSearchTerms(10, 30);
         return response()->json($terms);
     }
@@ -704,6 +709,11 @@ class MovieController extends Controller
     // Searches with no results (need to improve)
     public function getNoResultSearches()
     {
+        // Check if user has permission to view analytics
+        if (!Auth::user()->hasPermissionTo('view analytics')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $searches = SearchQuery::getNoResultSearches(20, 30);
         return response()->json($searches);
     }
@@ -711,6 +721,11 @@ class MovieController extends Controller
     // Complete analytics summary
     public function getAnalyticsSummary()
     {
+        // Check if user has permission to view analytics
+        if (!Auth::user()->hasPermissionTo('view analytics')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $summary = SearchQuery::getAnalyticsSummary(30);
         return response()->json($summary);
     }

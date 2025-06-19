@@ -9,9 +9,11 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon } from 'lucide-react';
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
+import { InlinePremiumNotice } from "@/components/premium-content-notice";
+import { usePage } from "@inertiajs/react";
 
 type PlayEpisodeDialogProps = {
   episode: any;
@@ -50,6 +52,17 @@ export function PlayEpisodeDialog({
   onFirstEpisodeOfSeason = () => {},
   onFirstEpisodeOfTVShow = () => {}
 }: PlayEpisodeDialogProps) {
+  const { props } = usePage<{
+    auth: {
+      user: any;
+      canAccessPremium: boolean;
+      isAdmin: boolean;
+    };
+  }>();
+
+  // Check if user can access this episode
+  const canAccessEpisode = episode?.is_free || props.auth.canAccessPremium || props.auth.isAdmin;
+  const isAuthenticated = !!props.auth.user;
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -80,6 +93,8 @@ export function PlayEpisodeDialog({
   const [repeatTvshow, setRepeatTvshow] = useState(false);
   const [showLoopNotification, setShowLoopNotification] = useState(false);
   const [showNextEpisodeNotification, setShowNextEpisodeNotification] = useState(false);
+  const [showPremiumNotice, setShowPremiumNotice] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -112,6 +127,16 @@ export function PlayEpisodeDialog({
     setRepeatSeason(initialRepeatMode === 'season');
     setRepeatTvshow(initialRepeatMode === 'tvshow');
   }, [initialRepeatMode]);
+
+  // Handle loading state when access changes
+  useEffect(() => {
+    if (!canAccessEpisode) {
+      setIsLoading(false); // Don't show loading for restricted content
+      setError(null); // Clear any previous errors
+    } else {
+      setIsLoading(true); // Reset loading state when access is granted
+    }
+  }, [canAccessEpisode]);
 
   // Initialize subtitle tracks when episode changes
   useEffect(() => {
@@ -375,6 +400,42 @@ export function PlayEpisodeDialog({
   const handleError = (err: Error) => {
     setError(err);
     onError?.(err);
+  };
+
+  // Check if content requires authentication/subscription
+  const checkContentAccess = async () => {
+    if (!episode.encFilePath) return false;
+    
+    const videoUrl = route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' });
+    
+    try {
+      // Use HEAD request with anti-cache headers to ensure fresh validation
+      const response = await fetch(videoUrl, { 
+        method: 'HEAD',
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (response.status === 401) {
+        setAuthError('Authentication required');
+        setShowPremiumNotice(true);
+        return false;
+      } else if (response.status === 403) {
+        setAuthError('Subscription required');
+        setShowPremiumNotice(true);
+        return false;
+      }
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Error checking content access:', error);
+      setAuthError('Unable to verify access permissions');
+      setShowPremiumNotice(true);
+      return false; // Fail closed for security
+    }
   };
 
   const togglePlay = () => {
@@ -1155,7 +1216,24 @@ export function PlayEpisodeDialog({
   // Add an initialization effect when the dialog first opens
   useEffect(() => {
     // This useEffect runs when the dialog opens
-  }, [dialogOpen, episode?.name]);
+    if (dialogOpen && episode?.encFilePath) {
+      setShowPremiumNotice(false);
+      setAuthError(null);
+      
+      // SECURITY: Clear any cached video content
+      if (videoRef.current) {
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
+      
+      // Check content access before attempting to load video
+      checkContentAccess().then((hasAccess) => {
+        if (!hasAccess) {
+          setIsLoading(false);
+        }
+      });
+    }
+  }, [dialogOpen, episode?.name, episode?.encFilePath]);
 
   // Replace the handleVideoEnd function to maintain PiP when episode ends
   const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -1614,32 +1692,48 @@ export function PlayEpisodeDialog({
               <>
                 {/* Video element */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
-                  {episode.encFilePath && dialogOpen ? (
+                  {showPremiumNotice ? (
+                    <InlinePremiumNotice 
+                      type="episode"
+                      onSignIn={() => {
+                        onOpenChange?.(false);
+                        window.location.href = '/login';
+                      }}
+                      onUpgrade={() => {
+                        onOpenChange?.(false);
+                        window.location.href = '/subscription/plans';
+                      }}
+                    />
+                  ) : episode.encFilePath && dialogOpen ? (
                     <>
                       <video 
                         ref={videoRef}
                         key={episode.encFilePath}
-                        src={`${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}`}
+                        src={canAccessEpisode ? `${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}` : undefined}
                         className="w-full h-full object-cover"
                         style={isFullscreen ? { objectFit: 'contain' } : {}}
                         controls={false}
-                        autoPlay={isPlaying}
+                        autoPlay={canAccessEpisode ? isPlaying : false}
                         muted={isMuted}
                         playsInline
-                        preload="metadata"
-                        onLoadedData={() => setIsLoading(false)}
+                        preload={canAccessEpisode ? "metadata" : "none"}
+                        onLoadedData={() => {
+                          if (canAccessEpisode) {
+                            setIsLoading(false);
+                          }
+                        }}
                         onLoadedMetadata={(e) => {
-                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          if (canAccessEpisode && e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                             setDuration(e.currentTarget.duration);
                           }
                         }}
                         onDurationChange={(e) => {
-                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          if (canAccessEpisode && e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                             setDuration(e.currentTarget.duration);
                           }
                         }}
                         onTimeUpdate={(e) => {
-                          if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
+                          if (canAccessEpisode && e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                             const progressValue = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
                             setProgress(progressValue);
                             setCurrentTime(e.currentTarget.currentTime);
@@ -1653,11 +1747,18 @@ export function PlayEpisodeDialog({
                           }
                         }}
                         onEnded={(e) => {
-                          handleVideoEnd(e);
+                          if (canAccessEpisode) {
+                            handleVideoEnd(e);
+                          }
                         }}
-                        onError={(e) => handleError(new Error('Video playback error'))}
+                        onError={(e) => {
+                          if (canAccessEpisode) {
+                            handleError(new Error('Video playback error'));
+                          }
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!canAccessEpisode) return; // Prevent interaction if no access
                           if (!controlsVisible) {
                             handleUserActivity();
                           } else {
@@ -1682,6 +1783,52 @@ export function PlayEpisodeDialog({
                           );
                         })}
                       </video>
+
+                      {/* Premium Content Overlay */}
+                      {!canAccessEpisode && (
+                        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+                          <div className="text-center text-white p-8 max-w-md">
+                            <div className="mb-6">
+                              <LockIcon className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+                              <h3 className="text-2xl font-bold mb-2">Premium Content</h3>
+                              <p className="text-gray-300">
+                                {!isAuthenticated 
+                                  ? "Please register and log in to watch this episode."
+                                  : "This episode requires a premium subscription to watch."
+                                }
+                              </p>
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {!isAuthenticated ? (
+                                <>
+                                  <a 
+                                    href="/register" 
+                                    className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                                  >
+                                    <UserIcon className="w-5 h-5 inline mr-2" />
+                                    Create Account
+                                  </a>
+                                  <a 
+                                    href="/login" 
+                                    className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                                  >
+                                    Already have an account? Log In
+                                  </a>
+                                </>
+                              ) : (
+                                <a 
+                                  href="/subscription/plans" 
+                                  className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                                >
+                                  <CreditCardIcon className="w-5 h-5 inline mr-2" />
+                                  Get Premium Access
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Loop notification */}
                       {showLoopNotification && (
@@ -1726,7 +1873,7 @@ export function PlayEpisodeDialog({
                 <div 
                   ref={controlsRef}
                   className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
-                    controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    (controlsVisible && canAccessEpisode) ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onMouseEnter={() => {
                     // Always show controls when hovering over them

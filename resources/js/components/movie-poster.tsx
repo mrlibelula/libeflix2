@@ -168,8 +168,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           </div>
           <div className="flex items-center gap-x-4">
             <div className="flex items-center gap-x-2">
-              {/* Watch Later button - Only show for local movies */}
-              {isLocalMovie && (
+              {/* Watch Later button - Only show for local movies and authenticated users */}
+              {isLocalMovie && onWatchLaterToggle && (
                 <button
                   onClick={handleToggleWatchLater}
                   disabled={isToggling || !isReady}

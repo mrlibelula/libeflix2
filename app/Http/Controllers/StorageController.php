@@ -60,9 +60,30 @@ class StorageController extends Controller
             abort(404, 'Video file not found');
         }
 
-        return response()->file($filePath, [
+        // Additional security: Log the access attempt
+        \Illuminate\Support\Facades\Log::info('Video file accessed', [
+            'user_id' => \Illuminate\Support\Facades\Auth::id(),
+            'user_email' => \Illuminate\Support\Facades\Auth::user()?->email,
+            'encFilePath' => $encFilePath,
+            'decodedPath' => $filePath,
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent()
+        ]);
+
+        $response = response()->file($filePath, [
             'Content-Type' => 'video/mp4',
         ]);
+
+        // Add anti-cache headers to prevent browser caching of video content
+        // This prevents users from accessing cached videos from previous sessions
+        $response->headers->add([
+            'Cache-Control' => 'no-cache, no-store, must-revalidate, private, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => 'Thu, 01 Jan 1970 00:00:00 GMT',
+            'X-Accel-Expires' => '0', // For nginx
+        ]);
+
+        return $response;
     }
 
     /**

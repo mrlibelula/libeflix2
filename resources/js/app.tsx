@@ -4,6 +4,7 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
+import { useState, useEffect } from 'react';
 
 
 // Extend Window interface to include _scrollPositions
@@ -28,6 +29,55 @@ const ScrollRestoration = () => {
   });
 
   return null;
+};
+
+// Clear browser storage function
+const clearBrowserStorage = () => {
+  try {
+    // Clear localStorage
+    localStorage.clear();
+    
+    // Clear sessionStorage
+    sessionStorage.clear();
+    
+    // Clear any episode or content caches
+    const cacheKeys = Object.keys(localStorage);
+    cacheKeys.forEach(key => {
+      if (key.includes('episode') || key.includes('content') || key.includes('cache')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    console.log('Browser storage cleared successfully');
+  } catch (error) {
+    console.warn('Could not clear browser storage:', error);
+  }
+};
+
+// Storage clear hook
+const useClearStorageOnLogout = () => {
+  const [previousUserId, setPreviousUserId] = useState<number | null>(null);
+  
+  useEffect(() => {
+    // Get current user from window object if available
+    const getCurrentUserId = () => {
+      try {
+        const pageProps = (window as any)?.InertiaApp?.props?.auth?.user?.id;
+        return pageProps || null;
+      } catch {
+        return null;
+      }
+    };
+    
+    const currentUserId = getCurrentUserId();
+    
+    // If user changed (logged out or different user logged in)
+    if (previousUserId !== null && currentUserId !== previousUserId) {
+      clearBrowserStorage();
+    }
+    
+    setPreviousUserId(currentUserId);
+  }, [previousUserId]);
 };
 
 createInertiaApp({

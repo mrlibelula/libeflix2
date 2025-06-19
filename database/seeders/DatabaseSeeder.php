@@ -23,5 +23,11 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->command->info('1 user seeded successfully');
+
+        // Seed subscription plans
+        $this->call(SubscriptionPlanSeeder::class);
+
+        // Seed roles and permissions (this will assign admin role to user ID 1)
+        $this->call(RolesAndPermissionsSeeder::class);
     }
 }

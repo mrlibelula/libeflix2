@@ -1,6 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useEffect } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -27,6 +27,21 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         password: '',
         remember: false,
     });
+
+    // Clear browser storage when login page loads to prevent cross-user data leakage
+    useEffect(() => {
+        try {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            console.log('Browser storage cleared on login page load');
+        } catch (error) {
+            console.warn('Could not clear browser storage:', error);
+        }
+    }, []);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
