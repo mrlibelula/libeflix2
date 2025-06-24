@@ -35,7 +35,7 @@ const colorStyles: Record<ColorVariant, string> = {
   rose: 'border-rose-500 dark:border-rose-900 text-rose-500 dark:text-rose-400 hover:bg-rose-500 dark:hover:bg-rose-900 hover:text-white dark:hover:text-white',
   orange: 'border-orange-500 dark:border-orange-900 text-orange-500 dark:text-orange-400 hover:bg-orange-500 dark:hover:bg-orange-900 hover:text-white dark:hover:text-white',
   sky: 'border-sky-500 dark:border-sky-900 text-sky-500 dark:text-sky-400 hover:bg-sky-500 dark:hover:bg-sky-900 hover:text-white dark:hover:text-white',
-  blue: 'border-blue-500 dark:border-blue-900 text-blue-500 dark:text-blue-400 hover:bg-blue-500 dark:hover:bg-blue-900 hover:text-white dark:hover:text-white',
+  blue: 'border-rose-500 dark:border-rose-900 text-rose-500 dark:text-rose-400 hover:bg-rose-500 dark:hover:bg-rose-900 hover:text-white dark:hover:text-white',
   indigo: 'border-indigo-500 dark:border-indigo-900 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500 dark:hover:bg-indigo-900 hover:text-white dark:hover:text-white',
   white: 'border-white dark:border-white text-white dark:text-white hover:bg-white hover:text-black dark:hover:text-black',
   black: 'border-black dark:border-black text-black dark:text-black hover:bg-black hover:text-white dark:hover:text-white',

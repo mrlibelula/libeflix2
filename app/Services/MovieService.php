@@ -9,30 +9,99 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Services\Tool;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Eloquent\Collection;
 
 class MovieService
 {
     /**
-     * Update the free movies in the database
+     * Import google_drive_file_id values from remote db to local db
+     * Run only in console
      *
-     * @param array $freeMovieIds
      * @return bool
      */
-    public static function updateFreeMoviesInDB(array $freeMovieIds = [
-        284470, // Atari: Game Over
-        293310, // Citizenfour
-        24972,  // Classic Albums: Pink Floyd - The Making of The Dark Side of the Moon
-        653734, // Coded Bias
-        702738, // Cryptopia: Bitcoin, Blockchains & the Future of the Internet
-        321769, // Deep Web
-        80215,  // Indie Game: The Movie
-        250658, // The Internet's Own Boy: The Story of Aaron Swartz
-        50275,  // TPB AFK: The Pirate Bay - Away from Keyboard
-        97690,  // We Are Legion: The Story of the Hacktivists
-        13016,  // Zeitgeist
-        13180,  // Zeitgeist: Addendum
-        54293   // Zeitgeist: Moving Forward
-    ]): bool
+    public static function importGoogleDriveIdsFromRemoteDB(): bool
+    {
+        // run only in console
+        if (!app()->runningInConsole()) {
+            throw new Exception('This script can only be run from the command line');
+        }
+
+        echo "Importing google_drive_file_id values from remote db..." . PHP_EOL;
+
+        $successMovies = [];
+        $errorMovies = [];
+
+        // get google_drive_file_id values from remote db (192.168.1.202 \\servero)
+        $remoteMovies = DB::connection('mysql_remote')->table('movies')
+            ->select('id', 'google_drive_file_id')
+            ->whereNotNull('google_drive_file_id')
+            ->get();
+
+        // import google_drive_file_id values to local db
+        $remoteMovies->each(function ($movie) use (&$successMovies, &$errorMovies) {
+            try {
+                Movie::where('id', $movie->id)->update(['google_drive_file_id' => $movie->google_drive_file_id]);
+                $successMovies[] = $movie->id;
+            } catch (\Throwable $th) {
+                echo "Error updating movie " . $movie->id . " in local db: " . $th->getMessage() . PHP_EOL;
+                $errorMovies[] = $movie->id;
+            }
+        });
+
+        // verify (via db) that all movies have been updated
+        $localMovies = Movie::select('id', 'google_drive_file_id')
+            ->whereNotNull('google_drive_file_id')
+            ->get()
+            ->toArray();
+        
+        if (count($localMovies) !== count($remoteMovies)) {
+            echo "Error: Not all movies have been updated" . PHP_EOL;
+            return false;
+        } else {
+            echo "Successfully updated " . count($successMovies) . " movies out of " . count($remoteMovies) . " in local db" . PHP_EOL;
+        }
+
+        return count($errorMovies) === 0;
+    }
+
+    /**
+     * Get the movies from the database that have a google_drive_file_id
+     * If $columns is a string '*', grab all columns from the movies table
+     * Google Drive movies will only load if the app is in production
+     *
+     * @param array|string $columns
+     * @param string $orderBy
+     * @return Collection
+     */
+    public static function getGoogleDriveMovies(array|string $columns = ['id', 'title', 'path', 'google_drive_file_id'], string $orderBy = 'id'): Collection
+    {
+        $gdriveMovies = collect([]);
+        $isProduction = App::environment('production');
+
+        if ($isProduction) {
+            // if columns is a string '*', grab all columns
+            if (is_string($columns) && $columns === '*') {
+                $columns = Schema::getColumnListing((new Movie)->getTable());
+            }
+
+            $gdriveMovies = Movie::select($columns)
+                ->whereNotNull('google_drive_file_id')
+                ->orderBy($orderBy) 
+                ->get();
+        }
+
+        return $gdriveMovies;
+    }
+
+    /**
+     * Update the free movies in the database (from remote db)
+     *
+     * @return bool
+     */
+    public static function updateFreeMoviesInDB(): bool
     {
         // run only in console
         if (!app()->runningInConsole()) {
@@ -41,35 +110,64 @@ class MovieService
 
         echo "Updating free movies in the database..." . PHP_EOL;
 
+        $freeMovieIds = [];
+
+        // obtain free movies from remote db
         try {
-            $freeMovies = Movie::whereIn('id', $freeMovieIds)->get();
-            $updatedMovies = 0;
-            foreach ($freeMovies as $movie) {
-                $movie->is_free = true;
-                if ($movie->save()) {
-                    $updatedMovies++;
-                }
-            }
-            echo "Updated " . $updatedMovies . " free movies in the database" . PHP_EOL;
-            $freeMovies->each(function ($movie) {
-                echo "  - " . $movie->title . " (" . $movie->release_date . ")" . PHP_EOL;
-            });
-            return true;
+            $freeMovieIds = DB::connection('mysql_remote')->table('movies')
+                ->select('id')
+                ->where('is_free', true)
+                ->get()
+                ->toArray();
         } catch (\Throwable $th) {
-            echo "Error updating free movies in the database: " . $th->getMessage() . PHP_EOL;
+            echo "Error obtaining free movies from remote db: " . $th->getMessage() . PHP_EOL;
             return false;
         }
 
+        // update free movies in local db
+        if (count($freeMovieIds)) {
+            try {
+                $freeMovies = Movie::whereIn('id', $freeMovieIds)->get();
+                $updatedMovies = 0;
+                foreach ($freeMovies as $movie) {
+                    $movie->is_free = true;
+                    if ($movie->save()) {
+                        $updatedMovies++;
+                    }
+                }
+                echo "Updated " . $updatedMovies . " free movies in the database" . PHP_EOL;
+                $freeMovies->each(function ($movie) {
+                    echo "  - " . $movie->title . " (" . $movie->release_date . ")" . PHP_EOL;
+                });
+                return true;
+            } catch (\Throwable $th) {
+                echo "Error updating free movies in the database: " . $th->getMessage() . PHP_EOL;
+                return false;
+            }
+        } else {
+            echo "No free movies found in remote db" . PHP_EOL;
+            return false;
+        }
     }
 
     /**
-     * Get the free movies from the database
+     * Obtain free movies from local database
      *
+     * @param array|string $columns
+     * @param string $orderBy
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    public static function getFreeMovies(): \Illuminate\Database\Eloquent\Collection
+    public static function getFreeMovies(array|string $columns = ['id', 'title'], string $orderBy = 'id'): \Illuminate\Database\Eloquent\Collection
     {
-        return Movie::where('is_free', true)->get();
+        // if columns is a string '*', grab all columns
+        if (is_string($columns) && $columns === '*') {
+            $columns = Schema::getColumnListing((new Movie)->getTable());
+        }
+
+        return Movie::select($columns)
+            ->where('is_free', true)
+            ->orderBy($orderBy)
+            ->get();
     }
 
     /**

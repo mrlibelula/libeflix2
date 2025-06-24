@@ -178,7 +178,7 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
                         key={trailer.id}
                         className={`p-2 lg:p-3 rounded-lg cursor-pointer transition-all duration-200 ${
                           selectedTrailer?.id === trailer.id
-                            ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-300 dark:border-blue-600'
+                            ? 'bg-rose-100 dark:bg-rose-900/30 border-2 border-rose-300 dark:border-rose-600'
                             : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                         }`}
                         onClick={() => handleTrailerSelect(trailer)}

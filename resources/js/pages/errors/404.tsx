@@ -24,7 +24,7 @@ export default function NotFound({ status }: ErrorProps) {
                     <p className="mb-8 text-gray-600 dark:text-gray-400">
                         The TV show you're looking for doesn't exist or has been removed.
                     </p>
-                    <Link href="/dashboard" className="px-6 py-2 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <Link href="/dashboard" className="px-6 py-2 text-sm font-semibold rounded-md bg-rose-600 text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
                         Back to Dashboard
                     </Link>
                 </div>

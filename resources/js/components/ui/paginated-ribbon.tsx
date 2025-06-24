@@ -151,7 +151,7 @@ export function PaginatedRibbon({
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors duration-200 ${
               currentPage === 1
                 ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
-                : 'text-zinc-600 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer'
+                : 'text-zinc-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer'
             }`}
             title="Previous page"
             aria-label="Previous page"
@@ -168,10 +168,10 @@ export function PaginatedRibbon({
                 disabled={page === '...'}
                 className={`min-w-[1.5rem] h-6 text-xs font-medium transition-colors duration-200 ${
                   page === currentPage
-                    ? 'text-blue-600 dark:text-blue-400 font-bold cursor-default'
+                    ? 'text-rose-600 dark:text-rose-400 font-bold cursor-default'
                     : page === '...'
                     ? 'text-zinc-500 dark:text-zinc-400 cursor-default'
-                    : 'text-zinc-600 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer'
+                    : 'text-zinc-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer'
                 }`}
                 title={typeof page === 'number' ? `Go to page ${page}` : undefined}
                 aria-label={typeof page === 'number' ? `Go to page ${page}` : undefined}
@@ -188,7 +188,7 @@ export function PaginatedRibbon({
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors duration-200 ${
               currentPage === totalPages
                 ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
-                : 'text-zinc-600 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer'
+                : 'text-zinc-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer'
             }`}
             title="Next page"
             aria-label="Next page"

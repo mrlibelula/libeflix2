@@ -62,11 +62,11 @@ class CheckPremiumContent
         
         // CRITICAL: Always check authentication for premium content
         if (!\Illuminate\Support\Facades\Auth::check()) {
-            \Illuminate\Support\Facades\Log::info('Premium content access denied: User not authenticated', [
-                'ip' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'url' => $request->url()
-            ]);
+            // \Illuminate\Support\Facades\Log::info('Premium content access denied: User not authenticated', [
+            //     'ip' => $request->ip(),
+            //     'user_agent' => $request->userAgent(),
+            //     'url' => $request->url()
+            // ]);
             
             // For API requests, return JSON error
             if ($request->expectsJson() || $request->is('api/*')) {
@@ -98,12 +98,12 @@ class CheckPremiumContent
         
         // CRITICAL: Re-check premium access permissions for current user
         if (!$user->canAccessPremiumContent()) {
-            \Illuminate\Support\Facades\Log::warning('Premium content access denied: Insufficient subscription', [
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-                'ip' => $request->ip(),
-                'url' => $request->url()
-            ]);
+            // \Illuminate\Support\Facades\Log::warning('Premium content access denied: Insufficient subscription', [
+            //     'user_id' => $user->id,
+            //     'user_email' => $user->email,
+            //     'ip' => $request->ip(),
+            //     'url' => $request->url()
+            // ]);
             
             // For API requests, return JSON error
             if ($request->expectsJson() || $request->is('api/*')) {

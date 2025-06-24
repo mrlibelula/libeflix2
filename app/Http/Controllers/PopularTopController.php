@@ -111,7 +111,8 @@ class PopularTopController extends Controller
             ];
 
             // If movie exists locally, add additional data
-            if ($localMovie) {
+            // In production, only consider movies with Google Drive IDs as locally available
+            if ($localMovie && (!app()->environment('production') || !empty($localMovie->google_drive_file_id))) {
                 $subtitles = json_decode($localMovie->subtitles, true) ?: [];
                 
                 $baseData['is_local'] = true;

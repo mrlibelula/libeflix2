@@ -2,30 +2,56 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Inertia\Inertia;
 use App\Models\Movie;
 use App\Models\SearchQuery;
 use App\Services\MovieService;
-use Illuminate\Support\Facades\Auth;
 use App\Services\Tool;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Inertia\Inertia;
 
 class MovieController extends Controller
 {
     /**
      * Display a listing of the movies.
      *
+     * @param Request $request
+     * @param array|string $columns
+     * @param bool $showOnlyFreeMovies
      * @return \Inertia\Response
      */
-    public function index(Request $request)
+    public function index(Request $request, array|string $columns = ['id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles', 'google_drive_file_id', 'is_free'])
     {
+        $isProduction = App::environment('production');
+        $showOnlyFreeMovies = env('SHOW_ONLY_FREE_MOVIES_IN_PRODUCTION', false);
+
         $user = Auth::user();
         $searchQuery = $request->get('search');
 
-        $moviesQuery = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
-            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count');
+        // if columns is a string '*', grab all columns
+        if (is_string($columns) && $columns === '*') {
+            $columns = Schema::getColumnListing((new Movie)->getTable());
+        }
+
+        if ($isProduction) {
+            if ($showOnlyFreeMovies) {
+                $moviesQuery = Movie::select($columns)
+                    ->whereNotNull('google_drive_file_id')
+                    ->where('is_free', true)
+                    ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count');
+            } else {
+                $moviesQuery = Movie::select($columns)
+                    ->whereNotNull('google_drive_file_id')
+                    ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count');
+            }
+        } else {
+            $moviesQuery = Movie::select($columns)
+                ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count');
+        }
 
         // Apply search filter if search query exists
         if ($searchQuery && strlen($searchQuery) >= 2) {
@@ -58,7 +84,14 @@ class MovieController extends Controller
             return $movie;
         });
 
-        $recentlyAddedMovies = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles')
+        if ($isProduction) {
+            $recentlyAddedMoviesQuery = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles', 'google_drive_file_id')
+                ->whereNotNull('google_drive_file_id');
+        } else {
+            $recentlyAddedMoviesQuery = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles', 'google_drive_file_id');
+        }
+        
+        $recentlyAddedMovies = $recentlyAddedMoviesQuery
             ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
             ->orderBy('created_at', 'desc')
             ->take(20)
@@ -89,7 +122,7 @@ class MovieController extends Controller
         $user = Auth::user();
 
         $watchLaterMovies = $user->watchLaterMovies()
-            ->select('movies.id', 'movies.title', 'movies.poster_path', 'movies.vote_average', 'movies.release_date', 'movies.slug', 'movies.subtitles')
+            ->select('movies.id', 'movies.title', 'movies.poster_path', 'movies.vote_average', 'movies.release_date', 'movies.slug', 'movies.subtitles', 'movies.google_drive_file_id')
             ->selectRaw('COALESCE(json_array_length(movies.trailers), 0) as trailer_count')
             ->get()
             ->map(function ($movie) use ($user) {
@@ -110,6 +143,13 @@ class MovieController extends Controller
     {
         $movie = Movie::where('slug', $slug)->first();
         if (!$movie) {
+            return redirect()->route('movies.index');
+        }
+
+        $isProduction = App::environment('production');
+        
+        // In production, only allow access to movies with Google Drive IDs
+        if ($isProduction && empty($movie->google_drive_file_id)) {
             return redirect()->route('movies.index');
         }
         
@@ -177,6 +217,7 @@ class MovieController extends Controller
         
         return Inertia::render('movie', [
             'movie' => $movie,
+            'isProduction' => $isProduction,
             'encFilePath' => Tool::encode($movie->path),
             'imgBaseUrl300' => env('TMDB_IMAGE_BASE_URL_300'),
             'imgBaseUrl500' => env('TMDB_IMAGE_BASE_URL_500'),
@@ -319,11 +360,13 @@ class MovieController extends Controller
                 ];
 
                 // If movie exists locally, add additional data
-                if ($localMovie) {
+                // In production, only consider movies with Google Drive IDs as locally available
+                if ($localMovie && (!app()->environment('production') || !empty($localMovie->google_drive_file_id))) {
                     $subtitles = json_decode($localMovie->subtitles, true) ?: [];
                     
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
+                    $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
@@ -380,11 +423,13 @@ class MovieController extends Controller
                 ];
 
                 // If movie exists locally, add additional data
-                if ($localMovie) {
+                // In production, only consider movies with Google Drive IDs as locally available
+                if ($localMovie && (!app()->environment('production') || !empty($localMovie->google_drive_file_id))) {
                     $subtitles = json_decode($localMovie->subtitles, true) ?: [];
                     
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
+                    $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();

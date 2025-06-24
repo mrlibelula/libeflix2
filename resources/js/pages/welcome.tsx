@@ -22,27 +22,37 @@ export default function Welcome() {
               </Link>
             ) : (
               <>
-                <Link
-                  href={route('tvshows.index')}
-                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
-                >
-                  TV Shows
-                </Link>
+                {/* Only show TV Shows link if the route exists (non-production environments) */}
+                {typeof route === 'function' && (() => {
+                  try {
+                    route('tvshows.index');
+                    return (
+                      <Link
+                        href={route('tvshows.index')}
+                        className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A] whitespace-nowrap"
+                      >
+                        TV Shows
+                      </Link>
+                    );
+                  } catch (e) {
+                    return null;
+                  }
+                })()}
                 <Link
                   href={route('movies.index')}
-                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A] whitespace-nowrap"
                 >
                   Movies
                 </Link>
                 <Link
                   href={route('subscription.plans.public')}
-                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A] whitespace-nowrap"
                 >
                   Plans
                 </Link>
                 <Link
                   href={route('login')}
-                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                  className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A] whitespace-nowrap"
                 >
                   Log in
                 </Link>

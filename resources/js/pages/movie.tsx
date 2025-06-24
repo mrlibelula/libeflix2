@@ -37,7 +37,7 @@ interface MovieData {
   subtitle_languages?: string[];
 }
 
-export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280 }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string }) {
+export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280, isProduction }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string, isProduction: boolean }) {
   const { props } = usePage<{
     auth: {
       user: any;
@@ -161,28 +161,47 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
         <div className="flex flex-col items-start justify-between">
           <div className="flex flex-col w-full">
             <div className="bg-black text-white focus:outline-none relative">
-              <video 
-                className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none"  
-                controls={canAccessMovie ? true : false}
-                controlsList="nodownload" 
-                onContextMenu={(e) => e.preventDefault()}
-                poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
-              >
-                <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
-                
-                {subtitles.map((subtitle: any, index: number) => (
-                  <track 
-                    key={index}
-                    kind="subtitles"
-                    src={`/movie/subtitles/${subtitle.encPath}`}
-                    srcLang={subtitle.languageCode.toLowerCase()}
-                    label={subtitle.languageName}
-                    default={index === 0} // Set first subtitle as default
-                  />
-                ))}
-                
-                Your browser does not support the video tag.
-              </video>
+              {!isProduction ? (
+                <video 
+                  className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none"  
+                  controls={canAccessMovie ? true : false}
+                  controlsList="nodownload" 
+                  onContextMenu={(e) => e.preventDefault()}
+                  poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
+                >
+                  <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
+                  
+                  {subtitles.map((subtitle: any, index: number) => (
+                    <track 
+                      key={index}
+                      kind="subtitles"
+                      src={`/movie/subtitles/${subtitle.encPath}`}
+                      srcLang={subtitle.languageCode.toLowerCase()}
+                      label={subtitle.languageName}
+                      default={index === 0} // Set first subtitle as default
+                    />
+                  ))}
+                  
+                  Your browser does not support the video tag.
+                </video>
+              ) : canAccessMovie ? (
+                <iframe 
+                  allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://drive.google.com/file/d/${movie.google_drive_file_id}/preview`} 
+                  width="100%" 
+                  className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none" 
+                  // style={{ aspectRatio: '16 / 9' }} 
+                ></iframe>
+              ) : (
+                <div 
+                  className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center bg-center bg-cover"
+                  style={{
+                    backgroundImage: `url(${imgBaseUrl1280}${movie.backdrop_path})`
+                  }}
+                ></div>
+              )}
 
               {/* Premium Content Overlay */}
               {!canAccessMovie && (
@@ -204,7 +223,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         <>
                           <Link 
                             href={route('register') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
-                            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
+                            className="block w-full bg-rose-600 hover:bg-rose-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
                             <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
                             Create Account

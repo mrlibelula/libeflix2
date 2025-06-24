@@ -56,6 +56,7 @@ class HandleInertiaRequests extends Middleware
                 'canAccessPremium' => $user ? $user->canAccessPremiumContent() : false,
                 'isAdmin' => $user ? $user->isAdmin() : false,
             ],
+            'isProduction' => app()->environment('production'),
             'csrf_token' => csrf_token(),
             'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),

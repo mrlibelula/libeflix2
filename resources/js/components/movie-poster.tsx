@@ -13,6 +13,8 @@ interface Movie {
   vote_average?: number;
   is_watch_later?: boolean;
   is_local?: boolean;
+  is_free?: boolean;
+  google_drive_file_id?: string;
   trailer_count?: number;
   subtitles?: {
     languageCode: string;
@@ -34,7 +36,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   const [isReady, setIsReady] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
-  const { props } = usePage<{ csrf_token: string }>();
+  const { props } = usePage<{ csrf_token: string; isProduction?: boolean }>();
 
   // Sync local state with movie prop changes
   useEffect(() => {
@@ -128,17 +130,47 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   // 2. Has a slug (traditional local movies from database)
   // 3. is_local is undefined (backward compatibility - assume local)
   const isLocalMovie = movie.is_local !== false && (movie.is_local === true || movie.slug || movie.is_local === undefined);
-  const isClickable = isLocalMovie && movie.slug;
+  
+  // In production, also check if the movie has a google_drive_file_id to be clickable
+  const isProductionEnvironment = props.isProduction;
+  const hasGoogleDriveFile = movie.google_drive_file_id && movie.google_drive_file_id.trim() !== '';
+  
+  const isClickable = isLocalMovie && movie.slug && (!isProductionEnvironment || hasGoogleDriveFile);
+  
+  // Check if movie is not clickable specifically due to missing google_drive_file_id in production
+  const isUnavailableInProduction = isProductionEnvironment && isLocalMovie && movie.slug && !hasGoogleDriveFile;
   
   const posterContent = (
     <div className={`flex-none w-fit ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}>
-      <div className="relative w-[11rem] h-[17rem] overflow-hidden transition duration-150 ease-in-out rounded-[10px] opacity-[90%] group-hover:opacity-100 group-hover:brightness-[105%]">
+      <div className={`relative w-[11rem] h-[17rem] overflow-hidden transition duration-150 ease-in-out rounded-[10px] ${
+        isUnavailableInProduction 
+          ? 'opacity-[60%] group-hover:opacity-[70%]' 
+          : 'opacity-[90%] group-hover:opacity-100 group-hover:brightness-[105%]'
+      }`}>
         <LazyImage
           src={movie.poster_path ? `${imgBaseUrl}${movie.poster_path}` : '/images/default-poster.jpg'}
           alt={movie.title}
           className="w-full h-full object-cover"
           priority={isPriority}
         />
+        
+        {/* FREE label for movies from database that are tagged as free */}
+        {isLocalMovie && movie.is_free && (
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-green-500 text-white text-[0.65rem] font-semibold px-1 rounded shadow-lg border-2 border-green-400 animate-pulse">
+              FREE TO WATCH
+            </div>
+          </div>
+        )}
+        
+        {/* Coming Soon overlay for movies without google_drive_file_id in production */}
+        {isUnavailableInProduction && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+            <div className="bg-gray-600/90 text-white text-[0.6rem] font-semibold px-2 py-1 rounded shadow-lg">
+              COMING SOON
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

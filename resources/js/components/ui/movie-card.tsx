@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StarIcon, PlusIcon, CheckIcon, HeartIcon, ClapperboardIcon } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
 import axios from 'axios';
 
 interface MovieCardProps {
@@ -15,6 +16,7 @@ interface MovieCardProps {
     overview?: string;
     is_local?: boolean;
     slug?: string;
+    google_drive_file_id?: string;
     is_watch_later?: boolean;
     has_subtitles?: boolean;
     subtitle_languages?: string[];
@@ -28,7 +30,13 @@ interface MovieCardProps {
 export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, onTrailerClick }: MovieCardProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
+  const { props } = usePage<{ isProduction?: boolean }>();
 
+  // Production environment logic - same as MoviePoster
+  const isProductionEnvironment = props.isProduction;
+  const hasGoogleDriveFile = movie.google_drive_file_id && movie.google_drive_file_id.trim() !== '';
+  const isClickableInProduction = !isProductionEnvironment || hasGoogleDriveFile;
+  
   const handleClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on action buttons or their container
     if ((e.target as Element).closest('.action-button') || 
@@ -38,14 +46,19 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
       return;
     }
 
-    if (onClick) {
-      onClick();
-    } else if (movie.is_local && movie.slug) {
-      // Navigate to local movie page
-      window.location.href = `/movie/${movie.slug}`;
+    // Check if movie should be clickable based on production environment
+    if (movie.is_local && movie.slug && isClickableInProduction) {
+      if (onClick) {
+        onClick();
+      } else {
+        // Navigate to local movie page
+        window.location.href = `/movie/${movie.slug}`;
+      }
     } else {
-      // External movie, could open TMDB or just do nothing
-      console.log('External movie clicked:', movie.title);
+      // External movie or not clickable in production - prevent navigation
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Movie not clickable:', movie.title);
     }
   };
 
@@ -84,18 +97,26 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
   const imageUrl = movie.poster_url || movie.backdrop_url;
   const releaseYear = movie.release_date ? new Date(movie.release_date).getFullYear() : '';
   const rating = Math.round(movie.vote_average * 10);
+  
+  // Check if movie is not clickable specifically due to missing google_drive_file_id in production
+  const isUnavailableInProduction = isProductionEnvironment && movie.is_local && movie.slug && !hasGoogleDriveFile;
+  const shouldShowClickableCursor = (movie.is_local && movie.slug && isClickableInProduction) || onClick;
 
   return (
     <div 
-      className={`group transition-all duration-300 ${movie.is_local || onClick ? 'cursor-pointer' : 'cursor-default'} ${className}`}
+      className={`group transition-all duration-300 ${shouldShowClickableCursor ? 'cursor-pointer' : 'cursor-default'} ${className}`}
       onClick={handleClick}
     >
-      <div className="relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800">
+      <div className={`relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800 ${
+        isUnavailableInProduction ? 'opacity-60' : ''
+      }`}>
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={movie.title}
-            className="w-full aspect-[2/3] object-cover transition-opacity duration-300 group-hover:opacity-80"
+            className={`w-full aspect-[2/3] object-cover transition-opacity duration-300 ${
+              isUnavailableInProduction ? 'group-hover:opacity-60' : 'group-hover:opacity-80'
+            }`}
             loading="lazy"
           />
         ) : (
@@ -103,6 +124,15 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
             <span className="text-gray-500 dark:text-gray-400 text-sm text-center p-2">
               No Image
             </span>
+          </div>
+        )}
+        
+        {/* Coming Soon overlay for movies without google_drive_file_id in production */}
+        {isUnavailableInProduction && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+            <div className="bg-gray-600/90 text-white text-xs font-semibold px-2 py-1 rounded shadow-lg">
+              COMING SOON
+            </div>
           </div>
         )}
         
@@ -174,7 +204,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
       </div>
       
       <div className="mt-2 space-y-1">
-        <h3 className="font-medium text-sm line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis">
+        <h3 className="font-medium text-sm line-clamp-2 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis">
           {movie.title}
         </h3>
         {releaseYear && (

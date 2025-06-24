@@ -10,20 +10,26 @@ use Inertia\Inertia;
 
 
 Route::get('/', function () {
-    return Inertia::render('welcome');
+    return Inertia::render('dashboard');
 })->name('home');
 
+Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
 // Public routes (accessible without authentication)
+// TV Shows routes
 Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
 Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
+
 Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 Route::get('movie/{slug}', [MovieController::class, 'show'])->name('movie.show');
 Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');
 
 // Premium content routes (require subscription for non-free content)
 Route::middleware(['premium.content'])->group(function () {
+    // TV Show streaming routes
     Route::get('tvshow/stream/{encFilePath}/{disk?}', [StorageController::class, 'tvshowEpisodeServe'])->name('tvshow.episode.serve');
     Route::get('tvshow/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'tvshowSubtitlesServe'])->name('tvshow.subtitles.serve');
+    
     Route::get('movie/stream/{encFilePath}/{disk?}', [StorageController::class, 'movieServe'])->name('movie.serve');
     Route::get('movie/subtitles/{encFilePath}/{disk?}', [StorageController::class, 'movieSubtitlesServe'])->name('movie.subtitles.serve');
 });
@@ -33,7 +39,6 @@ Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/episodes', [TvshowControll
 Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/credits', [TvshowController::class, 'getSeasonCredits'])->name('api.tvshows.season.credits');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
     
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
@@ -88,6 +93,7 @@ Route::middleware(['auth'])->group(function () {
 
 // API routes (some public, some require auth)
 Route::get('api/movies/search', [MovieController::class, 'search'])->name('api.movies.search');
+// TV Shows search API
 Route::get('api/tvshows/search', [TvshowController::class, 'search'])->name('api.tvshows.search');
 Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'])->name('api.movies.trailers');
 Route::get('api/movies/{movieId}/trailers-by-id', [MovieController::class, 'getTrailersById'])->name('api.movies.trailers-by-id');
@@ -104,6 +110,8 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('api/movies/search/popular-terms', [MovieController::class, 'getPopularSearchTerms'])->name('api.movies.search.popular-terms');
     Route::get('api/movies/search/no-results', [MovieController::class, 'getNoResultSearches'])->name('api.movies.search.no-results');
     Route::get('api/movies/search/analytics-summary', [MovieController::class, 'getAnalyticsSummary'])->name('api.movies.search.analytics-summary');
+    
+    // TV Shows admin analytics
     Route::get('api/tvshows/search/popular-terms', [TvshowController::class, 'getPopularSearchTerms'])->name('api.tvshows.search.popular-terms');
     Route::get('api/tvshows/search/no-results', [TvshowController::class, 'getNoResultSearches'])->name('api.tvshows.search.no-results');
     Route::get('api/tvshows/search/analytics-summary', [TvshowController::class, 'getAnalyticsSummary'])->name('api.tvshows.search.analytics-summary');

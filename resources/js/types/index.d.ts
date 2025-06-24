@@ -26,6 +26,7 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    isProduction: boolean;
     ziggy: Config & { location: string };
     [key: string]: unknown;
 }

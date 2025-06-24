@@ -79,7 +79,10 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth } = usePage<SharedData>().props;
+    const { auth, isProduction } = usePage<SharedData>().props;
+
+    // Remove the production filter - show TV Shows in all environments
+    const filteredMainNavItems = mainNavItems;
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -96,7 +99,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={filteredMainNavItems} />
             </SidebarContent>
 
             <SidebarFooter>

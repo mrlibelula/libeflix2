@@ -357,7 +357,7 @@ export function MovieRibbon({
                   onClick={() => handleSortToggle(option.field)}
                   className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium cursor-pointer ${
                     isActive
-                      ? 'bg-blue-100_ _dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200_ _dark:hover:bg-blue-900/50'
+                      ? 'bg-rose-100_ _dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 hover:bg-rose-200_ _dark:hover:bg-rose-900/50'
                       : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100'
                   }`}
                   title={`Sort by ${option.label}${isActive ? ` (${direction === 'asc' ? 'ascending' : 'descending'})` : ''}`}
@@ -449,7 +449,7 @@ export function MovieRibbon({
                         disabled={page === '...'}
                         className={`min-w-[2rem] w-8 h-8 md:min-w-[2.5rem] md:w-9_ md:h-9_ rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
                           page === currentPage
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-default'
+                            ? 'bg-rose-600 text-white hover:bg-rose-700 cursor-default'
                             : page === '...'
                             ? 'bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
                             : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-500 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'

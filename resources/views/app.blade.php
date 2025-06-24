@@ -120,6 +120,9 @@
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        
+        {{-- Preload custom BowlbyOneSC font to avoid FOUT --}}
+        <link rel="preload" href="{{ asset('/fonts/BowlbyOneSC-Regular.ttf') }}" as="font" type="font/ttf" crossorigin>
 
         @routes
         @viteReactRefresh

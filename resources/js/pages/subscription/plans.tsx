@@ -130,10 +130,10 @@ function PlanCard({ plan, isPopular, currentSubscription, onSubscribe }: {
     const isCurrentPlan = false; // You would determine this based on current subscription details
 
     return (
-        <Card className={`relative ${isPopular ? 'ring-2 ring-blue-500' : ''}`}>
+        <Card className={`relative ${isPopular ? 'ring-2 ring-rose-500' : ''}`}>
             {isPopular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <Badge variant="default" className="bg-blue-500">
+                    <Badge variant="default" className="bg-rose-500">
                         <Star className="w-3 h-3 mr-1" />
                         Most Popular
                     </Badge>
@@ -217,10 +217,10 @@ export default function SubscriptionPlans({ plans, currentSubscription, stripeKe
             <div className="py-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-12">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                        <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
                             Choose Your Plan
                         </h1>
-                        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                        <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
                             Get unlimited access to thousands of movies and TV shows. 
                             Cancel anytime.
                         </p>
@@ -275,13 +275,13 @@ export default function SubscriptionPlans({ plans, currentSubscription, stripeKe
                     )}
 
                     <div className="text-center">
-                        <p className="text-gray-600 mb-4">
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">
                             Already have an account?{' '}
-                            <a href="/login" className="text-blue-600 hover:underline">
+                            <a href="/login" className="text-rose-600 hover:underline">
                                 Sign in
                             </a>
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                             Secure payment powered by Stripe. Your payment information is safe and encrypted.
                         </p>
                     </div>

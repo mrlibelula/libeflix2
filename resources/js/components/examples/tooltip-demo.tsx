@@ -25,7 +25,7 @@ export function TooltipDemo() {
             </Tooltip>
             
             <Tooltip text="Bottom tooltip" position="bottom">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+              <div className="p-2 bg-rose-100 dark:bg-rose-900 rounded-md">
                 <HelpCircle className="h-6 w-6" />
               </div>
             </Tooltip>
