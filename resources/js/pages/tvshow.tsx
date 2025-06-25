@@ -182,6 +182,75 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
     await share(shareData);
   };
 
+  // Handle shared episode URLs - check for episode parameters in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedSeason = urlParams.get('season');
+    const sharedEpisode = urlParams.get('episode');
+    const shouldAutoplay = urlParams.get('autoplay') === 'true';
+
+    if (sharedSeason && sharedEpisode && shouldAutoplay) {
+      const seasonNumber = parseInt(sharedSeason);
+      const episodeNumber = parseInt(sharedEpisode);
+
+      // Find the target season
+      const targetSeason = tvshow.seasons?.find((s: any) => s.season_number === seasonNumber);
+      
+      if (targetSeason) {
+        // Load episodes for that season if not already loaded
+        loadSeasonEpisodes(seasonNumber).then(() => {
+          const episodes = getCachedEpisodes(seasonNumber);
+          const targetEpisode = episodes?.find((e: any) => e.episode_number === episodeNumber);
+          
+          if (targetEpisode) {
+            // Switch to the target season if necessary
+            if (selectedSeason?.season_number !== seasonNumber) {
+              setSelectedSeason(targetSeason);
+            }
+            
+            // Update document meta tags for episode sharing (for subsequent shares)
+            document.title = `${tvshow.name} - S${seasonNumber}E${episodeNumber}: ${targetEpisode.name}`;
+            
+            // Update Open Graph meta tags dynamically
+            const updateMetaTag = (property: string, content: string) => {
+              let metaTag = document.querySelector(`meta[property="${property}"], meta[name="${property}"]`);
+              if (metaTag) {
+                metaTag.setAttribute('content', content);
+              } else {
+                metaTag = document.createElement('meta');
+                if (property.startsWith('og:') || property.startsWith('video:')) {
+                  metaTag.setAttribute('property', property);
+                } else {
+                  metaTag.setAttribute('name', property);
+                }
+                metaTag.setAttribute('content', content);
+                document.head.appendChild(metaTag);
+              }
+            };
+            
+            // Update meta tags for this specific episode
+            updateMetaTag('og:title', `${tvshow.name} - S${seasonNumber}E${episodeNumber}: ${targetEpisode.name}`);
+            updateMetaTag('og:description', targetEpisode.overview || `Watch "${targetEpisode.name}" from ${tvshow.name}`);
+            updateMetaTag('twitter:title', `${tvshow.name} - S${seasonNumber}E${episodeNumber}: ${targetEpisode.name}`);
+            updateMetaTag('twitter:description', targetEpisode.overview || `Watch "${targetEpisode.name}" from ${tvshow.name}`);
+            updateMetaTag('description', targetEpisode.overview || `Watch "${targetEpisode.name}" from ${tvshow.name}`);
+            
+            // Open the episode dialog with autoplay
+            setSelectedEpisode(targetEpisode);
+            setIsDialogOpen(true);
+            
+            // Clean up URL parameters after handling
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('season');
+            newUrl.searchParams.delete('episode');
+            newUrl.searchParams.delete('autoplay');
+            window.history.replaceState({}, '', newUrl.toString());
+          }
+        });
+      }
+    }
+  }, [tvshow.seasons, loadSeasonEpisodes, getCachedEpisodes, selectedSeason]);
+
   // Auto-play episode if specified in URL parameters (before early return to ensure hooks order)
   // This should only happen once when the page initially loads with episode parameters from search
   useEffect(() => {
@@ -222,7 +291,31 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title={`${tvshow.name} ▸ S${selectedSeason.season_number.toString().padStart(2, '0')} ▸ TV Show`} />
+      <Head title={`${tvshow.name} ▸ S${selectedSeason.season_number.toString().padStart(2, '0')} ▸ TV Show`}>
+        {/* Open Graph meta tags for rich link sharing */}
+        <meta property="og:title" content={`${tvshow.name} - Season ${selectedSeason.season_number}`} />
+        <meta property="og:description" content={selectedSeason.overview || tvshow.overview || `Watch ${tvshow.name} - A great TV show experience`} />
+        <meta property="og:image" content={tvshow.backdropUrl || `https://image.tmdb.org/t/p/w780${tvshow.poster_path}`} />
+        <meta property="og:image:width" content="780" />
+        <meta property="og:image:height" content="439" />
+        <meta property="og:url" content={window.location.href} />
+        <meta property="og:type" content="video.tv_show" />
+        <meta property="og:site_name" content="Libeflix" />
+        
+        {/* Twitter Card meta tags */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${tvshow.name} - Season ${selectedSeason.season_number}`} />
+        <meta name="twitter:description" content={selectedSeason.overview || tvshow.overview || `Watch ${tvshow.name} - A great TV show experience`} />
+        <meta name="twitter:image" content={tvshow.backdropUrl || `https://image.tmdb.org/t/p/w780${tvshow.poster_path}`} />
+        
+        {/* Additional meta tags */}
+        <meta name="description" content={selectedSeason.overview || tvshow.overview || `Watch ${tvshow.name} - A great TV show experience`} />
+        <meta name="keywords" content={`${tvshow.name}, TV show, series, watch online, ${tvshow.genres?.map((g: any) => g.name).join(', ')}`} />
+        
+        {/* TV show-specific structured data */}
+        <meta property="video:series" content={tvshow.name} />
+        {tvshow.first_air_date && <meta property="video:release_date" content={tvshow.first_air_date} />}
+      </Head>
       {/* hero */}
       <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
         <div 

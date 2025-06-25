@@ -37,6 +37,8 @@ interface MovieData {
   is_watch_later?: boolean;
   has_subtitles?: boolean;
   subtitle_languages?: string[];
+  is_liked?: boolean;
+  likes_count?: number;
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280, isProduction }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string, isProduction: boolean }) {
@@ -264,6 +266,27 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     setIsTrailerModalOpen(true);
   };
 
+  // Function to handle like changes from movie cards
+  const handleMovieCardLikeChange = (movieId: number, isLiked: boolean, likesCount: number) => {
+    // Update the recommendations array
+    setRecommendations(prevRecommendations => 
+      prevRecommendations.map(rec => 
+        rec.id === movieId 
+          ? { ...rec, is_liked: isLiked, likes_count: likesCount }
+          : rec
+      )
+    );
+
+    // Update the similar movies array
+    setSimilarMovies(prevSimilar => 
+      prevSimilar.map(sim => 
+        sim.id === movieId 
+          ? { ...sim, is_liked: isLiked, likes_count: likesCount }
+          : sim
+      )
+    );
+  };
+
   // Function to handle sharing the movie page
   const handleShare = async () => {
     const shareData = {
@@ -277,7 +300,56 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title={`${movie.title}`} />
+      <Head title={`${movie.title}`}>
+        {/* Open Graph meta tags for rich link sharing */}
+        <meta property="og:title" content={`${movie.title} (${movie.release_date.split('-')[0]})`} />
+        <meta property="og:description" content={movie.overview || `Watch ${movie.title} - ${movie.tagline || 'A great movie experience'}`} />
+        <meta property="og:image" content={`${imgBaseUrl780}${movie.poster_path}`} />
+        <meta property="og:image:width" content="780" />
+        <meta property="og:image:height" content="1170" />
+        <meta property="og:url" content={window.location.href} />
+        <meta property="og:type" content="video.movie" />
+        <meta property="og:site_name" content="Libeflix" />
+        
+        {/* Twitter Card meta tags */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${movie.title} (${movie.release_date.split('-')[0]})`} />
+        <meta name="twitter:description" content={movie.overview || `Watch ${movie.title} - ${movie.tagline || 'A great movie experience'}`} />
+        <meta name="twitter:image" content={`${imgBaseUrl780}${movie.poster_path}`} />
+        
+        {/* Additional meta tags */}
+        <meta name="description" content={movie.overview || `Watch ${movie.title} - ${movie.tagline || 'A great movie experience'}`} />
+        <meta name="keywords" content={`${movie.title}, movie, watch online, ${movie.genres?.map((g: any) => g.name).join(', ')}`} />
+        
+        {/* Movie-specific structured data */}
+        <meta property="video:duration" content={`${movie.runtime * 60}`} />
+        <meta property="video:release_date" content={movie.release_date} />
+        
+        {/* JSON-LD Structured Data for better SEO */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Movie",
+            "name": movie.title,
+            "description": movie.overview || `Watch ${movie.title}`,
+            "image": `${imgBaseUrl780}${movie.poster_path}`,
+            "datePublished": movie.release_date,
+            "duration": `PT${movie.runtime}M`,
+            "genre": movie.genres?.map((g: any) => g.name),
+            "aggregateRating": movie.vote_average ? {
+              "@type": "AggregateRating",
+              "ratingValue": movie.vote_average,
+              "ratingCount": 1,
+              "bestRating": 10
+            } : undefined,
+            "url": window.location.href,
+            "potentialAction": {
+              "@type": "WatchAction",
+              "target": window.location.href
+            }
+          })}
+        </script>
+      </Head>
       <div>
         <div className="flex flex-col items-start justify-between">
           <div className="flex flex-col w-full">
@@ -633,6 +705,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                     movie={recommendation}
                                     className="w-[180px]"
                                     onTrailerClick={handleTrailerClick}
+                                    onLikeChange={handleMovieCardLikeChange}
                                   />
                                 </RibbonItem>
                               ))}
@@ -671,6 +744,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                                     movie={similar}
                                     className="w-[180px]"
                                     onTrailerClick={handleTrailerClick}
+                                    onLikeChange={handleMovieCardLikeChange}
                                   />
                                 </RibbonItem>
                               ))}

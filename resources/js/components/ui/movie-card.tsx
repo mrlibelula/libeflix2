@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StarIcon, PlusIcon, CheckIcon, HeartIcon, ClapperboardIcon } from 'lucide-react';
-import { usePage } from '@inertiajs/react';
+import { usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 
 interface MovieCardProps {
@@ -20,17 +20,43 @@ interface MovieCardProps {
     is_watch_later?: boolean;
     has_subtitles?: boolean;
     subtitle_languages?: string[];
+    is_liked?: boolean;
+    likes_count?: number;
   };
   onClick?: () => void;
   className?: string;
   onWatchLaterChange?: (movieId: number, isWatchLater: boolean) => void;
   onTrailerClick?: (movieId: number, movieTitle: string) => void;
+  onLikeChange?: (movieId: number, isLiked: boolean, likesCount: number) => void;
 }
 
-export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, onTrailerClick }: MovieCardProps) {
+export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, onTrailerClick, onLikeChange }: MovieCardProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
-  const { props } = usePage<{ isProduction?: boolean }>();
+  
+  // Like-related state
+  const [isLiked, setIsLiked] = useState(movie.is_liked || false);
+  const [likesCount, setLikesCount] = useState(movie.likes_count || 0);
+  const [isLikeToggling, setIsLikeToggling] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+  
+  const { props } = usePage<{ 
+    isProduction?: boolean;
+    csrf_token?: string;
+    auth?: {
+      user?: any;
+    };
+  }>();
+
+  // Check if user is authenticated
+  const isAuthenticated = !!props.auth?.user;
+
+  // Sync local state with movie prop changes
+  useEffect(() => {
+    setIsWatchLater(movie.is_watch_later || false);
+    setIsLiked(movie.is_liked || false);
+    setLikesCount(movie.likes_count || 0);
+  }, [movie.is_watch_later, movie.is_liked, movie.likes_count]);
 
   // Production environment logic - same as MoviePoster
   const isProductionEnvironment = props.isProduction;
@@ -81,6 +107,81 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
       console.error('Error toggling watch later:', error);
     } finally {
       setIsTogglingWatchLater(false);
+    }
+  };
+
+  const handleLikeToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    // Only allow like toggle for local movies
+    if (!movie.is_local || isLikeToggling) return;
+    
+    setIsLikeToggling(true);
+    setIsLikeAnimating(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsLikeAnimating(false);
+        return;
+      }
+      
+      const method = isLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/movies/${movie.id}/like`, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setIsLiked(data.is_liked);
+          setLikesCount(data.likes_count);
+          if (onLikeChange) {
+            onLikeChange(movie.id, data.is_liked, data.likes_count);
+          }
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsLikeAnimating(false);
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setIsLikeAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setIsLikeAnimating(false);
+    } finally {
+      setIsLikeToggling(false);
     }
   };
 
@@ -185,10 +286,34 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
             {/* Heart icon (only for local movies) */}
             {movie.is_local && (
               <button 
-                className="action-button p-1 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
-                onClick={(e) => e.stopPropagation()}
+                className={`action-button p-1 rounded-full text-white transition-all duration-200 ${
+                  isLiked 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : 'bg-black/70 hover:bg-black/90'
+                } ${isLikeToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={handleLikeToggle}
+                disabled={isLikeToggling}
+                title={isAuthenticated 
+                  ? (isLiked ? "Unlike this movie" : "Like this movie")
+                  : "Login to like this movie"
+                }
               >
-                <HeartIcon className="w-3 h-3" />
+                <div
+                  className={`transition-all duration-300 ease-in-out ${
+                    isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                  }`}
+                  style={{
+                    transform: isLikeAnimating 
+                      ? 'rotate(180deg)' 
+                      : 'rotate(0deg)',
+                  }}
+                >
+                  <HeartIcon 
+                    className={`w-3 h-3 transition-colors duration-200 ${
+                      isLiked ? 'fill-white' : ''
+                    }`}
+                  />
+                </div>
               </button>
             )}
 

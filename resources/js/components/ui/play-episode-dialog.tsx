@@ -9,11 +9,12 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2 } from 'lucide-react';
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import { InlinePremiumNotice } from "@/components/premium-content-notice";
 import { Link, usePage } from "@inertiajs/react";
+import { useWebShare } from "@/hooks/use-web-share";
 
 type PlayEpisodeDialogProps = {
   episode: any;
@@ -120,6 +121,9 @@ export function PlayEpisodeDialog({
 
   // Add userPreferredSubtitleId state to remember user's subtitle preference
   const [userPreferredSubtitleId, setUserPreferredSubtitleId] = useState<string>('off');
+
+  // Web Share API hook
+  const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -685,8 +689,13 @@ export function PlayEpisodeDialog({
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
             e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
             e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B') {
-          e.stopPropagation();
-          e.preventDefault();
+          
+          // Only prevent video control keys if user has access to the content
+          // This prevents accidental triggering of video actions on restricted content
+          if (canAccessEpisode) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
         }
       }
     };
@@ -828,8 +837,8 @@ export function PlayEpisodeDialog({
     if (!isPipSupported) return;
     
     const handlePipKeyDown = (e: KeyboardEvent) => {
-      // Only handle if dialog is open
-      if (!dialogOpen) return;
+      // Only handle if dialog is open and user has access to content
+      if (!dialogOpen || !canAccessEpisode) return;
       
       if (e.key === 'p' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -842,7 +851,7 @@ export function PlayEpisodeDialog({
     return () => {
       window.removeEventListener('keydown', handlePipKeyDown);
     };
-  }, [dialogOpen, isPipSupported]);
+  }, [dialogOpen, isPipSupported, canAccessEpisode]);
   
   // Add a cleanup effect to ensure video and PiP are properly terminated
   useEffect(() => {
@@ -892,6 +901,13 @@ export function PlayEpisodeDialog({
                        e.key === 'm' || e.key === 'M') ) {
       e.stopPropagation();
       e.preventDefault();
+      
+      // Don't handle video control keys if user doesn't have access to the content
+      if (!canAccessEpisode && (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || 
+                                e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'm' || e.key === 'M' ||
+                                e.key === 'f' || e.key === 'F' || e.key === 'p' || e.key === 'P')) {
+        return; // Skip video control actions when content is restricted
+      }
       
       switch (e.key) {
         case 'ArrowLeft':
@@ -966,8 +982,8 @@ export function PlayEpisodeDialog({
   // Add keyboard shortcut for volume control (up/down arrow keys)
   useEffect(() => {
     const handleVolumeKeyDown = (e: KeyboardEvent) => {
-      // Only handle if dialog is open
-      if (!dialogOpen) return;
+      // Only handle if dialog is open and user has access to content
+      if (!dialogOpen || !canAccessEpisode) return;
       
       // Prevent default behavior (scrolling)
       if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && 
@@ -988,7 +1004,7 @@ export function PlayEpisodeDialog({
     return () => {
       window.removeEventListener('keydown', handleVolumeKeyDown, true);
     };
-  }, [dialogOpen, volume, isMuted]);
+  }, [dialogOpen, volume, isMuted, canAccessEpisode]);
 
   // Toggle repeat modes with exclusive selection
   const toggleRepeatOne = () => {
@@ -1524,6 +1540,28 @@ export function PlayEpisodeDialog({
       setShowContextMenu(false);
       setActiveSection('none');
     }, 200);
+  };
+
+  // Function to handle sharing the episode
+  const handleShareEpisode = async () => {
+    // Create a shareable URL with episode information
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('season', episode.season_number.toString());
+    currentUrl.searchParams.set('episode', episode.episode_number.toString());
+    currentUrl.searchParams.set('autoplay', 'true');
+    
+    const episodeTitle = `${tvshowName} - S${episode.season_number}E${episode.episode_number}: ${episode.name}`;
+    const episodeDescription = episode.overview 
+      ? `Watch "${episode.name}" from ${tvshowName} - ${episode.overview.slice(0, 150)}${episode.overview.length > 150 ? '...' : ''}` 
+      : `Watch "${episode.name}" from ${tvshowName} - An exciting episode you don't want to miss!`;
+    
+    const shareData = {
+      title: episodeTitle,
+      text: episodeDescription,
+      url: currentUrl.toString(),
+    };
+    
+    await share(shareData);
   };
 
   // Add effect to restore PiP when episode changes
@@ -2165,6 +2203,25 @@ export function PlayEpisodeDialog({
                         {repeatTvshow ? "Repeating entire series" : ""}
                       </span>
                     )}
+                    {/* share episode button */}
+                    <Tooltip 
+                      text={
+                        isShareSupported 
+                          ? "Share this episode" 
+                          : "Share this episode (copy link)"
+                      } 
+                      position="bottom"
+                    >
+                      <button
+                        onClick={handleShareEpisode}
+                        disabled={isSharing}
+                        className="focus:outline-none cursor-pointer disabled:opacity-50"
+                      >
+                        <Share2 
+                          className={`w-5 h-5 transition-colors duration-150 hover:text-rose-500`}
+                        />
+                      </button>
+                    </Tooltip>
                     {/* repeat episode (loop episode) */}
                     <Tooltip text="Repeat current episode" position="bottom">
                       <button

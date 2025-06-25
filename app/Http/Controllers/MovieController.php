@@ -385,6 +385,12 @@ class MovieController extends Controller
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
+                    $baseData['is_liked'] = $user ? $localMovie->isLikedBy($user) : false;
+                    $baseData['likes_count'] = $localMovie->likesCount();
+                } else {
+                    // For non-local movies, set default like values
+                    $baseData['is_liked'] = false;
+                    $baseData['likes_count'] = 0;
                 }
 
                 return $baseData;
@@ -448,6 +454,12 @@ class MovieController extends Controller
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
+                    $baseData['is_liked'] = $user ? $localMovie->isLikedBy($user) : false;
+                    $baseData['likes_count'] = $localMovie->likesCount();
+                } else {
+                    // For non-local movies, set default like values
+                    $baseData['is_liked'] = false;
+                    $baseData['likes_count'] = 0;
                 }
 
                 return $baseData;
