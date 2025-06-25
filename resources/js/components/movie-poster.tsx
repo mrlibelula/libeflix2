@@ -16,6 +16,8 @@ interface Movie {
   is_free?: boolean;
   google_drive_file_id?: string;
   trailer_count?: number;
+  is_liked?: boolean;
+  likes_count?: number;
   subtitles?: {
     languageCode: string;
     languageName: string;
@@ -28,20 +30,39 @@ interface MoviePosterProps {
   imgBaseUrl: string;
   isPriority?: boolean;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
+  onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
 }
 
-export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLaterToggle }: MoviePosterProps) {
+export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLaterToggle, onLikeToggle }: MoviePosterProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isToggling, setIsToggling] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
-  const { props } = usePage<{ csrf_token: string; isProduction?: boolean }>();
+  
+  // Like-related state
+  const [isLiked, setIsLiked] = useState(movie.is_liked || false);
+  const [likesCount, setLikesCount] = useState(movie.likes_count || 0);
+  const [isLikeToggling, setIsLikeToggling] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+  
+  const { props } = usePage<{ 
+    csrf_token: string; 
+    isProduction?: boolean;
+    auth?: {
+      user?: any;
+    };
+  }>();
+
+  // Check if user is authenticated
+  const isAuthenticated = !!props.auth?.user;
 
   // Sync local state with movie prop changes
   useEffect(() => {
     setIsWatchLater(movie.is_watch_later || false);
-  }, [movie.is_watch_later]);
+    setIsLiked(movie.is_liked || false);
+    setLikesCount(movie.likes_count || 0);
+  }, [movie.is_watch_later, movie.is_liked, movie.likes_count]);
 
   // Ensure component is ready before allowing interactions
   useEffect(() => {
@@ -106,6 +127,80 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
       setIsAnimating(false);
     } finally {
       setIsToggling(false);
+    }
+  };
+
+  const handleLikeToggle = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation
+    e.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit(route('login') + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    // Only allow like toggle for local movies
+    if (!isLocalMovie || isLikeToggling || !isReady) return;
+    
+    setIsLikeToggling(true);
+    setIsLikeAnimating(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsLikeAnimating(false);
+        return;
+      }
+      
+      const method = isLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/movies/${movie.id}/like`, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change icon at the midpoint of animation (when rotated 90deg and not visible)
+        setTimeout(() => {
+          setIsLiked(data.is_liked);
+          setLikesCount(data.likes_count);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsLikeAnimating(false);
+        }, 300);
+        
+        onLikeToggle?.(movie.id, data.is_liked, data.likes_count);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit(route('login') + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setIsLikeAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setIsLikeAnimating(false);
+    } finally {
+      setIsLikeToggling(false);
     }
   };
 
@@ -230,10 +325,29 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
               {/* Heart button - Only show for local movies */}
               {isLocalMovie && (
                 <button
-                  className="transition-all duration-200 ease-in-out hover:scale-110 cursor-pointer"
-                  title="Like movie"
+                  onClick={handleLikeToggle}
+                  disabled={isLikeToggling || !isReady}
+                  className="transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
+                  title={isAuthenticated ? (isLiked ? "Unlike movie" : "Like movie") : "Login to like movie"}
                 >
-                  <HeartIcon className="text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 w-[1rem] h-[1rem] transition-colors duration-200" />
+                  <div
+                    className={`transition-all duration-300 ease-in-out ${
+                      isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                    }`}
+                    style={{
+                      transform: isLikeAnimating 
+                        ? 'rotate(180deg)' 
+                        : 'rotate(0deg)',
+                    }}
+                  >
+                    <HeartIcon 
+                      className={`w-[1rem] h-[1rem] transition-colors duration-200 ${
+                        isLiked 
+                          ? 'text-red-500 fill-red-500 hover:text-red-600 hover:fill-red-600' 
+                          : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200'
+                      }`} 
+                    />
+                  </div>
                 </button>
               )}
               

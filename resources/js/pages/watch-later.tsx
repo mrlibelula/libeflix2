@@ -52,6 +52,17 @@ export default function WatchLater({ watchLaterMovies, imgBaseUrl }: { watchLate
     }
   }, []);
 
+  const handleLikeToggle = useCallback((movieId: number, newStatus: boolean, newCount: number) => {
+    // Update the like status and count in the watch later list
+    setWatchLaterMoviesList(prev => 
+      prev.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_liked: newStatus, likes_count: newCount }
+          : movie
+      )
+    );
+  }, []);
+
   // Restore focus after state changes
   useEffect(() => {
     if (lastFocusedRibbonRef.current) {
@@ -115,6 +126,7 @@ export default function WatchLater({ watchLaterMovies, imgBaseUrl }: { watchLate
         title={`Watch Later Movies (${watchLaterMoviesList.length})`}
         ribbonId="watch-later"
         onWatchLaterToggle={handleWatchLaterToggle}
+        onLikeToggle={handleLikeToggle}
       />
         
     </AppLayout>

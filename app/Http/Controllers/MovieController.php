@@ -6,6 +6,7 @@ use App\Models\Movie;
 use App\Models\SearchQuery;
 use App\Services\MovieService;
 use App\Services\Tool;
+use App\Traits\HandlesLikes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
@@ -13,9 +14,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Illuminate\Http\JsonResponse;
 
 class MovieController extends Controller
 {
+    use HandlesLikes;
     /**
      * Display a listing of the movies.
      *
@@ -78,6 +81,8 @@ class MovieController extends Controller
 
         $movies = $movies->map(function ($movie) use ($user) {
             $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+            $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+            $movie->likes_count = $movie->likesCount();
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
@@ -98,6 +103,8 @@ class MovieController extends Controller
             ->get()
             ->map(function ($movie) use ($user) {
                 $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+                $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+                $movie->likes_count = $movie->likesCount();
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
                 if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
                 if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
@@ -127,6 +134,8 @@ class MovieController extends Controller
             ->get()
             ->map(function ($movie) use ($user) {
                 $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+                $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+                $movie->likes_count = $movie->likesCount();
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
                 if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
                 if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
@@ -152,6 +161,12 @@ class MovieController extends Controller
         if ($isProduction && empty($movie->google_drive_file_id)) {
             return redirect()->route('movies.index');
         }
+        
+        $user = Auth::user();
+        
+        // Add like data
+        $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+        $movie->likes_count = $movie->likesCount();
         
         // Decode subtitles JSON to make it accessible in React
         $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
@@ -988,5 +1003,38 @@ class MovieController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get users who liked a movie.
+     *
+     * @param Movie $movie
+     * @return JsonResponse
+     */
+    public function getLikedUsers(Movie $movie): JsonResponse
+    {
+        $users = $movie->likes()->with('user:id,name')->get()->map(function ($like) {
+            return [
+                'id' => $like->user->id,
+                'name' => $like->user->name,
+            ];
+        });
+
+        return response()->json([
+            'users' => $users,
+            'count' => $users->count()
+        ]);
+    }
+
+    /**
+     * Get the movie from the route parameters.
+     *
+     * @param Request $request
+     * @return Movie
+     */
+    public function getMovieFromRoute(Request $request)
+    {
+        $slug = $request->route('slug');
+        return Movie::where('slug', $slug)->first();
     }
 }

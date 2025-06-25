@@ -105,6 +105,28 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
     restoreFocus();
   }, [restoreFocus]);
 
+  const handleLikeToggle = useCallback((movieId: number, newStatus: boolean, newCount: number) => {
+    // Update the like status and count in all lists
+    setAllMovies(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_liked: newStatus, likes_count: newCount }
+          : movie
+      )
+    );
+
+    setRecentlyAddedMoviesList(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_liked: newStatus, likes_count: newCount }
+          : movie
+      )
+    );
+
+    // Restore focus to the last focused ribbon after state update
+    restoreFocus();
+  }, [restoreFocus]);
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
@@ -129,6 +151,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           imgBaseUrl={imgBaseUrl}
           ribbonId="now-streaming"
           onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
+          onLikeToggle={handleLikeToggle}
         />
 
         <MovieRibbon
@@ -137,6 +160,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           title={`Recently Added (${recentlyAddedMoviesList.length})`}
           ribbonId="recently-added"
           onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
+          onLikeToggle={handleLikeToggle}
         />
         
     </AppLayout>

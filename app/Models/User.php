@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Cashier\Billable;
@@ -43,6 +44,58 @@ class User extends Authenticatable
     public function watchLaterMovies(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(Movie::class)->withPivot('created_at')->orderBy('movie_user.created_at', 'DESC');
+    }
+
+    /**
+     * Get all the likes that the user has made.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function likes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Like::class);
+    }
+
+    /**
+     * Check if the user has liked a specific model.
+     *
+     * @param Model $model
+     * @return bool
+     */
+    public function hasLiked(Model $model): bool
+    {
+        return $this->likes()
+            ->where('likeable_type', get_class($model))
+            ->where('likeable_id', $model->id)
+            ->exists();
+    }
+
+    /**
+     * Like a specific model.
+     *
+     * @param Model $model
+     * @return Like
+     */
+    public function like(Model $model): Like
+    {
+        return $this->likes()->firstOrCreate([
+            'likeable_type' => get_class($model),
+            'likeable_id' => $model->id,
+        ]);
+    }
+
+    /**
+     * Unlike a specific model.
+     *
+     * @param Model $model
+     * @return bool
+     */
+    public function unlike(Model $model): bool
+    {
+        return $this->likes()
+            ->where('likeable_type', get_class($model))
+            ->where('likeable_id', $model->id)
+            ->delete() > 0;
     }
 
     /**

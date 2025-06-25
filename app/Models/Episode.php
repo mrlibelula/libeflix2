@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Services\Tool;
+use App\Traits\Likeable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOneThrough;
-use App\Services\Tool;
 
 class Episode extends Model
 {
+    use Likeable;
+    
     protected $guarded = [];
     protected $appends = ['stillUrl'];
     protected $casts = [
@@ -88,4 +91,6 @@ class Episode extends Model
         ->values() // Re-index array
         ->toArray();
     }
+
+
 }

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Likeable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Season extends Model
 {
+    use Likeable;
+    
     protected $guarded = [];
 
     public function tvshow(): BelongsTo
@@ -29,4 +32,6 @@ class Season extends Model
     {
         return env('TMDB_IMAGE_BASE_URL_1280') . $this->backdrop_path;
     }
+
+
 }

@@ -7,6 +7,7 @@ use App\Models\SearchQueryTvshow;
 use App\Services\TvshowService;
 use App\Services\SeasonService;
 use App\Services\Tool;
+use App\Traits\HandlesLikes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -18,6 +19,7 @@ use Inertia\Response;
 
 class TvshowController extends Controller
 {
+    use HandlesLikes;
     /**
      * Shows all available tv shows on Storage
      *
@@ -1094,4 +1096,6 @@ class TvshowController extends Controller
 
         return $results;
     }
+
+
 }

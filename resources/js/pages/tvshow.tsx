@@ -5,7 +5,7 @@ import { StarRating } from '@/components/ui/star-rating';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { LoaderCircle, Play } from 'lucide-react';
+import { LoaderCircle, Play, Share2 } from 'lucide-react';
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
 import { PaginatedRibbon } from "@/components/ui/paginated-ribbon"
 import { useState, useEffect, useRef } from 'react';
@@ -15,6 +15,8 @@ import { LazyImage } from '@/components/ui/lazy-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PlayEpisodeDialog } from '@/components/ui/play-episode-dialog';
 import { useSeasonData } from '@/hooks/use-season-data';
+import { useWebShare } from '@/hooks/use-web-share';
+import { Tooltip } from '@/components/ui/tooltip';
 
 // Constants
 const TVSHOW_OVERVIEW_STR_LIMIT = 260;
@@ -47,6 +49,9 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
     isCreditsLoading,
     error: loadingError
   } = useSeasonData(tvshow.slug);
+
+  // Web Share API hook
+  const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
   useEffect(() => {
     // Find the requested season or default to first season if not found
@@ -166,6 +171,17 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
     },
   ];
 
+  // Function to handle sharing the TV show page
+  const handleShare = async () => {
+    const shareData = {
+      title: `${tvshow.name} - Season ${selectedSeason?.season_number}`,
+      text: tvshow.overview ? `${tvshow.name} - ${tvshow.overview.slice(0, 100)}${tvshow.overview.length > 100 ? '...' : ''}` : `Check out this TV show: ${tvshow.name}`,
+      url: window.location.href,
+    };
+    
+    await share(shareData);
+  };
+
   // Auto-play episode if specified in URL parameters (before early return to ensure hooks order)
   // This should only happen once when the page initially loads with episode parameters from search
   useEffect(() => {
@@ -242,6 +258,24 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                   <AddCircleButton />
 
                   <LikeCircleButton isLiked={false} />
+
+                  <Tooltip 
+                    content={
+                      isShareSupported 
+                        ? "Share this TV show" 
+                        : "Share this TV show (copy link)"
+                    }
+                    position="top"
+                    delayMs={500}
+                  >
+                    <button
+                      onClick={handleShare}
+                      disabled={isSharing}
+                      className="p-1 rounded-full backdrop-blur border-2 border-black dark:border-neutral-400 hover:border-neutral-500 dark:hover:border-neutral-300 transition-all duration-150 cursor-pointer disabled:opacity-50"
+                    >
+                      <Share2 className="h-8 w-8 p-1" />
+                    </button>
+                  </Tooltip>
                 </div>
 
                 {/* genres */}

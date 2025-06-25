@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Services\TvshowService;
+use App\Traits\Likeable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Tvshow extends Model
 {
+    use Likeable;
+    
     protected $guarded = [];
     protected $appends = ['logo'];
     protected $casts = [
@@ -60,4 +63,6 @@ class Tvshow extends Model
         }
         return null;
     }
+
+
 }

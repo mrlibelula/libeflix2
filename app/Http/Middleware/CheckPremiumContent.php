@@ -89,10 +89,10 @@ class CheckPremiumContent
         
         // Admin users can access all premium content without restrictions
         if ($user->isAdmin()) {
-            \Illuminate\Support\Facades\Log::info('Premium content access granted: Admin user', [
-                'user_id' => $user->id,
-                'user_email' => $user->email
-            ]);
+            // \Illuminate\Support\Facades\Log::info('Premium content access granted: Admin user', [
+            //     'user_id' => $user->id,
+            //     'user_email' => $user->email
+            // ]);
             return $next($request);
         }
         
@@ -161,12 +161,12 @@ class CheckPremiumContent
             }
             
             // If not found in database, assume it's premium content for security
-            \Illuminate\Support\Facades\Log::warning('PREMIUM CHECK: Content not found in database - treating as premium', [
-                'encFilePath' => $encFilePath,
-                'decodedPath' => $decodedPath,
-                'user_id' => \Illuminate\Support\Facades\Auth::id(),
-                'will_block' => true
-            ]);
+            // \Illuminate\Support\Facades\Log::warning('PREMIUM CHECK: Content not found in database - treating as premium', [
+            //     'encFilePath' => $encFilePath,
+            //     'decodedPath' => $decodedPath,
+            //     'user_id' => \Illuminate\Support\Facades\Auth::id(),
+            //     'will_block' => true
+            // ]);
             return true;
             
         } catch (\Exception $e) {

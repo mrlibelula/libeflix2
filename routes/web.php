@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EpisodeController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\PopularTopController;
+use App\Http\Controllers\SeasonController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TvshowController;
 use Illuminate\Support\Facades\Route;
@@ -55,6 +57,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/movies/search/no-results', [MovieController::class, 'getNoResultSearches'])->name('api.movies.search.no-results');
     Route::get('api/movies/search/analytics-summary', [MovieController::class, 'getAnalyticsSummary'])->name('api.movies.search.analytics-summary');
     
+    // Movie likes API routes
+    Route::post('api/movies/{movie}/like', [MovieController::class, 'like'])->name('api.movies.like');
+    Route::delete('api/movies/{movie}/like', [MovieController::class, 'unlike'])->name('api.movies.unlike');
+    
     // TV show routes and API
     Route::get('api/tvshows/search', [TvshowController::class, 'search'])->name('api.tvshows.search');
     Route::post('api/tvshows/search/log', [TvshowController::class, 'logSearch'])->name('api.tvshows.search.log');
@@ -62,6 +68,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/tvshows/search/popular-terms', [TvshowController::class, 'getPopularSearchTerms'])->name('api.tvshows.search.popular-terms');
     Route::get('api/tvshows/search/no-results', [TvshowController::class, 'getNoResultSearches'])->name('api.tvshows.search.no-results');
     Route::get('api/tvshows/search/analytics-summary', [TvshowController::class, 'getAnalyticsSummary'])->name('api.tvshows.search.analytics-summary');
+    
+    // TV show likes API routes
+    Route::post('api/tvshows/{tvshow}/like', [TvshowController::class, 'like'])->name('api.tvshows.like');
+    Route::delete('api/tvshows/{tvshow}/like', [TvshowController::class, 'unlike'])->name('api.tvshows.unlike');
+    
+    // Episode likes API routes
+    Route::post('api/episodes/{episode}/like', [EpisodeController::class, 'like'])->name('api.episodes.like');
+    Route::delete('api/episodes/{episode}/like', [EpisodeController::class, 'unlike'])->name('api.episodes.unlike');
+    
+    // Season likes API routes
+    Route::post('api/seasons/{season}/like', [SeasonController::class, 'like'])->name('api.seasons.like');
+    Route::delete('api/seasons/{season}/like', [SeasonController::class, 'unlike'])->name('api.seasons.unlike');
     
     // Alternative Job Queue Routes
     Route::post('api/movies/{movie}/recommendations/initiate', [MovieController::class, 'initiateRecommendationsFetch'])->name('api.movies.recommendations.initiate');
@@ -99,6 +117,13 @@ Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'
 Route::get('api/movies/{movieId}/trailers-by-id', [MovieController::class, 'getTrailersById'])->name('api.movies.trailers-by-id');
 Route::get('api/movies/{movie}/recommendations', [MovieController::class, 'getRecommendations'])->name('api.movies.recommendations');
 Route::get('api/movies/{movie}/similar', [MovieController::class, 'getSimilarMovies'])->name('api.movies.similar');
+
+// Public likes routes (for viewing likes count without authentication)
+Route::get('api/movies/{movie}/likes', [MovieController::class, 'getLikes'])->name('api.movies.likes.public');
+Route::get('api/movies/{movie}/liked-users', [MovieController::class, 'getLikedUsers'])->name('api.movies.liked-users');
+Route::get('api/tvshows/{tvshow}/likes', [TvshowController::class, 'getLikes'])->name('api.tvshows.likes.public');
+Route::get('api/episodes/{episode}/likes', [EpisodeController::class, 'getLikes'])->name('api.episodes.likes.public');
+Route::get('api/seasons/{season}/likes', [SeasonController::class, 'getLikes'])->name('api.seasons.likes.public');
 
 // Admin routes - protected by admin role
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {

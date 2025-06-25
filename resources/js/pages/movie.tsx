@@ -1,6 +1,6 @@
 import AppLayout from "@/layouts/app-layout";
-import { BreadcrumbItem } from "@/types";
-import { Head, Link, usePage } from "@inertiajs/react";
+import { BreadcrumbItem, SharedData } from "@/types";
+import { Head, Link, usePage, router } from "@inertiajs/react";
 import { Clapperboard, HeartIcon, MessageSquareText, Share2, LockIcon, UserIcon, CreditCardIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { MovieCard } from "@/components/ui/movie-card";
 import { MovieCardSkeleton } from "@/components/ui/movie-card-skeleton";
 import { TrailerModal } from "@/components/trailer-modal";
+import { Tooltip } from "@/components/ui/tooltip";
+import { useWebShare } from "@/hooks/use-web-share";
 import axios from 'axios';
 
 // Interface for sidebar state event
@@ -38,12 +40,13 @@ interface MovieData {
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280, isProduction }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string, isProduction: boolean }) {
-  const { props } = usePage<{
+  const { props } = usePage<SharedData & {
     auth: {
       user: any;
       canAccessPremium: boolean;
       isAdmin: boolean;
     };
+    csrf_token: string;
   }>();
 
   // Check if user can access this movie
@@ -87,6 +90,17 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   // State for trailer modal
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
   const [selectedTrailerMovie, setSelectedTrailerMovie] = useState<{ id: number; title: string } | null>(null);
+  
+  // State for likes functionality
+  const [isLiked, setIsLiked] = useState(movie.is_liked || false);
+  const [likesCount, setLikesCount] = useState(movie.likes_count || 0);
+  const [isLikeToggling, setIsLikeToggling] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+  const [likedUsers, setLikedUsers] = useState<Array<{id: number, name: string}>>([]);
+  const [loadingLikedUsers, setLoadingLikedUsers] = useState(false);
+
+  // Web Share API hook
+  const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
   // Function to fetch recommendations
   const fetchRecommendations = async () => {
@@ -142,16 +156,123 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     };
   }, []);
 
+  // Sync like state with movie prop
+  useEffect(() => {
+    setIsLiked(movie.is_liked || false);
+    setLikesCount(movie.likes_count || 0);
+  }, [movie.is_liked, movie.likes_count]);
+
   // Fetch recommendations and similar movies when component mounts
   useEffect(() => {
     fetchRecommendations();
     fetchSimilarMovies();
   }, [movie.id]);
 
+  // Function to handle like toggle
+  const handleLikeToggle = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    if (isLikeToggling) return;
+    
+    setIsLikeToggling(true);
+    setIsLikeAnimating(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsLikeAnimating(false);
+        return;
+      }
+      
+      const method = isLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/movies/${movie.id}/like`, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setIsLiked(data.is_liked);
+          setLikesCount(data.likes_count);
+          // Clear liked users cache to force reload on next hover
+          setLikedUsers([]);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsLikeAnimating(false);
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+          // You could show a toast notification here or handle it differently
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setIsLikeAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setIsLikeAnimating(false);
+    } finally {
+      setIsLikeToggling(false);
+    }
+  };
+
+  // Function to fetch users who liked the movie
+  const fetchLikedUsers = async () => {
+    if (loadingLikedUsers || likedUsers.length > 0) return;
+    
+    setLoadingLikedUsers(true);
+    try {
+      const response = await fetch(`/api/movies/${movie.id}/liked-users`);
+      if (response.ok) {
+        const data = await response.json();
+        setLikedUsers(data.users);
+      }
+    } catch (error) {
+      console.error('Error fetching liked users:', error);
+    } finally {
+      setLoadingLikedUsers(false);
+    }
+  };
+
   // Function to handle trailer clicks from movie cards
   const handleTrailerClick = (movieId: number, movieTitle: string) => {
     setSelectedTrailerMovie({ id: movieId, title: movieTitle });
     setIsTrailerModalOpen(true);
+  };
+
+  // Function to handle sharing the movie page
+  const handleShare = async () => {
+    const shareData = {
+      title: `${movie.title}`,
+      text: movie.overview ? `${movie.title} - ${movie.overview.slice(0, 100)}${movie.overview.length > 100 ? '...' : ''}` : `Check out this movie: ${movie.title}`,
+      url: window.location.href,
+    };
+    
+    await share(shareData);
   };
 
   return (
@@ -276,14 +397,103 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         PG-13&nbsp;&nbsp;•&nbsp;&nbsp;0 views
                       </div>
                       <div className="flex items-center justify-end gap-x-2 text-gray-500 text-base lg:text-lg w-full lg:text-right whitespace-nowrap">
-                        {/* Likes, comments, share, etc. */}
-                        <HeartIcon className="w-5 h-5 lg:w-6 lg:h-6" />
-                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
+                        {/* Likes with tooltip */}
+                        <Tooltip
+                          content={
+                            likesCount > 0
+                              ? loadingLikedUsers
+                                ? <div>Loading...</div>
+                                : likedUsers.length > 0
+                                ? (
+                                  <div className="max-w-xs">
+                                    <div className="font-medium mb-1 text-xs">Liked by:</div>
+                                    <div className="space-y-0.5 max-h-20 overflow-y-auto">
+                                      {likedUsers.slice(0, 5).map((user, index) => (
+                                        <div key={user.id} className="text-xs opacity-90 hover:opacity-100 transition-opacity">
+                                          {user.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {likedUsers.length > 5 && (
+                                      <div className="text-xs opacity-60 mt-1 text-center">
+                                        and {likedUsers.length - 5} more...
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                                : <div>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</div>
+                              : (
+                                <div>
+                                  {isAuthenticated
+                                    ? (isLiked ? "Unlike this movie" : "Like this movie")
+                                    : "Login to like this movie"
+                                  }
+                                </div>
+                              )
+                          }
+                          position="top"
+                          delayMs={500}
+                        >
+                          <button
+                            onClick={handleLikeToggle}
+                            onMouseEnter={() => {
+                              if (likesCount > 0) {
+                                fetchLikedUsers();
+                              }
+                            }}
+                            disabled={isLikeToggling}
+                            className="flex items-center gap-x-1 transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
+                          >
+                            <div
+                              className={`transition-all duration-300 ease-in-out ${
+                                isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                              }`}
+                              style={{
+                                transform: isLikeAnimating 
+                                  ? 'rotate(180deg)' 
+                                  : 'rotate(0deg)',
+                              }}
+                            >
+                              <HeartIcon 
+                                className={`w-5 h-5 lg:w-6 lg:h-6 transition-colors duration-200 ${
+                                  isLiked 
+                                    ? 'text-red-500 fill-red-500 hover:text-red-600 hover:fill-red-600' 
+                                    : 'text-gray-500 hover:text-gray-600'
+                                }`} 
+                              />
+                            </div>
+                            <span className="mr-2 ml-1 lg:mr-4 text-xs lg:text-base">{likesCount}</span>
+                          </button>
+                        </Tooltip>
                         <MessageSquareText className="w-5 h-5 lg:w-6 lg:h-6" />
                         <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
-                        <Share2 className="w-5 h-5 lg:w-6 lg:h-6" />
-                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
-                        <Clapperboard className="w-5 h-5 lg:w-6 lg:h-6" />
+                        <Tooltip 
+                          content={
+                            isShareSupported 
+                              ? "Share this movie" 
+                              : "Share this movie (copy link)"
+                          }
+                          position="top"
+                          delayMs={500}
+                        >
+                          <button
+                            onClick={handleShare}
+                            disabled={isSharing}
+                            className="flex items-center gap-x-1 transition-all duration-200 ease-in-out hover:scale-110 cursor-pointer text-gray-500 hover:text-gray-600 disabled:opacity-50"
+                          >
+                            <Share2 className="w-5 h-5 lg:w-6 lg:h-6" />
+                            <span className="mr-2 lg:mr-4 text-xs lg:text-base">
+                              {isSharing ? "Share" : "Share"}
+                            </span>
+                          </button>
+                        </Tooltip>
+                        <button
+                          onClick={() => handleTrailerClick(movie.id, movie.title)}
+                          className="flex items-center transition-all duration-200 ease-in-out hover:scale-110 cursor-pointer text-gray-500 hover:text-gray-600"
+                          title="Watch trailers"
+                        >
+                          <Clapperboard className="w-5 h-5 lg:w-6 lg:h-6" />
+                        </button>
                       </div>
                     </div>
                   </div>

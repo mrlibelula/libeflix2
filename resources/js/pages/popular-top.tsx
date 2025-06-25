@@ -19,6 +19,8 @@ interface Movie {
   is_local?: boolean;
   slug?: string;
   is_watch_later?: boolean;
+  is_liked?: boolean;
+  likes_count?: number;
   has_subtitles?: boolean;
   subtitle_languages?: string[];
 }
@@ -77,6 +79,25 @@ export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, 
       prevMovies.map(movie => 
         movie.id === movieId 
           ? { ...movie, is_watch_later: newStatus }
+          : movie
+      )
+    );
+  }, []);
+
+  const handleLikeToggle = useCallback((movieId: number, newStatus: boolean, newCount: number) => {
+    // Update the like status and count in both lists
+    setPopularMoviesList(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_liked: newStatus, likes_count: newCount }
+          : movie
+      )
+    );
+
+    setTopRatedMoviesList(prevMovies => 
+      prevMovies.map(movie => 
+        movie.id === movieId 
+          ? { ...movie, is_liked: newStatus, likes_count: newCount }
           : movie
       )
     );
@@ -159,6 +180,7 @@ export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, 
         title={`Popular Movies (${popularMoviesList.length})`}
         ribbonId="popular-movies"
         onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
+        onLikeToggle={handleLikeToggle}
       />
 
       {/* Top Rated Movies Ribbon */}
@@ -168,6 +190,7 @@ export default function PopularTop({ popularMovies, topRatedMovies, imgBaseUrl, 
         title={`Top Rated Movies (${topRatedMoviesList.length})`}
         ribbonId="top-rated-movies"
         onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
+        onLikeToggle={handleLikeToggle}
       />
         
     </AppLayout>

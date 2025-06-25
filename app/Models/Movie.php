@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\Likeable;
 use Illuminate\Database\Eloquent\Model;
 
 class Movie extends Model
 {
+    use Likeable;
+    
     protected $guarded = [];
 
     /**
@@ -39,4 +42,6 @@ class Movie extends Model
     {
         return $this->watchLaterUsers()->detach($user);
     }
+
+
 }

@@ -7,6 +7,7 @@ type TooltipVariant = 'dark' | 'light';
 interface TooltipProps {
   children: React.ReactNode;
   text?: string;
+  content?: React.ReactNode;
   delayMs?: number;
   position?: TooltipPosition;
   variant?: TooltipVariant;
@@ -18,6 +19,7 @@ interface TooltipProps {
 export function Tooltip({ 
   children, 
   text, 
+  content,
   delayMs = 700, 
   position = 'top',
   variant = 'dark',
@@ -39,10 +41,19 @@ export function Tooltip({
 
   // Calculate position based on trigger element
   const updatePosition = () => {
-    if (!triggerRef.current || !tooltipRef.current) return;
+    if (!triggerRef.current) return;
     
     const triggerRect = triggerRef.current.getBoundingClientRect();
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    
+    // Get initial tooltip dimensions by temporarily rendering it off-screen
+    let tooltipWidth = 200; // fallback width
+    let tooltipHeight = 32; // fallback height
+    
+    if (tooltipRef.current) {
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      tooltipWidth = tooltipRect.width || tooltipWidth;
+      tooltipHeight = tooltipRect.height || tooltipHeight;
+    }
     
     let top = 0;
     let left = 0;
@@ -55,63 +66,59 @@ export function Tooltip({
     switch(position) {
       case 'top':
         // If tooltip would go above viewport, flip to bottom
-        if (triggerRect.top - tooltipRect.height - offset < 0) {
+        if (triggerRect.top - tooltipHeight - offset < 0) {
           newPosition = 'bottom';
           top = triggerRect.bottom + offset;
         } else {
-          top = triggerRect.top - tooltipRect.height - offset;
+          top = triggerRect.top - tooltipHeight - offset;
         }
-        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        left = triggerRect.left + (triggerRect.width / 2) - (tooltipWidth / 2);
         break;
       case 'bottom':
         // If tooltip would go below viewport, flip to top
-        if (triggerRect.bottom + tooltipRect.height + offset > viewportHeight) {
+        if (triggerRect.bottom + tooltipHeight + offset > viewportHeight) {
           newPosition = 'top';
-          top = triggerRect.top - tooltipRect.height - offset;
+          top = triggerRect.top - tooltipHeight - offset;
         } else {
           top = triggerRect.bottom + offset;
         }
-        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        left = triggerRect.left + (triggerRect.width / 2) - (tooltipWidth / 2);
         break;
       case 'left':
         // If tooltip would go beyond left viewport, flip to right
-        if (triggerRect.left - tooltipRect.width - offset < 0) {
+        if (triggerRect.left - tooltipWidth - offset < 0) {
           newPosition = 'right';
           left = triggerRect.right + offset;
         } else {
-          left = triggerRect.left - tooltipRect.width - offset;
+          left = triggerRect.left - tooltipWidth - offset;
         }
-        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        top = triggerRect.top + (triggerRect.height / 2) - (tooltipHeight / 2);
         break;
       case 'right':
         // If tooltip would go beyond right viewport, flip to left
-        if (triggerRect.right + tooltipRect.width + offset > viewportWidth) {
+        if (triggerRect.right + tooltipWidth + offset > viewportWidth) {
           newPosition = 'left';
-          left = triggerRect.left - tooltipRect.width - offset;
+          left = triggerRect.left - tooltipWidth - offset;
         } else {
           left = triggerRect.right + offset;
         }
-        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        top = triggerRect.top + (triggerRect.height / 2) - (tooltipHeight / 2);
         break;
     }
     
     // Prevent tooltip from going off-screen horizontally
     if (left < 10) {
       left = 10;
-    } else if (left + tooltipRect.width > viewportWidth - 10) {
-      left = viewportWidth - tooltipRect.width - 10;
+    } else if (left + tooltipWidth > viewportWidth - 10) {
+      left = viewportWidth - tooltipWidth - 10;
     }
     
     // Prevent tooltip from going off-screen vertically
     if (top < 10) {
       top = 10;
-    } else if (top + tooltipRect.height > viewportHeight - 10) {
-      top = viewportHeight - tooltipRect.height - 10;
+    } else if (top + tooltipHeight > viewportHeight - 10) {
+      top = viewportHeight - tooltipHeight - 10;
     }
-    
-    // Add scroll position
-    top += window.scrollY;
-    left += window.scrollX;
     
     setTooltipPosition({ top, left });
     setActualPosition(newPosition);
@@ -127,8 +134,11 @@ export function Tooltip({
       setIsVisible(true);
       // Reset position to initial prop value when showing
       setActualPosition(position);
-      // Update position after state change and rendering
-      setTimeout(updatePosition, 0);
+      // Update position immediately and then after a small delay for tooltip rendering
+      updatePosition();
+      requestAnimationFrame(() => {
+        updatePosition();
+      });
     }, delayMs);
   };
 
@@ -141,19 +151,29 @@ export function Tooltip({
     setIsVisible(false);
   };
 
-  // Update position when window resizes
+  // Update position when window resizes or scrolls
   useEffect(() => {
     if (isVisible) {
+      // Initial position update
       updatePosition();
-      window.addEventListener('resize', updatePosition);
-      window.addEventListener('scroll', updatePosition);
+      
+      // Create throttled update function for better performance
+      let timeoutId: NodeJS.Timeout;
+      const throttledUpdate = () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(updatePosition, 16); // ~60fps
+      };
+      
+      window.addEventListener('resize', throttledUpdate);
+      window.addEventListener('scroll', throttledUpdate, { passive: true });
       
       return () => {
-        window.removeEventListener('resize', updatePosition);
-        window.removeEventListener('scroll', updatePosition);
+        clearTimeout(timeoutId);
+        window.removeEventListener('resize', throttledUpdate);
+        window.removeEventListener('scroll', throttledUpdate);
       };
     }
-  }, [isVisible]);
+  }, [isVisible, position]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -188,16 +208,16 @@ export function Tooltip({
         {children}
       </div>
       
-      {text && isVisible && typeof document !== 'undefined' && createPortal(
+      {(text || content) && isVisible && typeof document !== 'undefined' && createPortal(
         <div
           ref={tooltipRef}
-          className={`fixed px-2 py-1 rounded text-xs whitespace-nowrap shadow-sm ${variantClasses[variant]} ${getAnimationClass()} z-[9999] ${className}`}
+          className={`fixed px-2 py-1 rounded text-xs shadow-sm ${variantClasses[variant]} ${getAnimationClass()} z-[9999] ${className} ${content ? 'whitespace-normal' : 'whitespace-nowrap'} max-w-xs`}
           style={{
             top: `${tooltipPosition.top}px`,
             left: `${tooltipPosition.left}px`,
           }}
         >
-          {text}
+          {content || text}
         </div>,
         document.body
       )}

@@ -61,14 +61,14 @@ class StorageController extends Controller
         }
 
         // Additional security: Log the access attempt
-        \Illuminate\Support\Facades\Log::info('Video file accessed', [
-            'user_id' => \Illuminate\Support\Facades\Auth::id(),
-            'user_email' => \Illuminate\Support\Facades\Auth::user()?->email,
-            'encFilePath' => $encFilePath,
-            'decodedPath' => $filePath,
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent()
-        ]);
+        // \Illuminate\Support\Facades\Log::info('Video file accessed', [
+        //     'user_id' => \Illuminate\Support\Facades\Auth::id(),
+        //     'user_email' => \Illuminate\Support\Facades\Auth::user()?->email,
+        //     'encFilePath' => $encFilePath,
+        //     'decodedPath' => $filePath,
+        //     'ip' => request()->ip(),
+        //     'user_agent' => request()->userAgent()
+        // ]);
 
         $response = response()->file($filePath, [
             'Content-Type' => 'video/mp4',
