@@ -99,8 +99,8 @@ trait HandlesLikes
             if ($movieParam instanceof \App\Models\Movie) {
                 return $movieParam;
             }
-            // If it's just an ID, load the model
-            return \App\Models\Movie::findOrFail($movieParam);
+            // If it's a slug, find by slug, otherwise fail
+            return \App\Models\Movie::where('slug', $movieParam)->firstOrFail();
         }
         
         if ($route->hasParameter('tvshow')) {
@@ -108,8 +108,8 @@ trait HandlesLikes
             if ($tvshowParam instanceof \App\Models\Tvshow) {
                 return $tvshowParam;
             }
-            // If it's just an ID, load the model
-            return \App\Models\Tvshow::findOrFail($tvshowParam);
+            // If it's a slug, find by slug, otherwise fail
+            return \App\Models\Tvshow::where('slug', $tvshowParam)->firstOrFail();
         }
         
         if ($route->hasParameter('episode')) {

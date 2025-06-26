@@ -125,7 +125,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     try {
       setLoadingRecommendations(true);
       setRecommendationsError(null);
-      const response = await axios.get(`/api/movies/${movie.id}/recommendations`);
+      const response = await axios.get(`/api/movies/${movie.slug}/recommendations`);
       if (response.data.success) {
         setRecommendations(response.data.recommendations);
       } else {
@@ -144,7 +144,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     try {
       setLoadingSimilarMovies(true);
       setSimilarMoviesError(null);
-      const response = await axios.get(`/api/movies/${movie.id}/similar`);
+      const response = await axios.get(`/api/movies/${movie.slug}/similar`);
       if (response.data.success) {
         setSimilarMovies(response.data.similar_movies);
       } else {
@@ -184,7 +184,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   useEffect(() => {
     fetchRecommendations();
     fetchSimilarMovies();
-  }, [movie.id]);
+  }, [movie.slug]);
 
   // Effect for Picture-in-Picture on scroll
   useEffect(() => {
@@ -281,7 +281,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
         .slice(0, 15);
       setShuffledBackdrops(shuffled);
     }
-  }, [movie.id]);
+  }, [movie.slug]);
 
   // Function to handle like toggle
   const handleLikeToggle = async () => {
@@ -309,7 +309,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       }
       
       const method = isLiked ? 'DELETE' : 'POST';
-      const response = await fetch(`/api/movies/${movie.id}/like`, {
+      const response = await fetch(`/api/movies/${movie.slug}/like`, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
@@ -361,7 +361,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     
     setLoadingLikedUsers(true);
     try {
-      const response = await fetch(`/api/movies/${movie.id}/liked-users`);
+      const response = await fetch(`/api/movies/${movie.slug}/liked-users`);
       if (response.ok) {
         const data = await response.json();
         setLikedUsers(data.users);

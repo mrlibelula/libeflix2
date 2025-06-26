@@ -1,10 +1,10 @@
 import { AddCircleButton } from '@/components/ui/add-circle-button';
-import { LikeCircleButton } from '@/components/ui/like-circle-button';
+import { LoveCircleButton } from '@/components/ui/love-circle-button';
 import { Button } from '@/components/ui/button';
 import { StarRating } from '@/components/ui/star-rating';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { LoaderCircle, Play, Share2 } from 'lucide-react';
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
 import { PaginatedRibbon } from "@/components/ui/paginated-ribbon"
@@ -35,6 +35,23 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   const [selectedEpisode, setSelectedEpisode] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
+  // Likes functionality state
+  const [isLiked, setIsLiked] = useState(tvshow.is_liked || false);
+  const [likesCount, setLikesCount] = useState(tvshow.likes_count || 0);
+  const [isLikeToggling, setIsLikeToggling] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+  
+  // Get Inertia page props for authentication and CSRF token
+  const { props } = usePage<{ 
+    csrf_token?: string;
+    auth?: {
+      user?: any;
+    };
+  }>();
+  
+  // Check if user is authenticated
+  const isAuthenticated = !!props.auth?.user;
+  
   // New state for lazy-loaded data
   const [seasonEpisodes, setSeasonEpisodes] = useState<Record<number, any[]>>({});
   const [seasonCredits, setSeasonCredits] = useState<any>(tvshow.credits);
@@ -52,6 +69,81 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
 
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
+
+  // Sync like state with tvshow prop
+  useEffect(() => {
+    setIsLiked(tvshow.is_liked || false);
+    setLikesCount(tvshow.likes_count || 0);
+  }, [tvshow.is_liked, tvshow.likes_count]);
+
+  // Function to handle like toggle
+  const handleLikeToggle = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    if (isLikeToggling) return;
+    
+    setIsLikeToggling(true);
+    setIsLikeAnimating(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsLikeAnimating(false);
+        return;
+      }
+      
+      const method = isLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/tvshows/${tvshow.slug}/like`, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setIsLiked(data.is_liked);
+          setLikesCount(data.likes_count);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsLikeAnimating(false);
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setIsLikeAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setIsLikeAnimating(false);
+    } finally {
+      setIsLikeToggling(false);
+    }
+  };
 
   useEffect(() => {
     // Find the requested season or default to first season if not found
@@ -443,7 +535,33 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
 
                   <AddCircleButton />
 
-                  <LikeCircleButton isLiked={false} />
+                  <Tooltip 
+                    content={
+                      isAuthenticated
+                        ? (isLiked ? "Unlike this TV show" : "Like this TV show")
+                        : "Login to like this TV show"
+                    }
+                    position="top"
+                    delayMs={500}
+                  >
+                    <div
+                      className={`transition-all duration-300 ease-in-out ${
+                        isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                      }`}
+                      style={{
+                        transform: isLikeAnimating 
+                          ? 'rotate(180deg)' 
+                          : 'rotate(0deg)',
+                      }}
+                    >
+                      <LoveCircleButton 
+                        isLiked={isLiked} 
+                        onClick={handleLikeToggle}
+                        disabled={isLikeToggling}
+                        className={`${isLikeToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                    </div>
+                  </Tooltip>
 
                   <Tooltip 
                     content={
@@ -532,6 +650,15 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                             tvshow.overview
                           )}
                         </div>
+
+                        {/* likes count display */}
+                        {likesCount > 0 && (
+                          <div className="mt-6 flex items-center gap-x-2 text-sm text-neutral-600 dark:text-neutral-400">
+                            <span className="font-medium">
+                              {likesCount} {likesCount === 1 ? 'person likes' : 'people like'} this TV show
+                            </span>
+                          </div>
+                        )}
 
                         {/* tabs */}
                         <div className="mt-10">

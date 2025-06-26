@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Database\Eloquent\Model;
 
 class TvshowController extends Controller
 {
@@ -91,6 +92,11 @@ class TvshowController extends Controller
 
         // Append voteAvarageStars to the TV show
         $tvshow->voteAverageStars = Tool::voteAvarageToStars($tvshow->vote_average, $tvshow->vote_count);
+
+        // Add likes information
+        $user = $request->user();
+        $tvshow->likes_count = $tvshow->likesCount();
+        $tvshow->is_liked = $user ? $tvshow->isLikedBy($user) : false;
 
         // For credits, we need to load episodes on demand, so we'll use the API endpoint
         // For now, let's load credits from the cast stored in the tvshow table
@@ -1097,5 +1103,18 @@ class TvshowController extends Controller
         return $results;
     }
 
+    private function getTvshowFromRoute(Request $request)
+    {
+        $slug = $request->route('tvshow');
+        return Tvshow::where('slug', $slug)->firstOrFail();
+    }
 
+    /**
+     * Get the model from the route parameters.
+     * Override the trait's method to use slug-based lookup.
+     */
+    protected function getModelFromRoute(Request $request): Model
+    {
+        return $this->getTvshowFromRoute($request);
+    }
 }

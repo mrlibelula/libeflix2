@@ -9,12 +9,13 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2 } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart } from 'lucide-react';
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import { InlinePremiumNotice } from "@/components/premium-content-notice";
 import { Link, usePage } from "@inertiajs/react";
 import { useWebShare } from "@/hooks/use-web-share";
+import { EpisodesApi } from "@/services/episodes-api";
 
 /**
  * Enhanced PlayEpisodeDialog Component
@@ -158,6 +159,12 @@ export function PlayEpisodeDialog({
 
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
+
+  // Add like-related state
+  const [isLiked, setIsLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [isLikeToggling, setIsLikeToggling] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -1748,6 +1755,50 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Add effect to fetch initial likes state
+  useEffect(() => {
+    if (episode?.id && isAuthenticated) {
+      EpisodesApi.getLikes(episode.id)
+        .then(response => {
+          setIsLiked(response.is_liked);
+          setLikesCount(response.likes_count);
+        })
+        .catch(error => {
+          console.error('Error fetching likes:', error);
+        });
+    }
+  }, [episode?.id, isAuthenticated]);
+
+  // Add like toggle handler
+  const handleLikeToggle = async () => {
+    if (!isAuthenticated || isLikeToggling) return;
+    
+    setIsLikeToggling(true);
+    setIsLikeAnimating(true);
+    
+    try {
+      const response = isLiked
+        ? await EpisodesApi.unlike(episode.id)
+        : await EpisodesApi.like(episode.id);
+      
+      // Change status at the midpoint of animation
+      setTimeout(() => {
+        setIsLiked(response.is_liked);
+        setLikesCount(response.likes_count);
+      }, 150);
+      
+      // Complete animation cycle
+      setTimeout(() => {
+        setIsLikeAnimating(false);
+      }, 300);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setIsLikeAnimating(false);
+    } finally {
+      setIsLikeToggling(false);
+    }
+  };
+
   if (error) {
     return (
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -2314,6 +2365,43 @@ export function PlayEpisodeDialog({
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-x-4">
+                    {/* Like button - only for premium users and admins */}
+                    {(props.auth.canAccessPremium || props.auth.isAdmin) && (
+                      <Tooltip 
+                        text={
+                          isAuthenticated 
+                            ? (isLiked ? "Unlike this episode" : "Like this episode") 
+                            : "Login to like this episode"
+                        } 
+                        position="bottom"
+                      >
+                        <button
+                          onClick={handleLikeToggle}
+                          disabled={isLikeToggling || !isAuthenticated}
+                          className="focus:outline-none cursor-pointer disabled:opacity-50"
+                        >
+                          <div
+                            className={`transition-all duration-300 ease-in-out ${
+                              isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                            }`}
+                            style={{
+                              transform: isLikeAnimating 
+                                ? 'rotate(180deg)' 
+                                : 'rotate(0deg)',
+                            }}
+                          >
+                            <Heart 
+                              className={`w-5 h-5 transition-colors duration-200 ${
+                                isLiked 
+                                  ? 'text-rose-500 fill-rose-500 hover:text-rose-600 hover:fill-rose-600' 
+                                  : 'hover:text-rose-500'
+                              }`}
+                            />
+                          </div>
+                        </button>
+                      </Tooltip>
+                    )}
+
                     {/* Repeat mode indicator */}
                     {(repeatOne || repeatSeason || repeatTvshow) && (
                       <span className="hidden text-xs text-rose-500 ml-2">
@@ -2386,6 +2474,10 @@ export function PlayEpisodeDialog({
               <DialogDescription>
                 <span className="sm:flex justify-start items-center gap-x-2 w-full">
                     <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
+                    {/* Add likes count */}
+                    {likesCount > 0 && (
+                      <><span> · </span><span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span></>
+                    )}
                 </span>
               </DialogDescription>
             </DialogHeader>

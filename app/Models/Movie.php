@@ -44,5 +44,15 @@ class Movie extends Model
         return $this->watchLaterUsers()->detach($user);
     }
 
+    /**
+     * Get the route key for the model.
+     *
+     * @return string
+     */
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
+
 
 }
