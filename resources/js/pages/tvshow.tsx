@@ -741,7 +741,23 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       console.log('🔍 hasNextEpisode (current season only):', hasNextInCurrentSeason, 'for episode:', selectedEpisode?.name);
                       return hasNextInCurrentSeason;
                     })()}
-                    hasPreviousEpisode={hasSmartPreviousEpisode(selectedEpisode)}
+                    hasPreviousEpisode={(() => {
+                      // Check if there's a previous episode specifically in the CURRENT season
+                      const currentIndex = currentSeasonEpisodes.findIndex((e: any) => e.id === selectedEpisode.id);
+                      let hasPrevInCurrentSeason = false;
+                      
+                      if (currentIndex !== -1) {
+                        for (let i = currentIndex - 1; i >= 0; i--) {
+                          if (isEpisodePlayable(currentSeasonEpisodes[i])) {
+                            hasPrevInCurrentSeason = true;
+                            break;
+                          }
+                        }
+                      }
+                      
+                      console.log('🔍 hasPreviousEpisode (current season only):', hasPrevInCurrentSeason, 'for episode:', selectedEpisode?.name);
+                      return hasPrevInCurrentSeason;
+                    })()}
                     onNextEpisode={() => {
                       console.log('📱 Regular onNextEpisode called');
                       const currentIndex = currentSeasonEpisodes.findIndex((e: any) => e.id === selectedEpisode.id);
@@ -770,12 +786,28 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       }
                     }}
                     onPreviousEpisode={() => {
+                      console.log('📱 Regular onPreviousEpisode called');
                       const currentIndex = currentSeasonEpisodes.findIndex((e: any) => e.id === selectedEpisode.id);
-                      if (currentIndex > 0) {
-                        const prevEpisode = currentSeasonEpisodes[currentIndex - 1];
-                        if (isEpisodePlayable(prevEpisode)) {
+                      console.log('📱 Current episode index:', currentIndex, 'in season with', currentSeasonEpisodes.length, 'episodes');
+                      
+                      // Use the same logic as hasSmartPreviousEpisode - look for the previous PLAYABLE episode
+                      let foundPrevEpisode = false;
+                      for (let i = currentIndex - 1; i >= 0; i--) {
+                        const prevEpisode = currentSeasonEpisodes[i];
+                        const isPlayable = isEpisodePlayable(prevEpisode);
+                        console.log(`📱 Checking episode ${i}: ${prevEpisode.name} - is_in_storage: ${prevEpisode.is_in_storage}, encFilePath: "${prevEpisode.encFilePath}", isPlayable: ${isPlayable}`);
+                        
+                        if (isPlayable) {
+                          console.log('📱 Found previous PLAYABLE episode in same season:', prevEpisode.name);
+                          foundPrevEpisode = true;
                           setSelectedEpisode(prevEpisode);
+                          setIsDialogOpen(true);
+                          break;
                         }
+                      }
+                      
+                      if (!foundPrevEpisode) {
+                        console.log('📱 No playable previous episode found in current season');
                       }
                     }}
                     // Enhanced navigation functions for handling missing episodes
@@ -971,17 +1003,24 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       }
                     }}
                     onFindPreviousAvailableEpisode={() => {
+                      console.log('🔍 Searching for previous PLAYABLE episode...');
                       const currentIndex = currentSeasonEpisodes.findIndex((e: any) => e.id === selectedEpisode.id);
                       
                       // First, try to find previous PLAYABLE episode in current season
+                      console.log('🔍 Searching current season for previous playable episodes...');
                       for (let i = currentIndex - 1; i >= 0; i--) {
                         const episode = currentSeasonEpisodes[i];
-                        if (isEpisodePlayable(episode)) {
+                        const isPlayable = isEpisodePlayable(episode);
+                        console.log(`🔍 Episode ${i}: ${episode.name} - isPlayable: ${isPlayable}`);
+                        if (isPlayable) {
+                          console.log('🔍 Found playable previous episode in current season:', episode.name);
                           setSelectedEpisode(episode);
                           setIsDialogOpen(true);
                           return;
                         }
                       }
+                      
+                      console.log('🔍 No playable previous episodes in current season, searching previous seasons...');
                       
                       // If no available episodes in current season, search previous seasons
                       const currentSeasonIndex = tvshow.seasons.findIndex(
@@ -1057,13 +1096,26 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       
                       for (let seasonIndex = currentSeasonIndex - 1; seasonIndex >= 0; seasonIndex--) {
                         const season = tvshow.seasons[seasonIndex];
+                        console.log(`🔍 Checking season ${season.season_number} - seasonFolderExists: ${season.seasonFolderExists}`);
                         if (season.seasonFolderExists) {
                           const prevSeasonEpisodes = seasonEpisodes[season.season_number];
+                          console.log(`🔍 Season ${season.season_number} episodes:`, prevSeasonEpisodes ? `${prevSeasonEpisodes.length} loaded` : 'not loaded');
+                          
                           if (prevSeasonEpisodes) {
+                            console.log(`🔍 Searching through ${prevSeasonEpisodes.length} episodes in season ${season.season_number} (backwards):`);
+                            
+                            // Debug each episode in this season (backwards)
+                            for (let i = prevSeasonEpisodes.length - 1; i >= 0; i--) {
+                              const ep = prevSeasonEpisodes[i];
+                              const isPlayable = isEpisodePlayable(ep);
+                              console.log(`🔍   Episode ${i + 1}: ${ep.name} - is_in_storage: ${ep.is_in_storage}, encFilePath: "${ep.encFilePath}", isPlayable: ${isPlayable}`);
+                            }
+                            
                             // Find last playable episode in the previous season
                             for (let i = prevSeasonEpisodes.length - 1; i >= 0; i--) {
                               const episode = prevSeasonEpisodes[i];
-                              if (episode.is_in_storage && episode.encFilePath) {
+                              if (isEpisodePlayable(episode)) {
+                                console.log(`🔍 *** FOUND PLAYABLE PREVIOUS EPISODE: ${episode.name} in season ${season.season_number} ***`);
                                 foundEpisode = true;
                                 // Change to the previous season
                                 handleSeasonSelect(season);
@@ -1077,6 +1129,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                               }
                             }
                             
+                            console.log(`🔍 No playable episodes found in season ${season.season_number}, continuing to previous season...`);
+                            
                             seasonsChecked++;
                             // If this was the last season to check and no episode found
                             if (seasonsChecked === seasonsToCheck && !foundEpisode) {
@@ -1084,11 +1138,23 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                             }
                           } else {
                             // Load episodes for this season if not loaded
+                            console.log(`🔍 Loading episodes for season ${season.season_number}...`);
                             loadSeasonEpisodes(season.season_number).then((episodes) => {
+                              console.log(`🔍 Loaded ${episodes?.length || 0} episodes for season ${season.season_number}`);
+                              
+                              if (episodes && episodes.length > 0) {
+                                console.log(`🔍 Searching through loaded episodes in season ${season.season_number} (backwards):`);
+                                episodes.forEach((ep: any, index: number) => {
+                                  const isPlayable = isEpisodePlayable(ep);
+                                  console.log(`🔍   Episode ${index + 1}: ${ep.name} - is_in_storage: ${ep.is_in_storage}, encFilePath: "${ep.encFilePath}", isPlayable: ${isPlayable}`);
+                                });
+                              }
+                              
                               // Find last playable episode
                               for (let i = episodes.length - 1; i >= 0; i--) {
                                 const episode = episodes[i];
-                                if (episode.is_in_storage && episode.encFilePath) {
+                                if (isEpisodePlayable(episode)) {
+                                  console.log(`🔍 *** FOUND PLAYABLE PREVIOUS EPISODE: ${episode.name} in loaded season ${season.season_number} ***`);
                                   foundEpisode = true;
                                   handleSeasonSelect(season);
                                   setTimeout(() => {
@@ -1099,9 +1165,17 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                                 }
                               }
                               
+                              console.log(`🔍 No playable episodes found in loaded season ${season.season_number}`);
                               seasonsChecked++;
                               if (seasonsChecked === seasonsToCheck && !foundEpisode) {
                                 // If this was the last season to check and no episode found
+                                console.log('🔍 All previous seasons checked, no playable episodes found - triggering handleNoPreviousEpisodes');
+                                handleNoPreviousEpisodes();
+                              }
+                            }).catch((error) => {
+                              console.error(`🔍 Error loading episodes for season ${season.season_number}:`, error);
+                              seasonsChecked++;
+                              if (seasonsChecked === seasonsToCheck && !foundEpisode) {
                                 handleNoPreviousEpisodes();
                               }
                             });
@@ -1112,7 +1186,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                     onFirstEpisodeOfSeason={() => {
                       // Get the first episode with valid file path in the current season
                       const firstPlayableEpisode = currentSeasonEpisodes.find((e: any) => 
-                        e.is_in_storage && e.encFilePath
+                        isEpisodePlayable(e)
                       );
                       
                       if (firstPlayableEpisode) {
@@ -1140,7 +1214,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                         // If we're already on first season, just go to first episode
                         if (firstSeason.season_number === selectedSeason.season_number) {
                           const firstPlayableEpisode = currentSeasonEpisodes.find((e: any) => 
-                            e.is_in_storage && e.encFilePath
+                            isEpisodePlayable(e)
                           );
                           
                           if (firstPlayableEpisode) {
