@@ -96,6 +96,7 @@ export function PlayEpisodeDialog({
   const [showNextEpisodeNotification, setShowNextEpisodeNotification] = useState(false);
   const [showPremiumNotice, setShowPremiumNotice] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isAccessChecked, setIsAccessChecked] = useState(false);
   
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -436,9 +437,9 @@ export function PlayEpisodeDialog({
       return response.ok;
     } catch (error) {
       console.error('Error checking content access:', error);
-      setAuthError('Unable to verify access permissions');
-      setShowPremiumNotice(true);
-      return false; // Fail closed for security
+      // Don't show premium notice for network errors - just allow video to try loading
+      // The video element itself will handle network errors appropriately
+      return true; // Allow the video to attempt loading and handle its own errors
     }
   };
 
@@ -1066,7 +1067,7 @@ export function PlayEpisodeDialog({
 
   // Add effect to reset video state when the episode changes
   useEffect(() => {
-    if (!videoRef.current || !dialogOpen) return;
+    if (!videoRef.current || !dialogOpen || !isAccessChecked) return;
     
     // Create a function to handle the video loading and playback
     const prepareAndPlayVideo = () => {
@@ -1177,7 +1178,7 @@ export function PlayEpisodeDialog({
       }
     };
   // Only run this effect when the episode changes or dialog state changes, NOT when subtitle preferences change
-  }, [episode?.encFilePath, dialogOpen, autoPlay]);
+  }, [episode?.encFilePath, dialogOpen, autoPlay, isAccessChecked]);
 
   // Separate effect to handle subtitle changes without restarting the video
   useEffect(() => {
@@ -1233,21 +1234,26 @@ export function PlayEpisodeDialog({
   useEffect(() => {
     // This useEffect runs when the dialog opens
     if (dialogOpen && episode?.encFilePath) {
+      setIsAccessChecked(false);
       setShowPremiumNotice(false);
       setAuthError(null);
-      
-      // SECURITY: Clear any cached video content
-      if (videoRef.current) {
-        videoRef.current.src = '';
-        videoRef.current.load();
-      }
+      setError(null);
       
       // Check content access before attempting to load video
-      checkContentAccess().then((hasAccess) => {
-        if (!hasAccess) {
-          setIsLoading(false);
-        }
-      });
+      checkContentAccess()
+        .then((hasAccess) => {
+          if (!hasAccess) {
+            setIsLoading(false);
+          }
+        })
+        .catch((error) => {
+          console.error('Access check failed:', error);
+          // Don't set error state for access check failures
+          // Let the video element handle loading errors
+        })
+        .finally(() => {
+          setIsAccessChecked(true);
+        });
     }
   }, [dialogOpen, episode?.name, episode?.encFilePath]);
 
@@ -1747,7 +1753,7 @@ export function PlayEpisodeDialog({
                       <video 
                         ref={videoRef}
                         key={episode.encFilePath}
-                        src={canAccessEpisode ? `${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}` : undefined}
+                        src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}` : undefined}
                         className="w-full h-full object-cover"
                         style={isFullscreen ? { objectFit: 'contain' } : {}}
                         controls={false}
