@@ -767,20 +767,59 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                                     itemsPerPage={30}
                                     paginationThreshold={30}
                                   >
-                                    {seasonCredits.crew.map((crew: any, index: number) => {
-                                      // Only prioritize the first 6-8 crew members for initial viewport
-                                      const isPriority = index < 8;
-                                      
-                                      return (
-                                        <CreditPoster 
-                                          key={crew.id || `crew-${index}`}
-                                          imageUrl={crew.profilePathUrl} 
-                                          name={crew.name}
-                                          characterName={crew.job} 
-                                          priority={isPriority}
-                                        />
-                                      );
-                                    })}
+                                    {(() => {
+                                      const jobOrder = [
+                                        'Director',
+                                        'Executive Producer',
+                                        'Producer',
+                                        'Writer',
+                                        'Screenplay',
+                                        'Teleplay',
+                                        'Story',
+                                        'Creator',
+                                        'Director of Photography',
+                                        'Editor',
+                                        'Production Design',
+                                        'Art Direction',
+                                        'Costume Design',
+                                        'Casting',
+                                        'Original Music Composer',
+                                      ];
+
+                                      const sortedCrew = [...seasonCredits.crew].sort((a, b) => {
+                                        const indexA = jobOrder.indexOf(a.job);
+                                        const indexB = jobOrder.indexOf(b.job);
+
+                                        if (indexA !== -1 && indexB === -1) return -1;
+                                        if (indexA === -1 && indexB !== -1) return 1;
+                                        if (indexA !== -1 && indexB !== -1) {
+                                          if (indexA !== indexB) {
+                                            return indexA - indexB;
+                                          }
+                                        }
+                                        
+                                        const jobComparison = a.job.localeCompare(b.job);
+                                        if (jobComparison !== 0) {
+                                          return jobComparison;
+                                        }
+                                        return a.name.localeCompare(b.name);
+                                      });
+
+                                      return sortedCrew.map((crew: any, index: number) => {
+                                        // Only prioritize the first 6-8 crew members for initial viewport
+                                        const isPriority = index < 8;
+                                        
+                                        return (
+                                          <CreditPoster 
+                                            key={crew.id || `crew-${index}`}
+                                            imageUrl={crew.profilePathUrl} 
+                                            name={crew.name}
+                                            characterName={crew.job} 
+                                            priority={isPriority}
+                                          />
+                                        );
+                                      });
+                                    })()}
                                   </PaginatedRibbon>
                                 </div>
                               )}

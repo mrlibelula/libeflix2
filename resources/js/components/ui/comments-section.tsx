@@ -204,7 +204,7 @@ export function CommentsSection({
   usePolling(
     stablePollingFetch,
     {
-      interval: 1000, // 1 second for testing
+      interval: 10000,
       enabled: true,
       immediate: true
     }
@@ -298,7 +298,7 @@ export function CommentsSection({
   const { startPolling, stopPolling } = usePolling(
     stablePollingFetch,
     {
-      interval: 1000,
+      interval: 10000,
       enabled: true,
       immediate: true
     }
