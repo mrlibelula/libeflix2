@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\Commentable;
 use App\Traits\Likeable;
 use Illuminate\Database\Eloquent\Model;
 
 class Movie extends Model
 {
-    use Likeable;
+    use Likeable, Commentable;
     
     protected $guarded = [];
 

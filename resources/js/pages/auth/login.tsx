@@ -40,7 +40,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             // Clear sessionStorage
             sessionStorage.clear();
             
-            console.log('Browser storage cleared on login page load');
+            // console.log('Browser storage cleared on login page load');
         } catch (error) {
             console.warn('Could not clear browser storage:', error);
         }

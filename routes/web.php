@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EpisodeController;
 use App\Http\Controllers\MovieController;
@@ -10,12 +11,28 @@ use App\Http\Controllers\TvshowController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// PUBLIC COMMENT ROUTES - MUST BE FIRST TO AVOID CONFLICTS
+Route::get('api/comments/public', [CommentController::class, 'publicIndex'])->name('api.comments.public.index');
+Route::get('api/comments/{comment}/public', [CommentController::class, 'publicShow'])->name('api.comments.public.show');
+
+// Public comment share route (accessible without authentication)
+Route::get('api/comments/{comment}/share', [CommentController::class, 'share'])->name('api.comments.share');
+
+// Test route to verify public access works
+Route::get('api/test-public', function () {
+    return response()->json(['message' => 'Public access works!', 'timestamp' => now()]);
+});
 
 Route::get('/', function () {
     return Inertia::render('dashboard');
 })->name('home');
 
 Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+// CSRF token refresh endpoint
+Route::get('csrf-token', function () {
+    return response()->json(['csrf_token' => csrf_token()]);
+});
 
 // Public routes (accessible without authentication)
 // TV Shows routes
@@ -60,6 +77,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Movie likes API routes
     Route::post('api/movies/{movie}/like', [MovieController::class, 'like'])->name('api.movies.like');
     Route::delete('api/movies/{movie}/like', [MovieController::class, 'unlike'])->name('api.movies.unlike');
+    
+    // Comments API routes
+    Route::get('api/comments', [CommentController::class, 'index'])->name('api.comments.index');
+    Route::post('api/comments', [CommentController::class, 'store'])->name('api.comments.store');
+    Route::get('api/comments/{comment}', [CommentController::class, 'show'])->name('api.comments.show');
+    Route::put('api/comments/{comment}', [CommentController::class, 'update'])->name('api.comments.update');
+    Route::delete('api/comments/{comment}', [CommentController::class, 'destroy'])->name('api.comments.destroy');
+    Route::get('api/comments/{comment}/replies', [CommentController::class, 'replies'])->name('api.comments.replies');
+    Route::post('api/comments/{comment}/like', [CommentController::class, 'toggleLike'])->name('api.comments.like');
     
     // TV show routes and API
     Route::get('api/tvshows/search', [TvshowController::class, 'search'])->name('api.tvshows.search');
@@ -125,6 +151,8 @@ Route::get('api/tvshows/{tvshow}/likes', [TvshowController::class, 'getLikes'])-
 Route::get('api/episodes/{episode}/likes', [EpisodeController::class, 'getLikes'])->name('api.episodes.likes.public');
 Route::get('api/seasons/{season}/likes', [SeasonController::class, 'getLikes'])->name('api.seasons.likes.public');
 
+// Public comment routes moved to top of file to avoid conflicts
+
 // Admin routes - protected by admin role
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('dashboard', function () {
@@ -156,6 +184,33 @@ Route::middleware(['auth', 'role_or_permission:editor|manage movies'])->prefix('
     // Editor content management routes (future implementation)
     // Route::get('movies', [EditorMovieController::class, 'index'])->name('movies.index');
     // Route::get('tvshows', [EditorTvshowController::class, 'index'])->name('tvshows.index');
+});
+
+// Test route for debugging comments
+Route::get('test-comments/{movieId}', function ($movieId) {
+    try {
+        $movie = \App\Models\Movie::findOrFail($movieId);
+        
+        // Test basic relationship
+        $basicComments = $movie->comments()->get();
+        
+        // Test with replies
+        $commentsWithReplies = $movie->commentsWithReplies()->get();
+        
+        return response()->json([
+            'movie_id' => $movieId,
+            'basic_comments_count' => $basicComments->count(),
+            'comments_with_replies_count' => $commentsWithReplies->count(),
+            'basic_comments' => $basicComments,
+            'comments_with_replies' => $commentsWithReplies,
+            'total_comments' => $movie->commentsCount(),
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
 });
 
 require __DIR__.'/settings.php';

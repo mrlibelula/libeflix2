@@ -6,13 +6,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { PaginatedRibbon } from "@/components/ui/paginated-ribbon";
 import { CreditPoster } from "@/components/ui/credit-poster";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MovieCard } from "@/components/ui/movie-card";
 import { MovieCardSkeleton } from "@/components/ui/movie-card-skeleton";
 import { TrailerModal } from "@/components/trailer-modal";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useWebShare } from "@/hooks/use-web-share";
 import axios from 'axios';
+import { LazyImage } from "@/components/ui/lazy-image";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CommentsSection } from "@/components/ui/comments-section";
+
+// console.log('movie.tsx loaded, CommentsSection imported:', CommentsSection);
 
 // Interface for sidebar state event
 interface SidebarStateDetail {
@@ -93,6 +98,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState(false);
   const [selectedTrailerMovie, setSelectedTrailerMovie] = useState<{ id: number; title: string } | null>(null);
   
+  // State for backdrop dialog
+  const [selectedBackdrop, setSelectedBackdrop] = useState<string | null>(null);
+  const [isBackdropDialogOpen, setIsBackdropDialogOpen] = useState(false);
+  
+  // State for shuffled backdrops (to maintain random order)
+  const [shuffledBackdrops, setShuffledBackdrops] = useState<any[]>([]);
+  
   // State for likes functionality
   const [isLiked, setIsLiked] = useState(movie.is_liked || false);
   const [likesCount, setLikesCount] = useState(movie.likes_count || 0);
@@ -100,6 +112,10 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   const [likedUsers, setLikedUsers] = useState<Array<{id: number, name: string}>>([]);
   const [loadingLikedUsers, setLoadingLikedUsers] = useState(false);
+
+  // Video element ref for Picture-in-Picture
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hasUserInitiatedPlayback, setHasUserInitiatedPlayback] = useState(false);
 
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
@@ -168,6 +184,103 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   useEffect(() => {
     fetchRecommendations();
     fetchSimilarMovies();
+  }, [movie.id]);
+
+  // Effect for Picture-in-Picture on scroll
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    
+    // This feature is only for the <video> element, not the iframe,
+    // only for desktop/tablet views, and only after the user has started playback.
+    if (!videoElement || isProduction || window.innerWidth < 1024 || !hasUserInitiatedPlayback) {
+        return;
+    }
+
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            const isVideoInPiP = document.pictureInPictureElement === videoElement;
+
+            // User scrolled down, video is less than 50% visible
+            if (entry.intersectionRatio < 0.5) {
+                if (
+                    document.pictureInPictureEnabled && 
+                    !isVideoInPiP &&
+                    !videoElement.paused &&
+                    videoElement.HAVE_CURRENT_DATA
+                ) {
+                    videoElement.requestPictureInPicture().catch((error) => {
+                        // Avoid logging errors if user cancels PiP request
+                        if (error.name !== 'AbortError') {
+                            console.error("Failed to enter PiP mode:", error);
+                        }
+                    });
+                }
+            } 
+            // User scrolled up, video is back in view
+            else if (isVideoInPiP) {
+                document.exitPictureInPicture().catch((error) => {
+                    console.error("Failed to exit PiP mode:", error);
+                });
+            }
+        },
+        {
+            threshold: 0.5, // Trigger when 50% of the video is visible/hidden
+        }
+    );
+
+    observer.observe(videoElement);
+
+    // On video pause, if it's in PiP, exit PiP.
+    const handlePause = () => {
+        if (document.pictureInPictureElement === videoElement) {
+            document.exitPictureInPicture();
+        }
+    };
+
+    videoElement.addEventListener('pause', handlePause);
+
+    return () => {
+        if (videoElement) {
+            observer.unobserve(videoElement);
+            videoElement.removeEventListener('pause', handlePause);
+
+            // If component unmounts and this video is in PiP, exit PiP.
+            if (document.pictureInPictureElement === videoElement) {
+                document.exitPictureInPicture();
+            }
+        }
+    };
+  }, [isProduction, hasUserInitiatedPlayback]);
+
+  // Cleanup effect to stop video on component unmount
+  useEffect(() => {
+    const videoElement = videoRef.current;
+
+    // This is a cleanup function that runs when the component unmounts
+    return () => {
+      if (videoElement) {
+        // Pause the video to prevent audio from playing in the background
+        videoElement.pause();
+
+        // If the video is in Picture-in-Picture mode, we must exit it
+        if (document.pictureInPictureElement === videoElement) {
+          document.exitPictureInPicture().catch((error) => {
+            // Log error if we can't exit PiP, but it's not critical
+            console.error("Failed to exit PiP on unmount:", error);
+          });
+        }
+      }
+    };
+  }, []); // The empty dependency array ensures this effect runs only on mount and unmount
+
+  // Shuffle backdrops once when component mounts
+  useEffect(() => {
+    if (movie.images?.backdrops && movie.images.backdrops.length > 0) {
+      const shuffled = [...movie.images.backdrops]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 15);
+      setShuffledBackdrops(shuffled);
+    }
   }, [movie.id]);
 
   // Function to handle like toggle
@@ -298,6 +411,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     await share(shareData);
   };
 
+  // Function to handle backdrop image click
+  const handleBackdropClick = (backdropPath: string) => {
+    setSelectedBackdrop(backdropPath);
+    setIsBackdropDialogOpen(true);
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${movie.title}`}>
@@ -353,14 +472,16 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
       <div>
         <div className="flex flex-col items-start justify-between">
           <div className="flex flex-col w-full">
-            <div className="bg-black text-white focus:outline-none relative">
+            <div className="bg-black text-white focus:outline-none sticky top-0 z-30 lg:relative">
               {!isProduction ? (
                 <video 
+                  ref={videoRef}
                   className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none"  
                   controls={canAccessMovie ? true : false}
                   controlsList="nodownload" 
                   onContextMenu={(e) => e.preventDefault()}
                   poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
+                  onPlay={() => setHasUserInitiatedPlayback(true)}
                 >
                   <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
                   
@@ -442,6 +563,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                 </div>
               )}
             </div>
+            
             <div className="p-3 md:p-5 lg:p-7 w-full">
               <div className="flex items-start justify-between gap-7 w-full">
                 <div className="flex flex-col gap-y-7 w-full">
@@ -597,7 +719,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         )}
                       </div>
                     </div>
-                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2rem)] lg:w-full">
+
+                    {/* Cast and Crew Tabs */}
+                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]" 
+                      style={{
+                        '--dynamic-sidebar-width': sidebarWidth
+                      } as React.CSSProperties}>
                       <Tabs 
                         defaultValue="cast" 
                         className="w-full lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]"
@@ -674,11 +801,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       </Tabs>
                     </div>
                     <div 
-                      className="flex flex-col gap-y-10 w-[calc(100vw-2rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]"
+                      className="flex flex-col gap-y-10 w-[calc(100vw-2rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-5rem)]"
                       style={{
                         '--dynamic-sidebar-width': sidebarWidth
                       } as React.CSSProperties}
                     >
+                      
                       {/* Recommended Movies Section */}
                       <div className="flex flex-col gap-y-4 w-full">
                         <h2 className="text-xl font-bold mb-4">Recommended Movies</h2>
@@ -756,6 +884,66 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                           </div>
                         )}
                       </div>
+
+                      <div className="flex flex-col lg:flex-row lg:gap-x-10 w-full"
+                        style={{
+                          '--dynamic-sidebar-width': sidebarWidth
+                        } as React.CSSProperties}
+                      >
+                        {/* Comments section */}
+                        <div className="flex flex-col gap-y-4 w-full">
+                          {(() => {
+                            // console.log('About to render CommentsSection with props:', {
+                            //   commentableType: "movie",
+                            //   commentableId: movie.id,
+                            //   isAuthenticated,
+                            //   currentUserId: props.auth.user?.id,
+                            //   initialCommentsCount: movie.comments_count || 0
+                            // });
+                            return null;
+                          })()}
+                          <CommentsSection
+                            commentableType="movie"
+                            commentableId={movie.id}
+                            isAuthenticated={isAuthenticated}
+                            currentUserId={props.auth.user?.id}
+                            initialCommentsCount={movie.comments_count || 0}
+                            loginLink={
+                              <Link 
+                                href={route('login') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)}
+                                className="text-blue-500 hover:text-blue-600 underline transition-colors duration-200"
+                              >
+                                Login to join the conversation
+                              </Link>
+                            }
+                          />
+                        </div>
+
+                        {/* other logos, backdrops and posters */}
+                        {shuffledBackdrops.length > 0 && (
+                          <div className="flex flex-col gap-y-4 w-full">
+                            <h2 className="text-xl font-bold mb-4">Images</h2>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-10">
+                              {shuffledBackdrops.map((backdrop: any, index: number) => (
+                                <div
+                                  key={`backdrop-${index}`}
+                                  className="cursor-pointer"
+                                  onClick={() => handleBackdropClick(backdrop.file_path)}
+                                >
+                                  <LazyImage 
+                                    src={`${imgBaseUrl300}${backdrop.file_path}`}
+                                    alt={backdrop.file_path}
+                                    className="w-full h-full object-cover rounded-lg shadow-md shadow-gray-500 dark:shadow-gray-700 opacity-80 hover:opacity-100 transition-opacity duration-300 ease-in-out"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+
                     </div>
                     
                   </div>
@@ -777,6 +965,35 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
           movieId={selectedTrailerMovie.id}
         />
       )}
+
+      {/* Backdrop Dialog */}
+      <Dialog open={isBackdropDialogOpen} onOpenChange={setIsBackdropDialogOpen}>
+        <DialogContent 
+          className="!max-w-[80vw] !w-[80vw] !h-[80vh] p-0 overflow-hidden border-0 focus:outline-none focus-visible:outline-none"
+          style={{ 
+            width: '80vw', 
+            height: '80vh', 
+            maxWidth: '80vw', 
+            maxHeight: '80vh' 
+          }}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogTitle className="sr-only">{movie.title} - Backdrop Image</DialogTitle>
+          <DialogDescription className="sr-only">
+            High-resolution backdrop image from {movie.title}
+          </DialogDescription>
+          {selectedBackdrop && (
+            <div className="relative w-full h-full">
+              <img
+                src={`${imgBaseUrl1280}${selectedBackdrop}`}
+                alt={`${movie.title} backdrop`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       
     </AppLayout>
   );

@@ -168,6 +168,9 @@ class MovieController extends Controller
         $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
         $movie->likes_count = $movie->likesCount();
         
+        // Add comments count
+        $movie->comments_count = $movie->commentsCount();
+        
         // Decode subtitles JSON to make it accessible in React
         $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
         $movie->genres = json_decode($movie->genres, true) ?: [];
@@ -229,6 +232,8 @@ class MovieController extends Controller
         
         // Assign the processed credits back to the movie
         $movie->credits = $credits;
+
+        $movie->images = json_decode($movie->images, true);
         
         return Inertia::render('movie', [
             'movie' => $movie,
