@@ -16,6 +16,18 @@ import { InlinePremiumNotice } from "@/components/premium-content-notice";
 import { Link, usePage } from "@inertiajs/react";
 import { useWebShare } from "@/hooks/use-web-share";
 
+/**
+ * Enhanced PlayEpisodeDialog Component
+ * 
+ * Features smart episode navigation that handles missing episodes in incomplete seasons:
+ * - Automatically finds next/previous available episodes, skipping missing ones
+ * - Supports proper repeat modes (episode, season, entire TV show)
+ * - Handles incomplete seasons by continuing to search for next available episodes
+ * - When "repeat TV show" is enabled and reaching the last available episode, loops back to Season 1 Episode 1
+ * - When "repeat season" is enabled and reaching the last available episode of a season, loops back to the first episode of that season
+ * - Shows user-friendly notifications when skipping missing episodes or looping
+ */
+
 type PlayEpisodeDialogProps = {
   episode: any;
   tvshowName: string;
@@ -33,6 +45,16 @@ type PlayEpisodeDialogProps = {
   onRepeatModeChange?: (mode: 'none' | 'one' | 'season' | 'tvshow') => void;
   onFirstEpisodeOfSeason?: () => void;
   onFirstEpisodeOfTVShow?: () => void;
+  // Enhanced navigation props for handling missing episodes
+  onFindNextAvailableEpisode?: () => void;
+  onFindPreviousAvailableEpisode?: () => void;
+  onLastEpisodeOfSeason?: () => void;
+  onLastEpisodeOfTVShow?: () => void;
+  // Information about episode availability
+  isFirstEpisodeOfSeason?: boolean;
+  isLastEpisodeOfSeason?: boolean;
+  isFirstEpisodeOfTVShow?: boolean;
+  isLastEpisodeOfTVShow?: boolean;
 };
 
 export function PlayEpisodeDialog({
@@ -51,7 +73,17 @@ export function PlayEpisodeDialog({
   initialRepeatMode = 'tvshow',
   onRepeatModeChange,
   onFirstEpisodeOfSeason = () => {},
-  onFirstEpisodeOfTVShow = () => {}
+  onFirstEpisodeOfTVShow = () => {},
+  // Enhanced navigation props for handling missing episodes
+  onFindNextAvailableEpisode = () => {},
+  onFindPreviousAvailableEpisode = () => {},
+  onLastEpisodeOfSeason = () => {},
+  onLastEpisodeOfTVShow = () => {},
+  // Information about episode availability
+  isFirstEpisodeOfSeason = false,
+  isLastEpisodeOfSeason = false,
+  isFirstEpisodeOfTVShow = false,
+  isLastEpisodeOfTVShow = false
 }: PlayEpisodeDialogProps) {
   const { props } = usePage<{
     auth: {
@@ -94,6 +126,7 @@ export function PlayEpisodeDialog({
   const [repeatTvshow, setRepeatTvshow] = useState(false);
   const [showLoopNotification, setShowLoopNotification] = useState(false);
   const [showNextEpisodeNotification, setShowNextEpisodeNotification] = useState(false);
+  const [showSkippingEpisodesNotification, setShowSkippingEpisodesNotification] = useState(false);
   const [showPremiumNotice, setShowPremiumNotice] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAccessChecked, setIsAccessChecked] = useState(false);
@@ -634,26 +667,69 @@ export function PlayEpisodeDialog({
     };
   }, [isPlaying, wasPlaying]);
 
-  // Handle navigation to previous episode
+  // Enhanced navigation to previous episode with smart episode finding
   const handlePreviousEpisode = () => {
-    if (hasPreviousEpisode && onPreviousEpisode) {
+    if (hasPreviousEpisode) {
+      // Use regular previous episode if available
       onPreviousEpisode();
+    } else {
+      // No direct previous episode, try to find previous available episode
+      if (onFindPreviousAvailableEpisode && typeof onFindPreviousAvailableEpisode === 'function') {
+        // Show notification that we're skipping missing episodes
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          onFindPreviousAvailableEpisode();
+        }, 1500);
+      } else if (repeatSeason || repeatTvshow) {
+        // Fallback: If no previous episode but repeat mode is enabled, go to last episode
+        if (repeatSeason && onLastEpisodeOfSeason) {
+          onLastEpisodeOfSeason();
+        } else if (repeatTvshow && onLastEpisodeOfTVShow) {
+          onLastEpisodeOfTVShow();
+        }
+      }
     }
   };
 
-  // Handle navigation to next episode
+  // Enhanced navigation to next episode with smart episode finding and repeat logic
   const handleNextEpisode = () => {
-    if (hasNextEpisode && onNextEpisode) {
-      // Store PiP state to restore it after episode change
-      const wasInPipMode = document.pictureInPictureElement === videoRef.current;
-      
-      // Call the next episode handler
+    // Store PiP state to restore it after episode change
+    const wasInPipMode = document.pictureInPictureElement === videoRef.current;
+    if (wasInPipMode) {
+      sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
+    }
+    
+    if (hasNextEpisode) {
+      // Use regular next episode if available
       onNextEpisode();
-      
-      // We'll restore PiP in the episode change effect if needed
-      if (wasInPipMode) {
-        // Store the PiP state in session storage to restore after episode change
-        sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
+    } else {
+      // No direct next episode, try to find next available episode or handle repeat modes
+      if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
+        // Show notification that we're skipping missing episodes
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          // Try to find next available episode (skipping missing ones)
+          onFindNextAvailableEpisode();
+        }, 1500);
+      } else if (repeatSeason || repeatTvshow) {
+        // Fallback: No next episode found, handle according to repeat mode
+        if (repeatSeason) {
+          // Loop back to first episode of current season
+          setShowLoopNotification(true);
+          setTimeout(() => {
+            setShowLoopNotification(false);
+            onFirstEpisodeOfSeason();
+          }, 1500);
+        } else if (repeatTvshow) {
+          // Loop back to first episode of entire TV show
+          setShowNextEpisodeNotification(true);
+          setTimeout(() => {
+            setShowNextEpisodeNotification(false);
+            onFirstEpisodeOfTVShow();
+          }, 1500);
+        }
       }
     }
   };
@@ -1257,7 +1333,7 @@ export function PlayEpisodeDialog({
     }
   }, [dialogOpen, episode?.name, episode?.encFilePath]);
 
-  // Replace the handleVideoEnd function to maintain PiP when episode ends
+  // Enhanced handleVideoEnd function to handle missing episodes and proper repeat behavior
   const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     // Prevent duplicate firing
     const video = e.currentTarget;
@@ -1289,31 +1365,60 @@ export function PlayEpisodeDialog({
       video.play().catch(() => {});
       setShowLoopNotification(true);
       setTimeout(() => setShowLoopNotification(false), 2000);
-    } else if ((repeatSeason || repeatTvshow) && hasNextEpisode) {
-      // Go to next episode within season or show
-      setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onNextEpisode();
-      }, 1500);
-    } else if (repeatSeason) {
-      // Go to first episode of current season
-      setShowLoopNotification(true);
-      setTimeout(() => {
-        setShowLoopNotification(false);
-        onFirstEpisodeOfSeason();
-      }, 2000);
-    } else if (repeatTvshow) {
-      // Go to first episode of TV show
-      setShowNextEpisodeNotification(true);
-      setTimeout(() => {
-        setShowNextEpisodeNotification(false);
-        onFirstEpisodeOfTVShow();
-      }, 1500);
+    } else if (repeatSeason || repeatTvshow) {
+      // For repeat modes, we need to be smarter about finding next episodes
+      if (hasNextEpisode) {
+        // There is a direct next episode available
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
+        }, 1500);
+      } else if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
+        // Try to find next available episode (skipping missing ones)
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          onFindNextAvailableEpisode();
+        }, 1500);
+      } else {
+        // No next episode found at all, handle according to repeat mode
+        if (repeatSeason) {
+          // Loop back to first episode of current season
+          setShowLoopNotification(true);
+          setTimeout(() => {
+            setShowLoopNotification(false);
+            onFirstEpisodeOfSeason();
+          }, 2000);
+        } else if (repeatTvshow) {
+          // Loop back to first episode of entire TV show
+          setShowNextEpisodeNotification(true);
+          setTimeout(() => {
+            setShowNextEpisodeNotification(false);
+            onFirstEpisodeOfTVShow();
+          }, 1500);
+        }
+      }
     } else {
-      // No repeat mode active - stop playback at the end
-      setIsPlaying(false);
-      onComplete?.();
+      // No repeat mode active - try next episode if available, otherwise stop
+      if (hasNextEpisode) {
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
+        }, 1500);
+      } else if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
+        // Try to find next available episode even without repeat mode
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          onFindNextAvailableEpisode();
+        }, 1500);
+      } else {
+        // No next episode found and no repeat mode - stop playback
+        setIsPlaying(false);
+        onComplete?.();
+      }
     }
   };
 
@@ -1897,10 +2002,18 @@ export function PlayEpisodeDialog({
                       )}
                       
                       {/* Next episode notification */}
-                      {showNextEpisodeNotification && hasNextEpisode && (
+                      {showNextEpisodeNotification && (
                         <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md text-sm flex items-center">
                           <SkipForward className="w-4 h-4 mr-2 text-rose-500" />
                           <span>Playing next episode</span>
+                        </div>
+                      )}
+                      
+                      {/* Skipping episodes notification */}
+                      {showSkippingEpisodesNotification && (
+                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md text-sm flex items-center">
+                          <SkipForward className="w-4 h-4 mr-2 text-yellow-500" />
+                          <span>Skipping missing episodes...</span>
                         </div>
                       )}
                     </>
