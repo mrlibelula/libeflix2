@@ -26,11 +26,14 @@ class Movie extends Model
      * Add a user to the watch later list.
      *
      * @param User $user
-     * @return User
+     * @return bool
      */
-    public function addWatchLater(User $user): User
+    public function addWatchLater(User $user): bool
     {
-        return $this->watchLaterUsers()->save($user);
+        // Use attach() to avoid potential issues with save()
+        // syncWithoutDetaching() ensures we don't add duplicates
+        $this->watchLaterUsers()->syncWithoutDetaching([$user->id]);
+        return true;
     }
 
     /**
@@ -41,7 +44,7 @@ class Movie extends Model
      */
     public function removeWatchLater(User $user): bool
     {
-        return $this->watchLaterUsers()->detach($user);
+        return $this->watchLaterUsers()->detach($user->id) > 0;
     }
 
     /**

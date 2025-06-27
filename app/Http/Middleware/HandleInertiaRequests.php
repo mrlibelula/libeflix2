@@ -39,6 +39,7 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        // Get current authenticated user - this ensures fresh auth state on each request
         $user = $request->user();
         $subscription = null;
         
@@ -50,6 +51,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
+            // Auth state is always fresh from the request, preventing stale client-side state
             'auth' => [
                 'user' => $user,
                 'subscription' => $subscription,

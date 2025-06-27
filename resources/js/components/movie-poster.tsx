@@ -62,6 +62,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     setIsWatchLater(movie.is_watch_later || false);
     setIsLiked(movie.is_liked || false);
     setLikesCount(movie.likes_count || 0);
+    
+
   }, [movie.is_watch_later, movie.is_liked, movie.likes_count]);
 
   // Ensure component is ready before allowing interactions
@@ -90,7 +92,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
         return;
       }
       
-      const response = await fetch(`/movies/${movie.id}/toggle-watch-later`, {
+      const response = await fetch(`/api/movies/${movie.id}/toggle-watch-later`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -225,6 +227,8 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   // 2. Has a slug (traditional local movies from database)
   // 3. is_local is undefined (backward compatibility - assume local)
   const isLocalMovie = movie.is_local !== false && (movie.is_local === true || movie.slug || movie.is_local === undefined);
+  
+
   
   // In production, also check if the movie has a google_drive_file_id to be clickable
   const isProductionEnvironment = props.isProduction;

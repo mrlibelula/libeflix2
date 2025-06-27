@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -33,6 +34,9 @@ class MovieController extends Controller
         $showOnlyFreeMovies = env('SHOW_ONLY_FREE_MOVIES_IN_PRODUCTION', false);
 
         $user = Auth::user();
+        
+
+
         $searchQuery = $request->get('search');
 
         // if columns is a string '*', grab all columns
@@ -79,13 +83,24 @@ class MovieController extends Controller
 
         $movies = $moviesQuery->get();
 
-        $movies = $movies->map(function ($movie) use ($user) {
-            $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+        // Efficiently load user's watch later movie IDs in a single query using direct DB query to avoid caching
+        $watchLaterMovieIds = $user ? DB::table('movie_user')
+            ->where('user_id', $user->id)
+            ->pluck('movie_id')
+            ->toArray() : [];
+
+        
+        $movies = $movies->map(function ($movie) use ($user, $watchLaterMovieIds) {
+            $movie->is_local = true; // Mark all database movies as local
+            $movie->is_watch_later = in_array($movie->id, $watchLaterMovieIds);
             $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
             $movie->likes_count = $movie->likesCount();
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
+            
+
+            
             return $movie;
         });
 
@@ -101,8 +116,9 @@ class MovieController extends Controller
             ->orderBy('created_at', 'desc')
             ->take(20)
             ->get()
-            ->map(function ($movie) use ($user) {
-                $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+            ->map(function ($movie) use ($user, $watchLaterMovieIds) {
+                $movie->is_local = true; // Mark all database movies as local
+                $movie->is_watch_later = in_array($movie->id, $watchLaterMovieIds);
                 $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
                 $movie->likes_count = $movie->likesCount();
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
@@ -133,7 +149,8 @@ class MovieController extends Controller
             ->selectRaw('COALESCE(json_array_length(movies.trailers), 0) as trailer_count')
             ->get()
             ->map(function ($movie) use ($user) {
-                $movie->is_watch_later = MovieService::isWatchLater($movie, $user);
+                $movie->is_local = true; // Mark all database movies as local
+                $movie->is_watch_later = true; // All movies in watch later page are in watch later
                 $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
                 $movie->likes_count = $movie->likesCount();
                 $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
@@ -280,26 +297,36 @@ class MovieController extends Controller
     public function toggleWatchLaterById(Request $request, int $movieId)
     {
         $movie = Movie::find($movieId);
-        
         if (!$movie) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Movie not found'
-            ], 404);
+            return response()->json(['error' => 'Movie not found'], 404);
         }
 
         $user = Auth::user();
+        
         $isWatchLater = MovieService::isWatchLater($movie, $user);
 
-        if ($isWatchLater) {
-            MovieService::removeWatchLater($movie, $user);
-        } else {
-            MovieService::addWatchLater($movie, $user);
-        }
+        // Use database transaction to ensure the operation is fully committed
+        $newStatus = DB::transaction(function () use ($isWatchLater, $movie, $user) {
+            if ($isWatchLater) {
+                MovieService::removeWatchLater($movie, $user);
+                return false;
+            } else {
+                MovieService::addWatchLater($movie, $user);
+                return true;
+            }
+        });
 
+
+        // Ensure session is properly updated
+        session()->save();
+        
         return response()->json([
             'success' => true,
-            'is_watch_later' => !$isWatchLater,
+            'is_watch_later' => $newStatus,
+            'message' => $newStatus ? 'Added to watch later' : 'Removed from watch later'
+        ])->withHeaders([
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache'
         ]);
     }
 

@@ -2,9 +2,10 @@ import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem, type SharedData } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
+import { type NavItem } from '@/types';
+import { Link } from '@inertiajs/react';
 import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -79,10 +80,34 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth, isProduction } = usePage<SharedData>().props;
+    const { isAuthenticated, isLoading } = useAuth();
 
-    // Remove the production filter - show TV Shows in all environments
-    const filteredMainNavItems = mainNavItems;
+    // Show loading state during hydration
+    if (isLoading) {
+        return (
+            <Sidebar collapsible="icon" variant="inset">
+                <SidebarHeader>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton size="lg" asChild>
+                                <Link href="/dashboard" prefetch>
+                                    <AppLogo />
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarHeader>
+                <SidebarContent>
+                    <NavMain items={mainNavItems} />
+                </SidebarContent>
+                <SidebarFooter>
+                    <NavFooter items={footerNavItems} className="mt-auto" />
+                    {/* Show placeholder during hydration */}
+                    <div className="h-12 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+                </SidebarFooter>
+            </Sidebar>
+        );
+    }
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -99,12 +124,12 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={filteredMainNavItems} />
+                <NavMain items={mainNavItems} />
             </SidebarContent>
 
             <SidebarFooter>
                 <NavFooter items={footerNavItems} className="mt-auto" />
-                {auth.user ? (
+                {isAuthenticated ? (
                     <NavUser />
                 ) : (
                     <SidebarMenu>

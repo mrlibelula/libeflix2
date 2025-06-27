@@ -117,6 +117,9 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasUserInitiatedPlayback, setHasUserInitiatedPlayback] = useState(false);
 
+  // Comments section ref for smooth scrolling
+  const commentsSectionRef = useRef<HTMLDivElement>(null);
+
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
@@ -216,15 +219,16 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     });
                 }
             } 
-            // User scrolled up, video is back in view
-            else if (isVideoInPiP) {
+            // User scrolled up, video is back in view (more generous threshold)
+            else if (entry.intersectionRatio > 0.7 && isVideoInPiP) {
                 document.exitPictureInPicture().catch((error) => {
                     console.error("Failed to exit PiP mode:", error);
                 });
             }
         },
         {
-            threshold: 0.5, // Trigger when 50% of the video is visible/hidden
+            // Multiple thresholds to catch jumpy scrolling
+            threshold: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         }
     );
 
@@ -415,6 +419,37 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const handleBackdropClick = (backdropPath: string) => {
     setSelectedBackdrop(backdropPath);
     setIsBackdropDialogOpen(true);
+  };
+
+  // Function to scroll to comments section with custom smooth animation
+  const handleCommentsClick = () => {
+    if (!commentsSectionRef.current) return;
+    
+    const target = commentsSectionRef.current;
+    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - 100; // 100px offset from top
+    const startPosition = window.pageYOffset;
+    const distance = targetPosition - startPosition;
+    const duration = 800; // 800ms for smooth animation
+    let start: number | null = null;
+    
+    const easeInOutQuad = (t: number): number => {
+      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    };
+    
+    const animation = (currentTime: number) => {
+      if (start === null) start = currentTime;
+      const timeElapsed = currentTime - start;
+      const progress = Math.min(timeElapsed / duration, 1);
+      const ease = easeInOutQuad(progress);
+      
+      window.scrollTo(0, startPosition + distance * ease);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animation);
+      }
+    };
+    
+    requestAnimationFrame(animation);
   };
 
   return (
@@ -659,8 +694,19 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                             <span className="mr-2 ml-1 lg:mr-4 text-xs lg:text-base">{likesCount}</span>
                           </button>
                         </Tooltip>
-                        <MessageSquareText className="w-5 h-5 lg:w-6 lg:h-6" />
-                        <span className="mr-2 lg:mr-4 text-xs lg:text-base">0</span>
+                        <Tooltip 
+                          content="Go to comments section"
+                          position="top"
+                          delayMs={500}
+                        >
+                          <button
+                            onClick={handleCommentsClick}
+                            className="flex items-center gap-x-1 transition-all duration-200 ease-in-out hover:scale-110 cursor-pointer text-gray-500 hover:text-gray-600"
+                          >
+                            <MessageSquareText className="w-5 h-5 lg:w-6 lg:h-6" />
+                            <span className="mr-2 lg:mr-4 text-xs lg:text-base">{movie.comments_count || 0}</span>
+                          </button>
+                        </Tooltip>
                         <Tooltip 
                           content={
                             isShareSupported 
@@ -885,23 +931,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         )}
                       </div>
 
-                      <div className="flex flex-col lg:flex-row lg:gap-x-10 w-full"
+                      <div className="flex flex-col-reverse gap-y-10 lg:gap-y-0 lg:flex-row lg:gap-x-10 w-full"
                         style={{
                           '--dynamic-sidebar-width': sidebarWidth
                         } as React.CSSProperties}
                       >
                         {/* Comments section */}
-                        <div className="flex flex-col gap-y-4 w-full">
-                          {(() => {
-                            // console.log('About to render CommentsSection with props:', {
-                            //   commentableType: "movie",
-                            //   commentableId: movie.id,
-                            //   isAuthenticated,
-                            //   currentUserId: props.auth.user?.id,
-                            //   initialCommentsCount: movie.comments_count || 0
-                            // });
-                            return null;
-                          })()}
+                        <div ref={commentsSectionRef} className="flex flex-col gap-y-4 w-full">
                           <CommentsSection
                             commentableType="movie"
                             commentableId={movie.id}
@@ -924,7 +960,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                           <div className="flex flex-col gap-y-4 w-full">
                             <h2 className="text-xl font-bold mb-4">Images</h2>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-10">
+                            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 xl:gap-10">
                               {shuffledBackdrops.map((backdrop: any, index: number) => (
                                 <div
                                   key={`backdrop-${index}`}

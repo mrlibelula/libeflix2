@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Tooltip } from '@/components/ui/tooltip';
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useInitials } from '@/hooks/use-initials';
+import { useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
@@ -46,7 +47,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     const page = usePage<SharedData>();
-    const { auth } = page.props;
+    const { user, isAuthenticated, isLoading } = useAuth();
     const getInitials = useInitials();
     
     // Check if we should show movie search (on movies and movie pages)
@@ -152,23 +153,23 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                 ))}
                             </div>
                         </div>
-                        {auth.user ? (
+                        {!isLoading && isAuthenticated && user ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="size-10 rounded-full p-1">
                                         <Avatar className="size-8 overflow-hidden rounded-full">
-                                            <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
+                                            <AvatarImage src={user.avatar} alt={user.name} />
                                             <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                                {getInitials(auth.user.name)}
+                                                {getInitials(user.name)}
                                             </AvatarFallback>
                                         </Avatar>
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-56" align="end">
-                                    <UserMenuContent user={auth.user} />
+                                    <UserMenuContent user={user} />
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                        ) : (
+                        ) : !isLoading && !isAuthenticated ? (
                             <div className="flex items-center space-x-2">
                                 <Link href={'/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} className="text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
                                     Sign in
@@ -177,6 +178,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                     Sign up
                                 </Link>
                             </div>
+                        ) : (
+                            // Show loading placeholder
+                            <div className="size-10 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-full"></div>
                         )}
                     </div>
                 </div>

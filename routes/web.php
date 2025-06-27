@@ -39,6 +39,7 @@ Route::get('csrf-token', function () {
 Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
 Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
 
+// Movies routes - accessible without auth but enhanced when authenticated
 Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 Route::get('movie/{slug}', [MovieController::class, 'show'])->name('movie.show');
 Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');

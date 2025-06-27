@@ -317,7 +317,11 @@ class MovieService
             return false;
         }
         
-        return $user->watchLaterMovies()->where('movies.id', $movie->id)->exists();
+        // Use direct database query to avoid any potential relationship caching issues
+        return DB::table('movie_user')
+            ->where('movie_id', $movie->id)
+            ->where('user_id', $user->id)
+            ->exists();
     }
 
     /**

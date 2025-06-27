@@ -204,7 +204,7 @@ export function CommentsSection({
   usePolling(
     stablePollingFetch,
     {
-      interval: 10000,
+      interval: 30000,
       enabled: true,
       immediate: true
     }
@@ -298,7 +298,7 @@ export function CommentsSection({
   const { startPolling, stopPolling } = usePolling(
     stablePollingFetch,
     {
-      interval: 10000,
+      interval: 30000,
       enabled: true,
       immediate: true
     }
@@ -352,7 +352,7 @@ export function CommentsSection({
       
       {/* New comment form */}
       {isAuthenticated && (
-        <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div className="space-y-3 ">
           <Textarea
             value={newComment}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewComment(e.target.value)}
@@ -360,7 +360,7 @@ export function CommentsSection({
             className="min-h-[80px]"
           />
           <div className="flex justify-end">
-            <Button
+            <Button variant="outline"
               onClick={handleSubmitComment}
               disabled={isSubmittingComment || !newComment.trim()}
               size="sm"
