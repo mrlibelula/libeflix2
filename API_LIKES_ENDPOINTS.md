@@ -21,7 +21,7 @@ POST /api/movies/{movie}/like
 **Authentication:** Required
 
 **Parameters:**
-- `movie` (path): Movie ID or slug
+- `movie` (path): Movie slug
 
 **Response:**
 ```json
@@ -49,7 +49,7 @@ DELETE /api/movies/{movie}/like
 **Authentication:** Required
 
 **Parameters:**
-- `movie` (path): Movie ID or slug
+- `movie` (path): Movie slug
 
 **Response:**
 ```json
@@ -77,7 +77,7 @@ GET /api/movies/{movie}/likes
 **Authentication:** Optional (returns `is_liked: false` for unauthenticated users)
 
 **Parameters:**
-- `movie` (path): Movie ID or slug
+- `movie` (path): Movie slug
 
 **Response:**
 ```json

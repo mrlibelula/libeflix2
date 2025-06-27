@@ -161,7 +161,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
       }
       
       const method = isLiked ? 'DELETE' : 'POST';
-      const response = await fetch(`/api/movies/${movie.id}/like`, {
+      const response = await fetch(`/api/movies/${movie.slug}/like`, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
