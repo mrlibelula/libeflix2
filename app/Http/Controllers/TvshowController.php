@@ -7,6 +7,7 @@ use App\Models\SearchQueryTvshow;
 use App\Services\TvshowService;
 use App\Services\SeasonService;
 use App\Services\Tool;
+use App\Services\WatchLaterService;
 use App\Traits\HandlesLikes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -97,6 +98,14 @@ class TvshowController extends Controller
         $user = $request->user();
         $tvshow->likes_count = $tvshow->likesCount();
         $tvshow->is_liked = $user ? $tvshow->isLikedBy($user) : false;
+        
+        // Add watch later information
+        $tvshow->is_watch_later = $user ? WatchLaterService::isWatchLater($tvshow, $user) : false;
+        
+        // Add watch later status to seasons
+        $tvshow->seasons->each(function ($season) use ($user) {
+            $season->is_watch_later = $user ? WatchLaterService::isWatchLater($season, $user) : false;
+        });
 
         // For credits, we need to load episodes on demand, so we'll use the API endpoint
         // For now, let's load credits from the cast stored in the tvshow table
@@ -144,12 +153,21 @@ class TvshowController extends Controller
             return response()->json(['error' => 'Season not found'], 404);
         }
 
+        // Get user for watch later status
+        $user = $request->user();
+        
+        // Add watch later status to season
+        $season->is_watch_later = $user ? WatchLaterService::isWatchLater($season, $user) : false;
+        
         // Process episodes with the same logic as before
-        $season->episodes->each(function ($episode) {
+        $season->episodes->each(function ($episode) use ($user) {
             $episode->stillUrl = $episode->still_path 
                 ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
                 : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
             $episode->voteAverageStars = Tool::voteAvarageToStars($episode->vote_average, $episode->vote_count);
+            
+            // Add watch later status to episode
+            $episode->is_watch_later = $user ? WatchLaterService::isWatchLater($episode, $user) : false;
             
             // Pre-encode the file path if it's a string (means it's a valid file path)
             if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {
@@ -1116,5 +1134,65 @@ class TvshowController extends Controller
     protected function getModelFromRoute(Request $request): Model
     {
         return $this->getTvshowFromRoute($request);
+    }
+
+    /**
+     * Toggle watch later status for a tvshow.
+     *
+     * @param Request $request
+     * @param Tvshow $tvshow
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleWatchLater(Request $request, Tvshow $tvshow)
+    {
+        $user = Auth::user();
+        $isWatchLater = WatchLaterService::isWatchLater($tvshow, $user);
+
+        if ($isWatchLater) {
+            WatchLaterService::removeWatchLater($tvshow, $user);
+        } else {
+            WatchLaterService::addWatchLater($tvshow, $user);
+        }
+
+        return response()->json([
+            'success' => true,
+            'is_watch_later' => !$isWatchLater,
+        ]);
+    }
+
+    /**
+     * Toggle watch later status for a tvshow by ID.
+     *
+     * @param Request $request
+     * @param int $tvshowId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleWatchLaterById(Request $request, int $tvshowId)
+    {
+        $tvshow = Tvshow::find($tvshowId);
+        if (!$tvshow) {
+            return response()->json(['error' => 'TV Show not found'], 404);
+        }
+
+        $user = Auth::user();
+        
+        $isWatchLater = WatchLaterService::isWatchLater($tvshow, $user);
+
+        // Use database transaction to ensure the operation is fully committed
+        $newStatus = DB::transaction(function () use ($isWatchLater, $tvshow, $user) {
+            if ($isWatchLater) {
+                WatchLaterService::removeWatchLater($tvshow, $user);
+                return false;
+            } else {
+                WatchLaterService::addWatchLater($tvshow, $user);
+                return true;
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'is_watch_later' => $newStatus,
+            'message' => $newStatus ? 'Added to watch later' : 'Removed from watch later'
+        ]);
     }
 }

@@ -165,6 +165,11 @@ export function PlayEpisodeDialog({
   const [likesCount, setLikesCount] = useState(0);
   const [isLikeToggling, setIsLikeToggling] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+  
+  // Add watch later state
+  const [isWatchLater, setIsWatchLater] = useState(false);
+  const [isWatchLaterToggling, setIsWatchLaterToggling] = useState(false);
+  const [isWatchLaterAnimating, setIsWatchLaterAnimating] = useState(false);
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -172,6 +177,15 @@ export function PlayEpisodeDialog({
     setRepeatSeason(initialRepeatMode === 'season');
     setRepeatTvshow(initialRepeatMode === 'tvshow');
   }, [initialRepeatMode]);
+  
+  // Initialize episode states when episode changes
+  useEffect(() => {
+    if (episode) {
+      setIsLiked(episode.is_liked || false);
+      setLikesCount(episode.likes_count || 0);
+      setIsWatchLater(episode.is_watch_later || false);
+    }
+  }, [episode]);
 
   // Handle loading state when access changes
   useEffect(() => {
@@ -1770,6 +1784,60 @@ export function PlayEpisodeDialog({
   }, [episode?.id, isAuthenticated]);
 
   // Add like toggle handler
+  const handleWatchLaterToggle = async () => {
+    if (!props.auth.user) {
+      console.log('User not authenticated');
+      return;
+    }
+    
+    if (isWatchLaterToggling) return;
+    
+    setIsWatchLaterToggling(true);
+    setIsWatchLaterAnimating(true);
+    
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsWatchLaterAnimating(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/episodes/${episode.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setIsWatchLater(data.is_watch_later);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsWatchLaterAnimating(false);
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        setIsWatchLaterAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling watch later:', error);
+      setIsWatchLaterAnimating(false);
+    } finally {
+      setIsWatchLaterToggling(false);
+    }
+  };
+
   const handleLikeToggle = async () => {
     if (!isAuthenticated || isLikeToggling) return;
     
@@ -2365,6 +2433,50 @@ export function PlayEpisodeDialog({
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-x-4">
+                    {/* Watch Later button - Only show for playable episodes */}
+                    {isAuthenticated && episode?.encFilePath && (
+                      <Tooltip 
+                        text={
+                          isWatchLater 
+                            ? "Remove episode from watch later" 
+                            : "Add episode to watch later"
+                        } 
+                        position="bottom"
+                      >
+                        <button
+                          onClick={handleWatchLaterToggle}
+                          disabled={isWatchLaterToggling}
+                          className={`focus:outline-none cursor-pointer disabled:opacity-50 p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all duration-300 ease-in-out ${
+                            isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
+                          }`}
+                          style={{
+                            transform: isWatchLaterAnimating 
+                              ? 'rotate(180deg)' 
+                              : 'rotate(0deg)',
+                          }}
+                        >
+                          {isWatchLater ? (
+                            <svg 
+                              className="w-5 h-5 text-green-500 dark:text-green-400" 
+                              fill="currentColor" 
+                              viewBox="0 0 20 20"
+                            >
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg 
+                              className="w-5 h-5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                          )}
+                        </button>
+                      </Tooltip>
+                    )}
+                    
                     {/* Like button - only for premium users and admins */}
                     {(props.auth.canAccessPremium || props.auth.isAdmin) && (
                       <Tooltip 

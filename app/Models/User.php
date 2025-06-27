@@ -37,13 +37,67 @@ class User extends Authenticatable
     ];
 
     /**
+     * Get all watchlist entries for this user.
+     */
+    public function watchlists()
+    {
+        return $this->hasMany(Watchlist::class);
+    }
+
+    /**
      * Get the movies that the user has added to their watch later list.
      *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
      */
     public function watchLaterMovies(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(Movie::class)->withPivot('created_at')->orderBy('movie_user.created_at', 'DESC');
+        return $this->morphedByMany(Movie::class, 'watchable', 'watchlists')
+                    ->withPivot('created_at')
+                    ->orderByPivot('created_at', 'desc');
+    }
+
+    /**
+     * Get the tvshows that the user has added to their watch later list.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function watchLaterTvshows(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->morphedByMany(Tvshow::class, 'watchable', 'watchlists')
+                    ->withPivot('created_at')
+                    ->orderByPivot('created_at', 'desc');
+    }
+
+    /**
+     * Get the seasons that the user has added to their watch later list.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function watchLaterSeasons(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->morphedByMany(Season::class, 'watchable', 'watchlists')
+                    ->withPivot('created_at')
+                    ->orderByPivot('created_at', 'desc');
+    }
+
+    /**
+     * Get the episodes that the user has added to their watch later list.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function watchLaterEpisodes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->morphedByMany(Episode::class, 'watchable', 'watchlists')
+                    ->withPivot('created_at')
+                    ->orderByPivot('created_at', 'desc');
+    }
+
+    /**
+     * Get all watch later items for this user (all types).
+     */
+    public function watchLaterItems()
+    {
+        return $this->watchlists()->with('watchable');
     }
 
     /**

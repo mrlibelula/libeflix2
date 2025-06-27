@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Services\TvshowService;
 use App\Traits\Likeable;
+use App\Traits\Watchable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Tvshow extends Model
 {
-    use Likeable;
+    use Likeable, Watchable;
     
     protected $guarded = [];
     protected $appends = ['logo'];

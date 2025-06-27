@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Services\Tool;
+use App\Services\WatchLaterService;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -287,7 +288,7 @@ class MovieService
      */
     public static function addWatchLater(Movie $movie, User $user): Movie
     {
-        $movie->addWatchLater($user);
+        WatchLaterService::addWatchLater($movie, $user);
         return $movie;
     }
 
@@ -300,7 +301,7 @@ class MovieService
      */
     public static function removeWatchLater(Movie $movie, User $user): Movie
     {
-        $movie->removeWatchLater($user);
+        WatchLaterService::removeWatchLater($movie, $user);
         return $movie;
     }
 
@@ -313,15 +314,7 @@ class MovieService
      */
     public static function isWatchLater(Movie $movie, ?User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
-        
-        // Use direct database query to avoid any potential relationship caching issues
-        return DB::table('movie_user')
-            ->where('movie_id', $movie->id)
-            ->where('user_id', $user->id)
-            ->exists();
+        return WatchLaterService::isWatchLater($movie, $user);
     }
 
     /**

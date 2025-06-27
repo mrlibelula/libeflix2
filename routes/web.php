@@ -63,6 +63,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
     Route::post('api/movies/{movieId}/toggle-watch-later', [MovieController::class, 'toggleWatchLaterById'])->name('api.movies.toggle-watch-later-by-id');
+    
+    // TV Show watch later routes
+    Route::post('tvshows/{tvshow}/toggle-watch-later', [TvshowController::class, 'toggleWatchLater'])->name('tvshows.toggle-watch-later');
+    Route::post('api/tvshows/{tvshowId}/toggle-watch-later', [TvshowController::class, 'toggleWatchLaterById'])->name('api.tvshows.toggle-watch-later-by-id');
+    
+    // Season watch later routes
+    Route::post('api/seasons/{seasonId}/toggle-watch-later', [SeasonController::class, 'toggleWatchLaterById'])->name('api.seasons.toggle-watch-later-by-id');
+    
+    // Episode watch later routes
+    Route::post('api/episodes/{episodeId}/toggle-watch-later', [EpisodeController::class, 'toggleWatchLaterById'])->name('api.episodes.toggle-watch-later-by-id');
     Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'])->name('api.movies.trailers');
     Route::get('api/movies/{movieId}/trailers-by-id', [MovieController::class, 'getTrailersById'])->name('api.movies.trailers-by-id');
     Route::get('api/movies/{movie}/recommendations', [MovieController::class, 'getRecommendations'])->name('api.movies.recommendations');

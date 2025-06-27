@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Traits\Likeable;
+use App\Traits\Watchable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Season extends Model
 {
-    use Likeable;
+    use Likeable, Watchable;
     
     protected $guarded = [];
 

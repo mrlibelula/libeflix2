@@ -6,6 +6,7 @@ use App\Models\Movie;
 use App\Models\SearchQuery;
 use App\Services\MovieService;
 use App\Services\Tool;
+use App\Services\WatchLaterService;
 use App\Traits\HandlesLikes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -84,10 +85,7 @@ class MovieController extends Controller
         $movies = $moviesQuery->get();
 
         // Efficiently load user's watch later movie IDs in a single query using direct DB query to avoid caching
-        $watchLaterMovieIds = $user ? DB::table('movie_user')
-            ->where('user_id', $user->id)
-            ->pluck('movie_id')
-            ->toArray() : [];
+        $watchLaterMovieIds = $user ? WatchLaterService::getUserWatchLaterMovieIds($user) : [];
 
         
         $movies = $movies->map(function ($movie) use ($user, $watchLaterMovieIds) {
@@ -136,7 +134,7 @@ class MovieController extends Controller
     }
 
     /**
-     * Display the user's watch later movies.
+     * Display the user's watch later items.
      *
      * @return \Inertia\Response
      */
@@ -144,23 +142,58 @@ class MovieController extends Controller
     {
         $user = Auth::user();
 
-        $watchLaterMovies = $user->watchLaterMovies()
-            ->select('movies.id', 'movies.title', 'movies.poster_path', 'movies.vote_average', 'movies.release_date', 'movies.slug', 'movies.subtitles', 'movies.google_drive_file_id')
-            ->selectRaw('COALESCE(json_array_length(movies.trailers), 0) as trailer_count')
-            ->get()
-            ->map(function ($movie) use ($user) {
-                $movie->is_local = true; // Mark all database movies as local
-                $movie->is_watch_later = true; // All movies in watch later page are in watch later
-                $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
-                $movie->likes_count = $movie->likesCount();
-                $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
-                if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
-                if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
-                return $movie;
-            });
+        // Get all watch later items grouped by type
+        $watchLaterItems = WatchLaterService::getWatchLaterItems($user);
+
+        // Process movies
+        $watchLaterMovies = collect($watchLaterItems['movies'])->map(function ($movie) use ($user) {
+            $movie->is_local = true; // Mark all database movies as local
+            $movie->is_watch_later = true; // All movies in watch later page are in watch later
+            $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+            $movie->likes_count = $movie->likesCount();
+            $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+            if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
+            if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
+            
+            // Add trailer count
+            $trailers = json_decode($movie->trailers, true) ?: [];
+            $movie->trailer_count = count($trailers);
+            
+            return $movie;
+        });
+
+        // Process TV shows
+        $watchLaterTvshows = collect($watchLaterItems['tvshows'])->map(function ($tvshow) use ($user) {
+            $tvshow->is_local = true;
+            $tvshow->is_watch_later = true;
+            $tvshow->is_liked = $user ? $tvshow->isLikedBy($user) : false;
+            $tvshow->likes_count = $tvshow->likesCount();
+            return $tvshow;
+        });
+
+        // Process seasons
+        $watchLaterSeasons = collect($watchLaterItems['seasons'])->map(function ($season) use ($user) {
+            $season->is_local = true;
+            $season->is_watch_later = true;
+            $season->is_liked = $user ? $season->isLikedBy($user) : false;
+            $season->likes_count = $season->likesCount();
+            return $season;
+        });
+
+        // Process episodes
+        $watchLaterEpisodes = collect($watchLaterItems['episodes'])->map(function ($episode) use ($user) {
+            $episode->is_local = true;
+            $episode->is_watch_later = true;
+            $episode->is_liked = $user ? $episode->isLikedBy($user) : false;
+            $episode->likes_count = $episode->likesCount();
+            return $episode;
+        });
 
         return Inertia::render('watch-later', [
             'watchLaterMovies' => $watchLaterMovies,
+            'watchLaterTvshows' => $watchLaterTvshows,
+            'watchLaterSeasons' => $watchLaterSeasons,
+            'watchLaterEpisodes' => $watchLaterEpisodes,
             'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
         ]);
     }

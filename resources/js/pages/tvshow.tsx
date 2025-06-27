@@ -41,6 +41,15 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   const [isLikeToggling, setIsLikeToggling] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   
+  // Watch later functionality state
+  const [isWatchLater, setIsWatchLater] = useState(tvshow.is_watch_later || false);
+  const [isWatchLaterToggling, setIsWatchLaterToggling] = useState(false);
+  const [isWatchLaterAnimating, setIsWatchLaterAnimating] = useState(false);
+  
+  // Watch later state for seasons and episodes
+  const [seasonWatchLaterStates, setSeasonWatchLaterStates] = useState<Record<number, { isWatchLater: boolean, isToggling: boolean, isAnimating: boolean }>>({});
+  const [episodeWatchLaterStates, setEpisodeWatchLaterStates] = useState<Record<number, { isWatchLater: boolean, isToggling: boolean, isAnimating: boolean }>>({});
+  
   // Get Inertia page props for authentication and CSRF token
   const { props } = usePage<{ 
     csrf_token?: string;
@@ -70,11 +79,47 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
-  // Sync like state with tvshow prop
+  // Get current season's episodes (moved here to ensure it's always available)
+  const currentSeasonEpisodes = selectedSeason ? (seasonEpisodes[selectedSeason.season_number] || []) : [];
+  const isLoadingCurrentSeason = selectedSeason ? isLoading(selectedSeason.season_number) : false;
+
+  // Sync like and watch later state with tvshow prop
   useEffect(() => {
     setIsLiked(tvshow.is_liked || false);
     setLikesCount(tvshow.likes_count || 0);
-  }, [tvshow.is_liked, tvshow.likes_count]);
+    setIsWatchLater(tvshow.is_watch_later || false);
+    
+    // Initialize season watch later states
+    const initialSeasonStates: Record<number, { isWatchLater: boolean, isToggling: boolean, isAnimating: boolean }> = {};
+    tvshow.seasons?.forEach((season: any) => {
+      initialSeasonStates[season.id] = {
+        isWatchLater: season.is_watch_later || false,
+        isToggling: seasonWatchLaterStates[season.id]?.isToggling || false,
+        isAnimating: seasonWatchLaterStates[season.id]?.isAnimating || false
+      };
+    });
+    setSeasonWatchLaterStates(initialSeasonStates);
+    
+  }, [tvshow.is_liked, tvshow.likes_count, tvshow.is_watch_later, tvshow.seasons]);
+  
+  // Initialize episode watch later states when episodes are loaded
+  useEffect(() => {
+    if (currentSeasonEpisodes.length > 0) {
+      const initialEpisodeStates: Record<number, { isWatchLater: boolean, isToggling: boolean, isAnimating: boolean }> = {};
+      currentSeasonEpisodes.forEach((episode: any) => {
+        // Always initialize or update the state with the current episode data
+        initialEpisodeStates[episode.id] = {
+          isWatchLater: episode.is_watch_later || false,
+          isToggling: episodeWatchLaterStates[episode.id]?.isToggling || false,
+          isAnimating: episodeWatchLaterStates[episode.id]?.isAnimating || false
+        };
+      });
+      setEpisodeWatchLaterStates(prev => ({
+        ...prev,
+        ...initialEpisodeStates
+      }));
+    }
+  }, [currentSeasonEpisodes]);
 
   // Function to handle like toggle
   const handleLikeToggle = async () => {
@@ -142,6 +187,263 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
       setIsLikeAnimating(false);
     } finally {
       setIsLikeToggling(false);
+    }
+  };
+
+  // Function to handle season watch later toggle
+  const handleSeasonWatchLaterToggle = async (seasonId: number) => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    const currentState = seasonWatchLaterStates[seasonId];
+    if (currentState?.isToggling) return;
+    
+    setSeasonWatchLaterStates(prev => ({
+      ...prev,
+      [seasonId]: {
+        ...prev[seasonId],
+        isToggling: true,
+        isAnimating: true
+      }
+    }));
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setSeasonWatchLaterStates(prev => ({
+          ...prev,
+          [seasonId]: { ...prev[seasonId], isAnimating: false, isToggling: false }
+        }));
+        return;
+      }
+      
+      const response = await fetch(`/api/seasons/${seasonId}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setSeasonWatchLaterStates(prev => ({
+            ...prev,
+            [seasonId]: {
+              ...prev[seasonId],
+              isWatchLater: data.is_watch_later
+            }
+          }));
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setSeasonWatchLaterStates(prev => ({
+            ...prev,
+            [seasonId]: { ...prev[seasonId], isAnimating: false }
+          }));
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setSeasonWatchLaterStates(prev => ({
+          ...prev,
+          [seasonId]: { ...prev[seasonId], isAnimating: false }
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling season watch later:', error);
+      setSeasonWatchLaterStates(prev => ({
+        ...prev,
+        [seasonId]: { ...prev[seasonId], isAnimating: false }
+      }));
+    } finally {
+      setSeasonWatchLaterStates(prev => ({
+        ...prev,
+        [seasonId]: { ...prev[seasonId], isToggling: false }
+      }));
+    }
+  };
+
+  // Function to handle episode watch later toggle
+  const handleEpisodeWatchLaterToggle = async (episodeId: number) => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    const currentState = episodeWatchLaterStates[episodeId];
+    if (currentState?.isToggling) return;
+    
+    setEpisodeWatchLaterStates(prev => ({
+      ...prev,
+      [episodeId]: {
+        ...prev[episodeId],
+        isToggling: true,
+        isAnimating: true
+      }
+    }));
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setEpisodeWatchLaterStates(prev => ({
+          ...prev,
+          [episodeId]: { ...prev[episodeId], isAnimating: false, isToggling: false }
+        }));
+        return;
+      }
+      
+      const response = await fetch(`/api/episodes/${episodeId}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setEpisodeWatchLaterStates(prev => ({
+            ...prev,
+            [episodeId]: {
+              ...prev[episodeId],
+              isWatchLater: data.is_watch_later
+            }
+          }));
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setEpisodeWatchLaterStates(prev => ({
+            ...prev,
+            [episodeId]: { ...prev[episodeId], isAnimating: false }
+          }));
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setEpisodeWatchLaterStates(prev => ({
+          ...prev,
+          [episodeId]: { ...prev[episodeId], isAnimating: false }
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling episode watch later:', error);
+      setEpisodeWatchLaterStates(prev => ({
+        ...prev,
+        [episodeId]: { ...prev[episodeId], isAnimating: false }
+      }));
+    } finally {
+      setEpisodeWatchLaterStates(prev => ({
+        ...prev,
+        [episodeId]: { ...prev[episodeId], isToggling: false }
+      }));
+    }
+  };
+
+  // Function to handle watch later toggle
+  const handleWatchLaterToggle = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    if (isWatchLaterToggling) return;
+    
+    setIsWatchLaterToggling(true);
+    setIsWatchLaterAnimating(true);
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setIsWatchLaterAnimating(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin', // Include cookies for CSRF
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setIsWatchLater(data.is_watch_later);
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setIsWatchLaterAnimating(false);
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setIsWatchLaterAnimating(false);
+      }
+    } catch (error) {
+      console.error('Error toggling watch later:', error);
+      setIsWatchLaterAnimating(false);
+    } finally {
+      setIsWatchLaterToggling(false);
     }
   };
 
@@ -376,10 +678,6 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
 
   // Make sure we have a selected season before rendering
   if (!selectedSeason) return null;
-
-  // Get current season's episodes
-  const currentSeasonEpisodes = seasonEpisodes[selectedSeason.season_number] || [];
-  const isLoadingCurrentSeason = isLoading(selectedSeason.season_number);
   
   // Smart episode availability checking functions
   // Helper function to check if an episode is actually playable (has video file)
@@ -533,7 +831,33 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                     <div className="mr-2" />
                   </Button>
 
-                  <AddCircleButton />
+                  <Tooltip 
+                    content={
+                      isAuthenticated
+                        ? (isWatchLater ? "Remove from watch later" : "Add to watch later")
+                        : "Login to add to watch later"
+                    }
+                    position="top"
+                    delayMs={500}
+                  >
+                    <div
+                      className={`transition-all duration-300 ease-in-out ${
+                        isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
+                      }`}
+                      style={{
+                        transform: isWatchLaterAnimating 
+                          ? 'rotate(180deg)' 
+                          : 'rotate(0deg)',
+                      }}
+                    >
+                      <AddCircleButton 
+                        isWatchLater={isWatchLater}
+                        isToggling={isWatchLaterToggling}
+                        onClick={handleWatchLaterToggle}
+                        className={`${isWatchLaterToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                    </div>
+                  </Tooltip>
 
                   <Tooltip 
                     content={
@@ -1382,15 +1706,49 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                           <RibbonItem 
                             key={index} 
                             onClick={() => handleSeasonSelect(season)} 
-                            className="cursor-pointer"
+                            className="cursor-pointer relative"
                           >
-                            <div className={`w-[10rem] h-[15rem] border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover-touch:opacity-100 transition-all duration-150`}>
+                            <div className={`w-[10rem] h-[15rem] border-2 ${selectedSeason?.season_number === season.season_number ? 'border-rose-500 dark:border-rose-500' : 'border-neutral-400 dark:border-neutral-700'} rounded-md overflow-hidden opacity-90 group-hover-touch:opacity-100 transition-all duration-150 relative`}>
                               <LazyImage 
                                 src={season.posterPathUrl}
                                 alt={season.name}
                                 className={`w-full h-full object-cover ${season.seasonFolderExists ? '' : 'grayscale'} group-hover-touch:grayscale-0 transition-all duration-150`}
                                 priority={isPriority}
                               />
+                              
+                              {/* Season Watch Later Button */}
+                              {isAuthenticated && (
+                                <div className="absolute top-2 right-2">
+                                  <Tooltip 
+                                    content={
+                                      seasonWatchLaterStates[season.id]?.isWatchLater 
+                                        ? "Remove season from watch later" 
+                                        : "Add season to watch later"
+                                    }
+                                    position="left"
+                                    delayMs={500}
+                                  >
+                                    <div
+                                      className={`transition-all duration-300 ease-in-out ${
+                                        seasonWatchLaterStates[season.id]?.isAnimating ? 'rotate-180' : 'rotate-0'
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSeasonWatchLaterToggle(season.id);
+                                      }}
+                                    >
+                                      <AddCircleButton 
+                                        isWatchLater={seasonWatchLaterStates[season.id]?.isWatchLater || false}
+                                        isToggling={seasonWatchLaterStates[season.id]?.isToggling || false}
+                                        onClick={() => {}} // Already handled by parent onClick
+                                        className={`scale-75 bg-black/50 hover:bg-black/70 transition-colors duration-200 ${
+                                          seasonWatchLaterStates[season.id]?.isToggling ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                      />
+                                    </div>
+                                  </Tooltip>
+                                </div>
+                              )}
                             </div>
                             <div className={`mt-6 font-semibold text-sm mb-4 rounded-md text-center w-full ${selectedSeason?.season_number === season.season_number ? 'bg-rose-500 dark:bg-rose-500 text-white' : 'text-neutral-700 dark:text-neutral-300 group-hover-touch:text-neutral-900 dark:group-hover-touch:text-neutral-100'} transition-colors duration-150`}>
                               {season.name}
@@ -1487,11 +1845,56 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                               <div className="w-full flex flex-col gap-y-1 lg:gap-y-2">
                                 <div className="flex flex-col lg:flex-row items-start gap-y-1 lg:gap-y-0 lg:items-center gap-x-2 justify-between">
                                   <div className="flex flex-col 3xl:flex-row items-start 3xl:items-center w-full justify-between gap-x-2 font-semibold leading-tight">
-                                    <div 
-                                      className={episode.is_in_storage ? 'cursor-pointer' : ''}
-                                      onClick={() => episode.is_in_storage && handleEpisodeClick(episode)}
-                                    >
-                                      {episode.name}
+                                    <div className="flex items-center gap-x-2">
+                                      <div 
+                                        className={episode.is_in_storage ? 'cursor-pointer' : ''}
+                                        onClick={() => episode.is_in_storage && handleEpisodeClick(episode)}
+                                      >
+                                        {episode.name}
+                                      </div>
+                                      
+                                      {/* Episode Watch Later Button - Only show for playable episodes */}
+                                      {isAuthenticated && isEpisodePlayable(episode) && (
+                                        <Tooltip 
+                                          content={
+                                            episodeWatchLaterStates[episode.id]?.isWatchLater 
+                                              ? "Remove episode from watch later" 
+                                              : "Add episode to watch later"
+                                          }
+                                          position="top"
+                                          delayMs={500}
+                                        >
+                                          <button
+                                            className={`transition-all duration-300 ease-in-out p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
+                                              episodeWatchLaterStates[episode.id]?.isAnimating ? 'rotate-180' : 'rotate-0'
+                                            } ${episodeWatchLaterStates[episode.id]?.isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEpisodeWatchLaterToggle(episode.id);
+                                            }}
+                                            disabled={episodeWatchLaterStates[episode.id]?.isToggling}
+                                          >
+                                            {episodeWatchLaterStates[episode.id]?.isWatchLater ? (
+                                              <svg 
+                                                className="w-4 h-4 text-green-500 dark:text-green-400" 
+                                                fill="currentColor" 
+                                                viewBox="0 0 20 20"
+                                              >
+                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                              </svg>
+                                            ) : (
+                                              <svg 
+                                                className="w-4 h-4 text-neutral-600 dark:text-neutral-400" 
+                                                fill="none" 
+                                                stroke="currentColor" 
+                                                viewBox="0 0 24 24"
+                                              >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                        </Tooltip>
+                                      )}
                                     </div>
                                     {/* subtitles */}
                                     {episode.subtitles && Array.isArray(episode.subtitles) && episode.subtitles.length > 0 && (
