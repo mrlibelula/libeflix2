@@ -62,6 +62,13 @@ api.interceptors.response.use(
       });
     }
 
+    // For 409 errors (authentication required), redirect to login
+    if (error.response?.status === 409) {
+      const loginUrl = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      window.location.href = loginUrl;
+      return Promise.reject(error);
+    }
+
     // For other errors, just reject
     return Promise.reject(error);
   }

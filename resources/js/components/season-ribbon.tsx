@@ -1,0 +1,477 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon, ChevronLeftIcon, ChevronRightIcon, HashIcon, ClockIcon } from "lucide-react";
+import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
+import { SeasonCard } from "@/components/ui/season-card";
+import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+
+// Types
+type SortField = 'name' | 'season_number' | 'rating' | 'added';
+type SortDirection = 'asc' | 'desc';
+
+interface SortOption {
+  field: SortField;
+  direction: SortDirection;
+  icon: any;
+  label: string;
+}
+
+// Interface for sidebar state event
+interface SidebarStateDetail {
+  state: 'expanded' | 'collapsed';
+  width: string;
+  isMobile: boolean;
+}
+
+interface SeasonRibbonProps {
+  seasons: Array<any>;
+  imgBaseUrl: string;
+  title?: string;
+  ribbonId?: string;
+  onWatchLaterToggle?: (seasonId: number, newStatus: boolean) => void;
+  showCheckIcon?: boolean;
+}
+
+// Configuration for pagination
+const ITEMS_PER_PAGE = 30; // Show 30 items per page
+const PAGINATION_THRESHOLD = 30; // Use pagination if more than 30 items
+
+export function SeasonRibbon({ 
+  seasons, 
+  imgBaseUrl, 
+  title = "Watch Later Seasons" + (seasons.length > 0 ? ` (${seasons.length})` : ""),
+  ribbonId,
+  onWatchLaterToggle,
+  showCheckIcon = false,
+}: SeasonRibbonProps) {
+
+  const [isRibbonOpen, setIsRibbonOpen] = useState(true);
+  const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Ref for the ribbon container to control scroll position
+  const ribbonContainerRef = useRef<HTMLDivElement>(null);
+  // Carousel API for controlling scroll position
+  const [carouselApi, setCarouselApi] = useState<any>(null);
+  
+  // Sort options configuration
+  const sortOptions: SortOption[] = [
+    { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
+    { field: 'season_number', direction: 'asc', icon: HashIcon, label: 'Season Number' },
+    { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
+    { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
+  ];
+
+  // Helper function to get initial sidebar width from cookie
+  const getInitialSidebarWidth = () => {
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const sidebarCookie = cookies.find(cookie => cookie.trim().startsWith('sidebar_state='));
+      if (sidebarCookie) {
+        const isExpanded = sidebarCookie.split('=')[1] === 'true';
+        return isExpanded ? '12rem' : '3rem';
+      }
+    }
+    return '12rem'; // Default to expanded if no cookie found
+  };
+
+  // State to track sidebar width for dynamic CSS calculations
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth());
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = (event: CustomEvent<SidebarStateDetail>) => {
+      const { state, width, isMobile } = event.detail;
+      if (!isMobile) {
+        setSidebarWidth(width);
+      }
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
+    };
+  }, []);
+
+  // Sort seasons based on current sort settings
+  const sortSeasons = (seasonsToSort: Array<any>, sortField: SortField, sortDirection: SortDirection) => {
+    return [...seasonsToSort].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortField) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || '';
+          bValue = b.name?.toLowerCase() || '';
+          break;
+        case 'season_number':
+          aValue = a.season_number || 0;
+          bValue = b.season_number || 0;
+          break;
+        case 'rating':
+          aValue = a.vote_average || a.likes_count || 0;
+          bValue = b.vote_average || b.likes_count || 0;
+          break;
+        case 'added':
+          // For "added" sorting, use the original array index to maintain default order
+          // This preserves the order items were loaded from the backend
+          aValue = seasonsToSort.indexOf(a);
+          bValue = seasonsToSort.indexOf(b);
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+  };
+
+  // Get sorted or base seasons
+  const processedSeasons = currentSort 
+    ? sortSeasons(seasons, currentSort.field, currentSort.direction)
+    : seasons;
+
+  // Determine if we should use pagination
+  const shouldPaginate = processedSeasons.length > PAGINATION_THRESHOLD;
+  
+  // Calculate pagination values
+  const totalPages = shouldPaginate ? Math.ceil(processedSeasons.length / ITEMS_PER_PAGE) : 1;
+  const startIndex = shouldPaginate ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+  const endIndex = shouldPaginate ? startIndex + ITEMS_PER_PAGE : processedSeasons.length;
+  
+  // Get the currently visible seasons
+  const visibleSeasons = processedSeasons.slice(startIndex, endIndex);
+
+  // Reset to page 1 when seasons change or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [processedSeasons.length, currentSort]);
+
+  // Reset ribbon scroll position when page changes
+  useEffect(() => {
+    if (carouselApi) {
+      // Use carousel API to scroll to the beginning
+      carouselApi.scrollTo(0);
+    }
+  }, [currentPage, carouselApi]);
+
+  // Restore focus to ribbon after pagination
+  const restoreFocusToRibbon = useCallback(() => {
+    // Add a small delay to ensure DOM has updated
+    setTimeout(() => {
+      if (ribbonContainerRef.current) {
+        // Try to find the carousel element using multiple selectors
+        let carouselElement = ribbonContainerRef.current.querySelector('[tabindex="0"]');
+        if (!carouselElement) {
+          carouselElement = ribbonContainerRef.current.querySelector('[role="region"][aria-roledescription="carousel"]');
+        }
+        if (!carouselElement) {
+          carouselElement = ribbonContainerRef.current.querySelector('[data-slot="carousel"]');
+        }
+        
+        if (carouselElement) {
+          (carouselElement as HTMLElement).focus();
+        }
+      }
+    }, 100);
+  }, []);
+
+  const toggleRibbon = () => {
+    setIsRibbonOpen(!isRibbonOpen);
+  };
+
+  const handleSortToggle = (field: SortField) => {
+    if (currentSort?.field === field) {
+      // Toggle direction if same field
+      const newDirection = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      setCurrentSort({ field, direction: newDirection });
+    } else {
+      // Set new field with default direction
+      const defaultDirection = sortOptions.find(opt => opt.field === field)?.direction || 'asc';
+      setCurrentSort({ field, direction: defaultDirection });
+    }
+    
+    // Restore focus to ribbon after sorting
+    restoreFocusToRibbon();
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+      restoreFocusToRibbon();
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+      restoreFocusToRibbon();
+    }
+  };
+
+  const handlePageJump = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      restoreFocusToRibbon();
+    }
+  };
+
+  // Helper functions for empty state content
+  const getEmptyStateTitle = (ribbonTitle: string) => {
+    if (ribbonTitle.toLowerCase().includes("watch later")) {
+      return "No seasons in your watch later list";
+    }
+    return "No seasons available";
+  };
+
+  const getEmptyStateDescription = (ribbonTitle: string) => {
+    if (ribbonTitle.toLowerCase().includes("watch later")) {
+      return "Add seasons to your watchlist by clicking the + icon on seasons you'd like to watch later.";
+    }
+    return "There are no seasons to stream at the moment. Check back later for new releases!";
+  };
+
+  const getEmptyStateIcon = (ribbonTitle: string): "clapper" | "plus" | "search" | "star" => {
+    if (ribbonTitle.toLowerCase().includes("watch later")) {
+      return "plus";
+    }
+    return "clapper";
+  };
+
+  const getEmptyStateActionText = (ribbonTitle: string) => {
+    if (ribbonTitle.toLowerCase().includes("watch later")) {
+      return "Browse TV Shows";
+    }
+    return undefined;
+  };
+
+  const getEmptyStateAction = (ribbonTitle: string) => {
+    if (ribbonTitle.toLowerCase().includes("watch later")) {
+      return () => {
+        // Navigate to TV shows page
+        window.location.href = '/tvshows';
+      };
+    }
+    return undefined;
+  };
+
+  // Get current sort option for display
+  const getCurrentSortDirection = (field: SortField) => {
+    if (currentSort?.field === field) {
+      return currentSort.direction;
+    }
+    return null;
+  };
+
+  // Generate page numbers for pagination display
+  const getVisiblePageNumbers = () => {
+    const pages = [];
+    // Responsive max pages: 3 on mobile, 5 on desktop
+    const isMobile = window.innerWidth < 768;
+    const maxVisiblePages = isMobile ? 3 : 5;
+    const sidePages = isMobile ? 1 : 2; // Pages around current page
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show current page and surrounding pages
+      const start = Math.max(1, currentPage - sidePages);
+      const end = Math.min(totalPages, currentPage + sidePages);
+      
+      // Always show first page
+      if (start > 1) {
+        pages.push(1);
+        if (start > 2) pages.push('...');
+      }
+      
+      // Show middle pages
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      // Always show last page
+      if (end < totalPages) {
+        if (end < totalPages - 1) pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
+  return (
+    <div 
+      className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--dynamic-sidebar-width)-30px)] focus:outline-none"
+      data-ribbon={ribbonId || title}
+      tabIndex={seasons.length === 0 ? 0 : -1}
+      style={{
+        '--dynamic-sidebar-width': sidebarWidth,
+        outline: 'none', // Remove default focus outline, rely on custom styling if needed
+      } as React.CSSProperties}
+    >
+      {/* ribbon header */}
+      <div className="flex w-full justify-between items-center pr-2 mb-3 mt-5">
+        <div 
+          onClick={toggleRibbon} 
+          className="flex justify-start items-center select-none gap-x-2 text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out"
+        >
+          <div>
+            {title}
+            {shouldPaginate && (
+              <span className="text-sm font-normal ml-2 text-zinc-600 dark:text-zinc-400">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+          </div>
+          <ChevronDownIcon className={`w-5 h-5 transition-transform duration-300 ease-in-out ${!isRibbonOpen ? 'rotate-[270deg]' : 'rotate-0'}`} />
+        </div>
+
+        {/* Sort Controls */}
+        {seasons.length > 0 && (
+          <div className="flex items-center gap-1">
+            {sortOptions.map((option) => {
+              const isActive = getCurrentSortDirection(option.field) !== null;
+              const direction = getCurrentSortDirection(option.field);
+              
+              return (
+                <button
+                  key={option.field}
+                  onClick={() => handleSortToggle(option.field)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium cursor-pointer ${
+                    isActive
+                      ? '_bg-rose-100 _dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 _hover:bg-rose-200 _dark:hover:bg-rose-900/50'
+                      : '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 _hover:bg-zinc-200 _dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                  title={`Sort by ${option.label}${isActive ? ` (${direction === 'asc' ? 'ascending' : 'descending'})` : ''}`}
+                >
+                  <option.icon className="w-4 h-4" />
+                  {isActive && (
+                    direction === 'asc' ? (
+                      <ArrowUpIcon className="w-3 h-3" />
+                    ) : (
+                      <ArrowDownIcon className="w-3 h-3" />
+                    )
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ribbon content */}
+      <div className={`transition-all duration-500 ease-in-out transform-gpu overflow-hidden ${
+        isRibbonOpen 
+          ? 'opacity-100 translate-y-0 scale-100 h-auto pt-4' 
+          : 'opacity-0 -translate-y-4 scale-95 pointer-events-none h-0 pt-0'
+      }`}>
+        {seasons.length === 0 ? (
+          <EmptyRibbonState
+            title={getEmptyStateTitle(title)}
+            description={getEmptyStateDescription(title)}
+            icon={getEmptyStateIcon(title)}
+            actionText={getEmptyStateActionText(title)}
+            onAction={getEmptyStateAction(title)}
+          />
+        ) : (
+          <>
+            <div ref={ribbonContainerRef}>
+              <Ribbon
+                align="start"
+                dragFree={true}
+                onApiInitialized={setCarouselApi}
+              >
+                {visibleSeasons.map((season: any, index: number) => {
+                  // Only prioritize the first 6-8 items (typical viewport on desktop)
+                  // This provides good initial load performance while still lazy loading the rest
+                  const isPriority = index < 8;
+
+                  return (
+                    <RibbonItem
+                      key={season.id}
+                    >
+                      <SeasonCard
+                        season={season}
+                        imgBaseUrl={imgBaseUrl}
+                        isPriority={isPriority}
+                        onWatchLaterToggle={onWatchLaterToggle}
+                        showCheckIcon={showCheckIcon}
+                      />
+                    </RibbonItem>
+                  );
+                })}
+              </Ribbon>
+            </div>
+
+            {/* Pagination Controls */}
+            {shouldPaginate && (
+              <div className="flex items-center justify-center mt-4 md:mt-6 pb-2">
+                {/* Fixed width container to keep arrow buttons in consistent positions */}
+                <div className="flex items-center gap-1 md:gap-2 w-[380px] md:w-[500px] justify-center">
+                  {/* Previous Button */}
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                      currentPage === 1
+                        ? '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 _hover:bg-zinc-200 _dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                    }`}
+                    title="Previous page"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeftIcon className="w-4 h-4" />
+                  </button>
+
+                  {/* Page Numbers - centered within fixed space */}
+                  <div className="flex items-center justify-center gap-1 flex-1 min-w-0">
+                    {getVisiblePageNumbers().map((page, index) => (
+                      <button
+                        key={index}
+                        onClick={() => typeof page === 'number' ? handlePageJump(page) : undefined}
+                        disabled={page === '...'}
+                        className={`min-w-[2rem] w-8 h-8 md:min-w-[2.5rem] md:w-9 md:h-9 rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
+                          page === currentPage
+                            ? 'bg-rose-600 text-white hover:bg-rose-700 cursor-default'
+                            : page === '...'
+                            ? 'bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
+                            : '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-500 _hover:bg-zinc-200 _dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                        }`}
+                        title={typeof page === 'number' ? `Go to page ${page}` : undefined}
+                        aria-label={typeof page === 'number' ? `Go to page ${page}` : undefined}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
+                      currentPage === totalPages
+                        ? '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                        : '_bg-zinc-100 _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 _hover:bg-zinc-200 _dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
+                    }`}
+                    title="Next page"
+                    aria-label="Next page"
+                  >
+                    <ChevronRightIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+} 

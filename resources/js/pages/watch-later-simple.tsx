@@ -55,13 +55,13 @@ export default function WatchLaterSimple({
           </div>
         </div>
 
-        {/* Only show movies for now */}
+        {/* Movies */}
         {watchLaterMoviesList.length > 0 && (
           <div className="mt-8">
             <MovieRibbon
               movies={watchLaterMoviesList}
               imgBaseUrl={imgBaseUrl}
-              title={`Watch Later Movies (${watchLaterMoviesList.length})`}
+              title={`Movies (${watchLaterMoviesList.length})`}
               ribbonId="watch-later-movies"
             />
           </div>

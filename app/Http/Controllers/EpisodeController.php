@@ -13,6 +13,11 @@ class EpisodeController extends Controller
 {
     use HandlesLikes;
 
+    protected function getModelClass(): string
+    {
+        return Episode::class;
+    }
+
     /**
      * Toggle watch later status for an episode by ID.
      *

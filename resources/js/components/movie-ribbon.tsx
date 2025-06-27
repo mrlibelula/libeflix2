@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, StarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
@@ -20,7 +20,7 @@ interface MovieRibbonProps {
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
 }
 
-type SortField = 'name' | 'year' | 'rating';
+type SortField = 'name' | 'year' | 'rating' | 'added';
 type SortDirection = 'asc' | 'desc';
 
 interface SortOption {
@@ -54,6 +54,7 @@ export function MovieRibbon({
   
   // Sort options configuration
   const sortOptions: SortOption[] = [
+    { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
     { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
     { field: 'year', direction: 'desc', icon: CalendarIcon, label: 'Year' },
     { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
@@ -127,6 +128,12 @@ export function MovieRibbon({
         case 'rating':
           aValue = a.vote_average || 0;
           bValue = b.vote_average || 0;
+          break;
+        case 'added':
+          // For "added" sorting, use the original array index to maintain default order
+          // This preserves the order items were loaded from the backend
+          aValue = moviesToSort.indexOf(a);
+          bValue = moviesToSort.indexOf(b);
           break;
         default:
           return 0;

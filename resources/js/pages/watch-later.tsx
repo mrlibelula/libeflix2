@@ -2,6 +2,9 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head } from "@inertiajs/react";
 import { MovieRibbon } from "@/components/movie-ribbon";
+import { TvshowRibbon } from "@/components/tvshow-ribbon";
+import { SeasonRibbon } from "@/components/season-ribbon";
+import { EpisodeRibbon } from "@/components/episode-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 export default function WatchLater({ 
@@ -78,6 +81,27 @@ export default function WatchLater({
     );
   }, []);
 
+  const handleTvshowWatchLaterToggle = useCallback((tvshowId: number, newStatus: boolean) => {
+    if (!newStatus) {
+      // Remove from watch later list
+      setWatchLaterTvshowsList(prev => prev.filter(tvshow => tvshow.id !== tvshowId));
+    }
+  }, []);
+
+  const handleSeasonWatchLaterToggle = useCallback((seasonId: number, newStatus: boolean) => {
+    if (!newStatus) {
+      // Remove from watch later list
+      setWatchLaterSeasonsList(prev => prev.filter(season => season.id !== seasonId));
+    }
+  }, []);
+
+  const handleEpisodeWatchLaterToggle = useCallback((episodeId: number, newStatus: boolean) => {
+    if (!newStatus) {
+      // Remove from watch later list
+      setWatchLaterEpisodesList(prev => prev.filter(episode => episode.id !== episodeId));
+    }
+  }, []);
+
   // Restore focus after state changes
   useEffect(() => {
     if (lastFocusedRibbonRef.current) {
@@ -135,120 +159,95 @@ export default function WatchLater({
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Watch Later Movies and TV Shows" />
 
-      {/* Content Summary */}
-      <div className="px-5 py-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-            <h3 className="font-semibold text-blue-800 dark:text-blue-200">Movies</h3>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{watchLaterMoviesList.length}</p>
-          </div>
-          
-          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-            <h3 className="font-semibold text-green-800 dark:text-green-200">TV Shows</h3>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-300">{watchLaterTvshowsList.length}</p>
-          </div>
-          
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-            <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Seasons</h3>
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-300">{watchLaterSeasonsList.length}</p>
-          </div>
-          
-          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-            <h3 className="font-semibold text-purple-800 dark:text-purple-200">Episodes</h3>
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">{watchLaterEpisodesList.length}</p>
+      <div className="flex flex-col gap-y-10 py-5">
+        {/* Content Summary */}
+        <div className="px-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+              <h3 className="font-semibold text-blue-800 dark:text-blue-200">Movies</h3>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{watchLaterMoviesList.length}</p>
+            </div>
+            
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+              <h3 className="font-semibold text-green-800 dark:text-green-200">TV Shows</h3>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-300">{watchLaterTvshowsList.length}</p>
+            </div>
+            
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Seasons</h3>
+              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-300">{watchLaterSeasonsList.length}</p>
+            </div>
+            
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+              <h3 className="font-semibold text-purple-800 dark:text-purple-200">Episodes</h3>
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">{watchLaterEpisodesList.length}</p>
+            </div>
           </div>
         </div>
+
+        {/* Movies */}
+        {watchLaterMoviesList.length > 0 && (
+          <MovieRibbon
+            movies={watchLaterMoviesList}
+            imgBaseUrl={imgBaseUrl}
+            title={`Movies (${watchLaterMoviesList.length})`}
+            ribbonId="watch-later-movies"
+            onWatchLaterToggle={handleWatchLaterToggle}
+            onLikeToggle={handleLikeToggle}
+          />
+        )}
+
+        {/* TV Shows */}
+        {watchLaterTvshowsList.length > 0 && (
+          <TvshowRibbon
+            tvshows={watchLaterTvshowsList}
+            imgBaseUrl={imgBaseUrl}
+            title={`TV Shows (${watchLaterTvshowsList.length})`}
+            ribbonId="watch-later-tvshows"
+            onWatchLaterToggle={handleTvshowWatchLaterToggle}
+            showCheckIcon={true}
+          />
+        )}
+
+        {/* Seasons */}
+        {watchLaterSeasonsList.length > 0 && (
+          <SeasonRibbon
+            seasons={watchLaterSeasonsList}
+            imgBaseUrl={imgBaseUrl}
+            title={`Seasons (${watchLaterSeasonsList.length})`}
+            ribbonId="watch-later-seasons"
+            onWatchLaterToggle={handleSeasonWatchLaterToggle}
+            showCheckIcon={true}
+          />
+        )}
+
+        {/* Episodes */}
+        {watchLaterEpisodesList.length > 0 && (
+          <EpisodeRibbon
+            episodes={watchLaterEpisodesList}
+            imgBaseUrl={imgBaseUrl}
+            title={`Episodes (${watchLaterEpisodesList.length})`}
+            ribbonId="watch-later-episodes"
+            onWatchLaterToggle={handleEpisodeWatchLaterToggle}
+            showCheckIcon={true}
+          />
+        )}
+
+        {/* Empty state when no items */}
+        {watchLaterMoviesList.length === 0 && 
+        watchLaterTvshowsList.length === 0 && 
+        watchLaterSeasonsList.length === 0 && 
+        watchLaterEpisodesList.length === 0 && (
+          <div className="flex items-center justify-center py-32 text-zinc-500 dark:text-zinc-400">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📺</div>
+              <h2 className="text-2xl font-bold mb-2">Your Watch Later List is Empty</h2>
+              <p className="text-lg">Add movies, TV shows, seasons, or episodes to watch them later!</p>
+            </div>
+          </div>
+        )}
+
       </div>
-
-      {/* Movies */}
-      {watchLaterMoviesList.length > 0 && (
-        <MovieRibbon
-          movies={watchLaterMoviesList}
-          imgBaseUrl={imgBaseUrl}
-          title={`Watch Later Movies (${watchLaterMoviesList.length})`}
-          ribbonId="watch-later-movies"
-          onWatchLaterToggle={handleWatchLaterToggle}
-          onLikeToggle={handleLikeToggle}
-        />
-      )}
-
-      {/* TV Shows - Simple List for Now */}
-      {watchLaterTvshowsList.length > 0 && (
-        <div className="px-5 py-3">
-          <h2 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">
-            Watch Later TV Shows ({watchLaterTvshowsList.length})
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {watchLaterTvshowsList.map((tvshow: any) => (
-              <div key={tvshow.id} className="bg-white dark:bg-zinc-800 rounded-lg p-4 shadow">
-                <h3 className="font-semibold text-sm mb-2">{tvshow.name}</h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  {tvshow.first_air_date ? new Date(tvshow.first_air_date).getFullYear() : 'N/A'}
-                </p>
-                {tvshow.vote_average > 0 && (
-                  <p className="text-xs text-yellow-600">★ {tvshow.vote_average.toFixed(1)}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Seasons - Simple List for Now */}
-      {watchLaterSeasonsList.length > 0 && (
-        <div className="px-5 py-3">
-          <h2 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">
-            Watch Later Seasons ({watchLaterSeasonsList.length})
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {watchLaterSeasonsList.map((season: any) => (
-              <div key={season.id} className="bg-white dark:bg-zinc-800 rounded-lg p-4 shadow">
-                <h3 className="font-semibold text-sm mb-2">{season.name}</h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">Season {season.season_number}</p>
-                {season.tvshow && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400">from {season.tvshow.name}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Episodes - Simple List for Now */}
-      {watchLaterEpisodesList.length > 0 && (
-        <div className="px-5 py-3">
-          <h2 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">
-            Watch Later Episodes ({watchLaterEpisodesList.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {watchLaterEpisodesList.map((episode: any) => (
-              <div key={episode.id} className="bg-white dark:bg-zinc-800 rounded-lg p-4 shadow">
-                <h3 className="font-semibold text-sm mb-2">{episode.name}</h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  S{episode.season_number}E{episode.episode_number}
-                </p>
-                {episode.tvshow && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400">from {episode.tvshow.name}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty state when no items */}
-      {watchLaterMoviesList.length === 0 && 
-       watchLaterTvshowsList.length === 0 && 
-       watchLaterSeasonsList.length === 0 && 
-       watchLaterEpisodesList.length === 0 && (
-        <div className="flex items-center justify-center py-32 text-zinc-500 dark:text-zinc-400">
-          <div className="text-center">
-            <div className="text-6xl mb-4">📺</div>
-            <h2 className="text-2xl font-bold mb-2">Your Watch Later List is Empty</h2>
-            <p className="text-lg">Add movies, TV shows, seasons, or episodes to watch them later!</p>
-          </div>
-        </div>
-      )}
         
     </AppLayout>
   );
