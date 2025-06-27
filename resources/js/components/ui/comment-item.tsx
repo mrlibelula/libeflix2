@@ -203,7 +203,7 @@ export function CommentItem({
         className
       )}
     >
-      <div className="flex space-x-3 p-3 rounded-lg hover:bg-gray-200/50 dark:hover:bg-[#171717]/50 transition-colors duration-200">
+      <div className="flex space-x-3 p-3 rounded-lg hover:bg-gray-200/50 dark:hover:bg-[#171717] transition-colors duration-200">
         <div className="flex-shrink-0">
           <Avatar className="w-8 h-8">
             {comment.user.avatar ? (
