@@ -45,7 +45,7 @@ return new class extends Migration
                 INSERT INTO movie_user (user_id, movie_id, created_at, updated_at)
                 SELECT user_id, watchable_id, created_at, updated_at
                 FROM watchlists
-                WHERE watchable_type = 'App\\\\Models\\\\Movie'
+                WHERE watchable_type = 'App\\Models\\Movie'
             ");
         }
     }

@@ -18,13 +18,13 @@ return new class extends Migration
             // Migrate existing movie_user records to watchlists table
             DB::statement("
                 INSERT INTO watchlists (user_id, watchable_id, watchable_type, created_at, updated_at)
-                SELECT user_id, movie_id, 'App\\\\Models\\\\Movie', created_at, updated_at
+                SELECT user_id, movie_id, 'App\\Models\\Movie', created_at, updated_at
                 FROM movie_user
                 WHERE NOT EXISTS (
                     SELECT 1 FROM watchlists 
                     WHERE watchlists.user_id = movie_user.user_id 
                     AND watchlists.watchable_id = movie_user.movie_id 
-                    AND watchlists.watchable_type = 'App\\\\Models\\\\Movie'
+                    AND watchlists.watchable_type = 'App\\Models\\Movie'
                 )
             ");
         }
@@ -39,7 +39,7 @@ return new class extends Migration
         if (Schema::hasTable('watchlists')) {
             DB::statement("
                 DELETE FROM watchlists 
-                WHERE watchable_type = 'App\\\\Models\\\\Movie'
+                WHERE watchable_type = 'App\\Models\\Movie'
             ");
         }
     }
