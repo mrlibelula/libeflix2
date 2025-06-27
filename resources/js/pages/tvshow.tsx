@@ -448,16 +448,26 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   };
 
   useEffect(() => {
+    // Check URL parameters first to see if there's a specific season requested
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSeasonParam = urlParams.get('season');
+    
     // Find the requested season or default to first season if not found
     let initialSeason;
     
-    if (selectedSeasonNumber) {
+    // Priority 1: URL parameter (for direct links from watch later)
+    if (urlSeasonParam) {
+      const urlSeasonNumber = parseInt(urlSeasonParam);
+      initialSeason = tvshow.seasons.find((s: any) => s.season_number === urlSeasonNumber);
+    }
+    
+    // Priority 2: selectedSeasonNumber prop (for regular navigation)
+    if (!initialSeason && selectedSeasonNumber) {
       initialSeason = tvshow.seasons.find((s: any) => s.season_number === selectedSeasonNumber);
-      // If the requested season doesn't exist, fall back to the first season
-      if (!initialSeason && tvshow.seasons.length > 0) {
-        initialSeason = tvshow.seasons[0];
-      }
-    } else if (tvshow.seasons.length > 0) {
+    }
+    
+    // Priority 3: Default to first season
+    if (!initialSeason && tvshow.seasons.length > 0) {
       initialSeason = tvshow.seasons[0];
     }
     
@@ -591,17 +601,22 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
       const targetSeason = tvshow.seasons?.find((s: any) => s.season_number === seasonNumber);
       
       if (targetSeason) {
+        // Always switch to the target season first (this will trigger episode loading)
+        if (!selectedSeason || selectedSeason.season_number !== seasonNumber) {
+          setSelectedSeason(targetSeason);
+        }
+        
         // Load episodes for that season if not already loaded
-        loadSeasonEpisodes(seasonNumber).then(() => {
-          const episodes = getCachedEpisodes(seasonNumber);
+        loadSeasonEpisodes(seasonNumber).then((episodes) => {
+          // Ensure episodes are stored in the state immediately
+          setSeasonEpisodes(prev => ({
+            ...prev,
+            [seasonNumber]: episodes
+          }));
+          
           const targetEpisode = episodes?.find((e: any) => e.episode_number === episodeNumber);
           
           if (targetEpisode) {
-            // Switch to the target season if necessary
-            if (selectedSeason?.season_number !== seasonNumber) {
-              setSelectedSeason(targetSeason);
-            }
-            
             // Update document meta tags for episode sharing (for subsequent shares)
             document.title = `${tvshow.name} - S${seasonNumber}E${episodeNumber}: ${targetEpisode.name}`;
             
@@ -643,7 +658,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
         });
       }
     }
-  }, [tvshow.seasons, loadSeasonEpisodes, getCachedEpisodes, selectedSeason]);
+  }, [tvshow.seasons, loadSeasonEpisodes, getCachedEpisodes]);
 
   // Auto-play episode if specified in URL parameters (before early return to ensure hooks order)
   // This should only happen once when the page initially loads with episode parameters from search

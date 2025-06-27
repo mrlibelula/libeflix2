@@ -27,6 +27,12 @@ export default function WatchLater({
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Refs for each ribbon section for smooth scrolling
+  const moviesRibbonRef = useRef<HTMLDivElement>(null);
+  const tvshowsRibbonRef = useRef<HTMLDivElement>(null);
+  const seasonsRibbonRef = useRef<HTMLDivElement>(null);
+  const episodesRibbonRef = useRef<HTMLDivElement>(null);
+
   // Track which ribbon has focus
   useEffect(() => {
     const handleFocusChange = () => {
@@ -49,6 +55,43 @@ export default function WatchLater({
       document.removeEventListener('focusin', handleFocusChange);
     };
   }, []);
+
+  // Function to handle smooth scrolling to a target element
+  const handleSmoothScrollTo = (targetRef: React.RefObject<HTMLDivElement | null>) => {
+    if (!targetRef.current) return;
+    
+    const target = targetRef.current;
+    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - 100; // 100px offset from top
+    const startPosition = window.pageYOffset;
+    const distance = targetPosition - startPosition;
+    const duration = 800; // 800ms for smooth animation
+    let start: number | null = null;
+    
+    const easeInOutQuad = (t: number): number => {
+      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    };
+    
+    const animation = (currentTime: number) => {
+      if (start === null) start = currentTime;
+      const timeElapsed = currentTime - start;
+      const progress = Math.min(timeElapsed / duration, 1);
+      const ease = easeInOutQuad(progress);
+      
+      window.scrollTo(0, startPosition + distance * ease);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animation);
+      }
+    };
+    
+    requestAnimationFrame(animation);
+  };
+
+  // Specific scroll handlers for each ribbon
+  const handleScrollToMovies = () => handleSmoothScrollTo(moviesRibbonRef);
+  const handleScrollToTvshows = () => handleSmoothScrollTo(tvshowsRibbonRef);
+  const handleScrollToSeasons = () => handleSmoothScrollTo(seasonsRibbonRef);
+  const handleScrollToEpisodes = () => handleSmoothScrollTo(episodesRibbonRef);
 
   const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
     if (newStatus) {
@@ -163,22 +206,34 @@ export default function WatchLater({
         {/* Content Summary */}
         <div className="px-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div 
+              onClick={handleScrollToMovies}
+              className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors duration-200"
+            >
               <h3 className="font-semibold text-blue-800 dark:text-blue-200">Movies</h3>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{watchLaterMoviesList.length}</p>
             </div>
             
-            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+            <div 
+              onClick={handleScrollToTvshows}
+              className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors duration-200"
+            >
               <h3 className="font-semibold text-green-800 dark:text-green-200">TV Shows</h3>
               <p className="text-2xl font-bold text-green-600 dark:text-green-300">{watchLaterTvshowsList.length}</p>
             </div>
             
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <div 
+              onClick={handleScrollToSeasons}
+              className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 cursor-pointer hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors duration-200"
+            >
               <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Seasons</h3>
               <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-300">{watchLaterSeasonsList.length}</p>
             </div>
             
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div 
+              onClick={handleScrollToEpisodes}
+              className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors duration-200"
+            >
               <h3 className="font-semibold text-purple-800 dark:text-purple-200">Episodes</h3>
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">{watchLaterEpisodesList.length}</p>
             </div>
@@ -187,50 +242,58 @@ export default function WatchLater({
 
         {/* Movies */}
         {watchLaterMoviesList.length > 0 && (
-          <MovieRibbon
-            movies={watchLaterMoviesList}
-            imgBaseUrl={imgBaseUrl}
-            title={`Movies (${watchLaterMoviesList.length})`}
-            ribbonId="watch-later-movies"
-            onWatchLaterToggle={handleWatchLaterToggle}
-            onLikeToggle={handleLikeToggle}
-          />
+          <div ref={moviesRibbonRef}>
+            <MovieRibbon
+              movies={watchLaterMoviesList}
+              imgBaseUrl={imgBaseUrl}
+              title={`Movies (${watchLaterMoviesList.length})`}
+              ribbonId="watch-later-movies"
+              onWatchLaterToggle={handleWatchLaterToggle}
+              onLikeToggle={handleLikeToggle}
+            />
+          </div>
         )}
 
         {/* TV Shows */}
         {watchLaterTvshowsList.length > 0 && (
-          <TvshowRibbon
-            tvshows={watchLaterTvshowsList}
-            imgBaseUrl={imgBaseUrl}
-            title={`TV Shows (${watchLaterTvshowsList.length})`}
-            ribbonId="watch-later-tvshows"
-            onWatchLaterToggle={handleTvshowWatchLaterToggle}
-            showCheckIcon={true}
-          />
+          <div ref={tvshowsRibbonRef}>
+            <TvshowRibbon
+              tvshows={watchLaterTvshowsList}
+              imgBaseUrl={imgBaseUrl}
+              title={`TV Shows (${watchLaterTvshowsList.length})`}
+              ribbonId="watch-later-tvshows"
+              onWatchLaterToggle={handleTvshowWatchLaterToggle}
+              showCheckIcon={true}
+            />
+          </div>
         )}
 
         {/* Seasons */}
         {watchLaterSeasonsList.length > 0 && (
-          <SeasonRibbon
-            seasons={watchLaterSeasonsList}
-            imgBaseUrl={imgBaseUrl}
-            title={`Seasons (${watchLaterSeasonsList.length})`}
-            ribbonId="watch-later-seasons"
-            onWatchLaterToggle={handleSeasonWatchLaterToggle}
-            showCheckIcon={true}
-          />
+          <div ref={seasonsRibbonRef}>
+            <SeasonRibbon
+              seasons={watchLaterSeasonsList}
+              imgBaseUrl={imgBaseUrl}
+              title={`Seasons (${watchLaterSeasonsList.length})`}
+              ribbonId="watch-later-seasons"
+              onWatchLaterToggle={handleSeasonWatchLaterToggle}
+              showCheckIcon={true}
+            />
+          </div>
         )}
 
         {/* Episodes */}
         {watchLaterEpisodesList.length > 0 && (
-          <EpisodeRibbon
-            episodes={watchLaterEpisodesList}
-            imgBaseUrl={imgBaseUrl}
-            title={`Episodes (${watchLaterEpisodesList.length})`}
-            ribbonId="watch-later-episodes"
-            onWatchLaterToggle={handleEpisodeWatchLaterToggle}
-            showCheckIcon={true}
-          />
+          <div ref={episodesRibbonRef}>
+            <EpisodeRibbon
+              episodes={watchLaterEpisodesList}
+              imgBaseUrl={imgBaseUrl}
+              title={`Episodes (${watchLaterEpisodesList.length})`}
+              ribbonId="watch-later-episodes"
+              onWatchLaterToggle={handleEpisodeWatchLaterToggle}
+              showCheckIcon={true}
+            />
+          </div>
         )}
 
         {/* Empty state when no items */}
