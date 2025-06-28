@@ -1796,10 +1796,32 @@ export function PlayEpisodeDialog({
     setIsWatchLaterAnimating(true);
     
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      // Try multiple sources for CSRF token
+      let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      // If meta tag not found, try to get fresh token from API
+      if (!csrfToken) {
+        try {
+          const tokenResponse = await fetch('/csrf-token', {
+            method: 'GET',
+            credentials: 'same-origin',
+          });
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            csrfToken = tokenData.csrf_token;
+                         // Update meta tag for future requests
+             const metaTag = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
+             if (metaTag && csrfToken) {
+               metaTag.setAttribute('content', csrfToken);
+             }
+          }
+        } catch (tokenError) {
+          console.error('Failed to fetch CSRF token:', tokenError);
+        }
+      }
       
       if (!csrfToken) {
-        console.error('CSRF token not found');
+        console.error('CSRF token not found - please refresh the page');
         setIsWatchLaterAnimating(false);
         return;
       }
@@ -1808,7 +1830,7 @@ export function PlayEpisodeDialog({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
+          'X-CSRF-TOKEN': csrfToken as string,
           'Accept': 'application/json',
         },
         credentials: 'same-origin',
@@ -1828,6 +1850,54 @@ export function PlayEpisodeDialog({
         }, 300);
       } else {
         console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+          // Try to get fresh CSRF token and retry once
+          try {
+            const tokenResponse = await fetch('/csrf-token', {
+              method: 'GET',
+              credentials: 'same-origin',
+            });
+            if (tokenResponse.ok) {
+              const tokenData = await tokenResponse.json();
+              const freshToken = tokenData.csrf_token;
+              // Update meta tag
+              const metaTag = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
+              if (metaTag && freshToken) {
+                metaTag.setAttribute('content', freshToken);
+              }
+              
+              // Retry the request with fresh token
+              const retryResponse = await fetch(`/api/episodes/${episode.id}/toggle-watch-later`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-TOKEN': freshToken,
+                  'Accept': 'application/json',
+                },
+                credentials: 'same-origin',
+              });
+              
+              if (retryResponse.ok) {
+                const retryData = await retryResponse.json();
+                setTimeout(() => {
+                  setIsWatchLater(retryData.is_watch_later);
+                }, 150);
+                setTimeout(() => {
+                  setIsWatchLaterAnimating(false);
+                }, 300);
+                return;
+              }
+            }
+          } catch (retryError) {
+            console.error('Failed to retry with fresh token:', retryError);
+          }
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          window.location.href = '/login?redirect=' + encodeURIComponent(currentUrl);
+          return;
+        }
         setIsWatchLaterAnimating(false);
       }
     } catch (error) {
