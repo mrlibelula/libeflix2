@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Episode;
 
 class TvshowController extends Controller
 {
@@ -30,6 +31,7 @@ class TvshowController extends Controller
     public function index(Request $request): Response
     {
         $searchQuery = $request->get('search');
+        $user = $request->user();
 
         $tvshowsQuery = Tvshow::select('id', 'name', 'backdrop_path', 'poster_path', 'vote_average', 'vote_count', 'first_air_date', 'videos', 'images', 'selected_logo', 'slug')
             ->withCount('seasons')
@@ -43,6 +45,13 @@ class TvshowController extends Controller
         }
 
         $tvshows = $tvshowsQuery->get();
+
+        // Add likes and watch later information to each TV show
+        $tvshows->each(function ($tvshow) use ($user) {
+            $tvshow->likes_count = $tvshow->likesCount();
+            $tvshow->is_liked = $user ? $tvshow->isLikedBy($user) : false;
+            $tvshow->is_watch_later = $user ? WatchLaterService::isWatchLater($tvshow, $user) : false;
+        });
 
         return Inertia::render('tvshows', [
             'tvshows' => $tvshows,

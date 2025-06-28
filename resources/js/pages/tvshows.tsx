@@ -1,10 +1,283 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { LoveCircleButton } from '@/components/ui/love-circle-button';
+import { AddCircleButton } from '@/components/ui/add-circle-button';
+import { useState, useEffect } from 'react';
 
 export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>, searchQuery?: string }) {
   const imgUrl = 'https://image.tmdb.org/t/p/w500/';
+  
+  // Get Inertia page props for authentication and CSRF token
+  const { props } = usePage<{ 
+    csrf_token?: string;
+    auth?: {
+      user?: any;
+    };
+  }>();
+  
+  // Check if user is authenticated
+  const isAuthenticated = !!props.auth?.user;
+  
+  // State for tracking likes and watch later status for each TV show
+  const [tvshowStates, setTvshowStates] = useState<Record<number, {
+    isLiked: boolean;
+    likesCount: number;
+    isLikeToggling: boolean;
+    isLikeAnimating: boolean;
+    isWatchLater: boolean;
+    isWatchLaterToggling: boolean;
+    isWatchLaterAnimating: boolean;
+  }>>({});
+  
+  // Initialize states from tvshow props
+  useEffect(() => {
+    const initialStates: typeof tvshowStates = {};
+    tvshows.forEach((tvshow) => {
+      initialStates[tvshow.id] = {
+        isLiked: tvshow.is_liked || false,
+        likesCount: tvshow.likes_count || 0,
+        isLikeToggling: false,
+        isLikeAnimating: false,
+        isWatchLater: tvshow.is_watch_later || false,
+        isWatchLaterToggling: false,
+        isWatchLaterAnimating: false,
+      };
+    });
+    setTvshowStates(initialStates);
+  }, [tvshows]);
+  
+  // Function to handle like toggle
+  const handleLikeToggle = async (tvshow: any, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation to tvshow page
+    e.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    const currentState = tvshowStates[tvshow.id];
+    if (!currentState || currentState.isLikeToggling) return;
+    
+    setTvshowStates(prev => ({
+      ...prev,
+      [tvshow.id]: {
+        ...prev[tvshow.id],
+        isLikeToggling: true,
+        isLikeAnimating: true,
+      }
+    }));
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setTvshowStates(prev => ({
+          ...prev,
+          [tvshow.id]: {
+            ...prev[tvshow.id],
+            isLikeAnimating: false,
+            isLikeToggling: false,
+          }
+        }));
+        return;
+      }
+      
+      const method = currentState.isLiked ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/tvshows/${tvshow.slug}/like`, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setTvshowStates(prev => ({
+            ...prev,
+            [tvshow.id]: {
+              ...prev[tvshow.id],
+              isLiked: data.is_liked,
+              likesCount: data.likes_count,
+            }
+          }));
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setTvshowStates(prev => ({
+            ...prev,
+            [tvshow.id]: {
+              ...prev[tvshow.id],
+              isLikeAnimating: false,
+            }
+          }));
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setTvshowStates(prev => ({
+          ...prev,
+          [tvshow.id]: {
+            ...prev[tvshow.id],
+            isLikeAnimating: false,
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setTvshowStates(prev => ({
+        ...prev,
+        [tvshow.id]: {
+          ...prev[tvshow.id],
+          isLikeAnimating: false,
+        }
+      }));
+    } finally {
+      setTvshowStates(prev => ({
+        ...prev,
+        [tvshow.id]: {
+          ...prev[tvshow.id],
+          isLikeToggling: false,
+        }
+      }));
+    }
+  };
+  
+  // Function to handle watch later toggle
+  const handleWatchLaterToggle = async (tvshow: any, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation to tvshow page
+    e.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
+    const currentState = tvshowStates[tvshow.id];
+    if (!currentState || currentState.isWatchLaterToggling) return;
+    
+    setTvshowStates(prev => ({
+      ...prev,
+      [tvshow.id]: {
+        ...prev[tvshow.id],
+        isWatchLaterToggling: true,
+        isWatchLaterAnimating: true,
+      }
+    }));
+    
+    try {
+      // Get CSRF token from Inertia shared data or meta tag
+      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        console.error('CSRF token not found');
+        setTvshowStates(prev => ({
+          ...prev,
+          [tvshow.id]: {
+            ...prev[tvshow.id],
+            isWatchLaterAnimating: false,
+            isWatchLaterToggling: false,
+          }
+        }));
+        return;
+      }
+      
+      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Change status at the midpoint of animation
+        setTimeout(() => {
+          setTvshowStates(prev => ({
+            ...prev,
+            [tvshow.id]: {
+              ...prev[tvshow.id],
+              isWatchLater: data.is_watch_later,
+            }
+          }));
+        }, 150);
+        
+        // Complete animation cycle
+        setTimeout(() => {
+          setTvshowStates(prev => ({
+            ...prev,
+            [tvshow.id]: {
+              ...prev[tvshow.id],
+              isWatchLaterAnimating: false,
+            }
+          }));
+        }, 300);
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        if (response.status === 419) {
+          console.error('CSRF token mismatch. Please refresh the page.');
+        } else if (response.status === 401) {
+          // User is not authenticated, redirect to login
+          const currentUrl = window.location.pathname + window.location.search;
+          router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
+          return;
+        }
+        setTvshowStates(prev => ({
+          ...prev,
+          [tvshow.id]: {
+            ...prev[tvshow.id],
+            isWatchLaterAnimating: false,
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling watch later:', error);
+      setTvshowStates(prev => ({
+        ...prev,
+        [tvshow.id]: {
+          ...prev[tvshow.id],
+          isWatchLaterAnimating: false,
+        }
+      }));
+    } finally {
+      setTvshowStates(prev => ({
+        ...prev,
+        [tvshow.id]: {
+          ...prev[tvshow.id],
+          isWatchLaterToggling: false,
+        }
+      }));
+    }
+  };
+
   const breadcrumbs: BreadcrumbItem[] = [
     {
       title: searchQuery 
@@ -35,6 +308,7 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
           {tvshows.map((tvshow, index) => {
             // Prioritize the first 8-10 TV shows for initial viewport (typical grid on desktop)
             const isPriority = index < 10;
+            const currentState = tvshowStates[tvshow.id];
             
             return (
               <Link href={`/tvshow/${tvshow.slug}`} className="relative group rounded-xl overflow-hidden shadow-lg shadow-neutral-600 dark:shadow-black transition-all duration-[250ms] touch-manipulation" key={tvshow.id}>
@@ -47,6 +321,46 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
                   />
                 
                 <div className="dark-gradient absolute inset-0 size-full" />
+
+                {/* Like and Watch Later buttons */}
+                {isAuthenticated && currentState && (
+                  <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div 
+                      className={`transition-all duration-300 ease-in-out ${
+                        currentState.isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                      }`}
+                      style={{
+                        transform: currentState.isLikeAnimating 
+                          ? 'rotate(180deg)' 
+                          : 'rotate(0deg)',
+                      }}
+                    >
+                      <LoveCircleButton
+                        isLiked={currentState.isLiked}
+                        onClick={(e) => handleLikeToggle(tvshow, e)}
+                        disabled={currentState.isLikeToggling}
+                        className="backdrop-blur-sm bg-black/20 hover:bg-black/40"
+                      />
+                    </div>
+                    <div 
+                      className={`transition-all duration-300 ease-in-out ${
+                        currentState.isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
+                      }`}
+                      style={{
+                        transform: currentState.isWatchLaterAnimating 
+                          ? 'rotate(180deg)' 
+                          : 'rotate(0deg)',
+                      }}
+                    >
+                      <AddCircleButton
+                        isWatchLater={currentState.isWatchLater}
+                        isToggling={currentState.isWatchLaterToggling}
+                        onClick={(e) => handleWatchLaterToggle(tvshow, e)}
+                        className="backdrop-blur-sm bg-black/20 hover:bg-black/40"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="absolute bottom-0 text-center w-full p-3">
                   {
@@ -64,6 +378,13 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
                     <span className="text-white">⭐{Math.round(tvshow.vote_average * 10)}%</span>
                     <span className="text-white/30">•</span>
                     <span>{tvshow.seasons_count > 1 ? `${tvshow.seasons_count} Seasons` : `${tvshow.seasons_count} Season`}</span>
+                    {/* Show likes count if available */}
+                    {currentState && currentState.likesCount > 0 && (
+                      <>
+                        <span className="text-white/30">•</span>
+                        <span>{currentState.likesCount} {currentState.likesCount === 1 ? 'like' : 'likes'}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

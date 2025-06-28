@@ -70,7 +70,7 @@ export function EpisodeCard({
         
         {/* Check icon for removal from watch later */}
         {showCheckIcon && (
-          <div className="absolute top-2 right-2">
+          <div className="absolute top-2 right-2 z-20">
             <button
               onClick={handleRemoveFromWatchLater}
               className="p-1.5 bg-green-600 hover:bg-green-700 rounded-full text-white transition-colors duration-200 shadow-lg"
@@ -83,7 +83,7 @@ export function EpisodeCard({
 
         {/* Play button overlay for playable episodes */}
         {isPlayable && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30 z-10">
             <div className="p-3 bg-rose-600 rounded-full text-white">
               <PlayIcon className="w-6 h-6 fill-white" />
             </div>
