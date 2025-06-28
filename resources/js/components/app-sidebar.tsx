@@ -4,20 +4,20 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus } from 'lucide-react';
+import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutDashboard,
+        title: 'Home',
+        href: '/',
+        icon: Home,
     },
     {
         title: 'TV Shows',
         href: '/tvshows',
-        icon: Video,
+        icon: Tv,
     },
     {
         title: 'Movies',
@@ -90,7 +90,7 @@ export function AppSidebar() {
                     <SidebarMenu>
                         <SidebarMenuItem>
                             <SidebarMenuButton size="lg" asChild>
-                                <Link href="/dashboard" prefetch>
+                                <Link href="/" prefetch>
                                     <AppLogo />
                                 </Link>
                             </SidebarMenuButton>
@@ -115,7 +115,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href="/dashboard" prefetch>
+                            <Link href="/" prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>

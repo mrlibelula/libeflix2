@@ -56,6 +56,13 @@ type PlayEpisodeDialogProps = {
   isLastEpisodeOfSeason?: boolean;
   isFirstEpisodeOfTVShow?: boolean;
   isLastEpisodeOfTVShow?: boolean;
+  // External watch later state management
+  externalWatchLaterState?: {
+    isWatchLater: boolean;
+    isToggling: boolean;
+    isAnimating: boolean;
+  };
+  onExternalWatchLaterToggle?: (episodeId: number) => void;
 };
 
 export function PlayEpisodeDialog({
@@ -84,7 +91,10 @@ export function PlayEpisodeDialog({
   isFirstEpisodeOfSeason = false,
   isLastEpisodeOfSeason = false,
   isFirstEpisodeOfTVShow = false,
-  isLastEpisodeOfTVShow = false
+  isLastEpisodeOfTVShow = false,
+  // External watch later state management
+  externalWatchLaterState,
+  onExternalWatchLaterToggle
 }: PlayEpisodeDialogProps) {
   const { props } = usePage<{
     auth: {
@@ -166,10 +176,17 @@ export function PlayEpisodeDialog({
   const [isLikeToggling, setIsLikeToggling] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   
-  // Add watch later state
+  // Add watch later state (only used when external state is not provided)
   const [isWatchLater, setIsWatchLater] = useState(false);
   const [isWatchLaterToggling, setIsWatchLaterToggling] = useState(false);
   const [isWatchLaterAnimating, setIsWatchLaterAnimating] = useState(false);
+
+  // Use external watch later state when provided, otherwise use internal state
+  const currentWatchLaterState = externalWatchLaterState || {
+    isWatchLater,
+    isToggling: isWatchLaterToggling,
+    isAnimating: isWatchLaterAnimating
+  };
 
   // Initialize repeat mode states based on initialRepeatMode prop
   useEffect(() => {
@@ -183,9 +200,12 @@ export function PlayEpisodeDialog({
     if (episode) {
       setIsLiked(episode.is_liked || false);
       setLikesCount(episode.likes_count || 0);
-      setIsWatchLater(episode.is_watch_later || false);
+      // Only set internal watch later state if external state is not provided
+      if (!externalWatchLaterState) {
+        setIsWatchLater(episode.is_watch_later || false);
+      }
     }
-  }, [episode]);
+  }, [episode, externalWatchLaterState]);
 
   // Handle loading state when access changes
   useEffect(() => {
@@ -1790,6 +1810,13 @@ export function PlayEpisodeDialog({
       return;
     }
     
+    // Use external toggle function if provided
+    if (onExternalWatchLaterToggle) {
+      onExternalWatchLaterToggle(episode.id);
+      return;
+    }
+    
+    // Otherwise use internal state management
     if (isWatchLaterToggling) return;
     
     setIsWatchLaterToggling(true);
@@ -2507,7 +2534,7 @@ export function PlayEpisodeDialog({
                     {isAuthenticated && episode?.encFilePath && (
                       <Tooltip 
                         text={
-                          isWatchLater 
+                          currentWatchLaterState.isWatchLater 
                             ? "Remove episode from watch later" 
                             : "Add episode to watch later"
                         } 
@@ -2515,17 +2542,17 @@ export function PlayEpisodeDialog({
                       >
                         <button
                           onClick={handleWatchLaterToggle}
-                          disabled={isWatchLaterToggling}
+                          disabled={currentWatchLaterState.isToggling}
                           className={`focus:outline-none cursor-pointer disabled:opacity-50 p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all duration-300 ease-in-out ${
-                            isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
+                            currentWatchLaterState.isAnimating ? 'rotate-180' : 'rotate-0'
                           }`}
                           style={{
-                            transform: isWatchLaterAnimating 
+                            transform: currentWatchLaterState.isAnimating 
                               ? 'rotate(180deg)' 
                               : 'rotate(0deg)',
                           }}
                         >
-                          {isWatchLater ? (
+                          {currentWatchLaterState.isWatchLater ? (
                             <svg 
                               className="w-5 h-5 text-green-500 dark:text-green-400" 
                               fill="currentColor" 

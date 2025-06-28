@@ -1199,6 +1199,8 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       }
                     }}
                     onError={(err) => console.error(err.message)}
+                    externalWatchLaterState={episodeWatchLaterStates[selectedEpisode.id]}
+                    onExternalWatchLaterToggle={handleEpisodeWatchLaterToggle}
                     hasNextEpisode={(() => {
                       // Check if there's a next episode specifically in the CURRENT season
                       const currentIndex = currentSeasonEpisodes.findIndex((e: any) => e.id === selectedEpisode.id);
