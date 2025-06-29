@@ -64,11 +64,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
     
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
-    Route::post('api/movies/{movieId}/toggle-watch-later', [MovieController::class, 'toggleWatchLaterById'])->name('api.movies.toggle-watch-later-by-id');
+    Route::post('api/movies/{movie:slug}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('api.movies.toggle-watch-later-by-slug');
     
     // TV Show watch later routes
     Route::post('tvshows/{tvshow}/toggle-watch-later', [TvshowController::class, 'toggleWatchLater'])->name('tvshows.toggle-watch-later');
-    Route::post('api/tvshows/{tvshowId}/toggle-watch-later', [TvshowController::class, 'toggleWatchLaterById'])->name('api.tvshows.toggle-watch-later-by-id');
+    Route::post('api/tvshows/{tvshow:slug}/toggle-watch-later', [TvshowController::class, 'toggleWatchLater'])->name('api.tvshows.toggle-watch-later-by-slug');
     
     // Season watch later routes
     Route::post('api/seasons/{seasonId}/toggle-watch-later', [SeasonController::class, 'toggleWatchLaterById'])->name('api.seasons.toggle-watch-later-by-id');

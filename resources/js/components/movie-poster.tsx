@@ -3,6 +3,7 @@ import { LazyImage } from "@/components/ui/lazy-image";
 import { CheckIcon, ClapperboardIcon, HeartIcon, PlusIcon, StarIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { TrailerModal } from "@/components/trailer-modal";
+import { api } from "@/lib/api";
 
 interface Movie {
   id: number;
@@ -83,31 +84,13 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     setIsAnimating(true);
     
     try {
-      // Get CSRF token from Inertia shared data or meta tag
-      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        setIsAnimating(false);
-        return;
-      }
-      
-      const response = await fetch(`/api/movies/${movie.id}/toggle-watch-later`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json',
-        },
-        credentials: 'same-origin', // Include cookies for CSRF
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = await api.post(`/api/movies/${movie.slug}/toggle-watch-later`);
       
       if (response.ok) {
-        const data = await response.json();
-        
         // Change icon at the midpoint of animation (when rotated 90deg and not visible)
         setTimeout(() => {
-          setIsWatchLater(data.is_watch_later);
+          setIsWatchLater(response.data?.is_watch_later);
         }, 150);
         
         // Complete animation cycle
@@ -115,13 +98,9 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           setIsAnimating(false);
         }, 300);
         
-        onWatchLaterToggle?.(movie.id, data.is_watch_later);
+        onWatchLaterToggle?.(movie.id, response.data?.is_watch_later);
       } else {
-        console.error('HTTP error:', response.status, response.statusText);
-        if (response.status === 419) {
-          console.error('CSRF token mismatch. Please refresh the page.');
-          // You could show a toast notification here or handle it differently
-        }
+        console.error('HTTP error:', response.status, response.error);
         setIsAnimating(false);
       }
     } catch (error) {
@@ -151,33 +130,16 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     setIsLikeAnimating(true);
     
     try {
-      // Get CSRF token from Inertia shared data or meta tag
-      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = isLiked 
+        ? await api.delete(`/api/movies/${movie.slug}/like`)
+        : await api.post(`/api/movies/${movie.slug}/like`);
       
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        setIsLikeAnimating(false);
-        return;
-      }
-      
-      const method = isLiked ? 'DELETE' : 'POST';
-      const response = await fetch(`/api/movies/${movie.slug}/like`, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json',
-        },
-        credentials: 'same-origin', // Include cookies for CSRF
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
+      if (response.ok) {        
         // Change icon at the midpoint of animation (when rotated 90deg and not visible)
         setTimeout(() => {
-          setIsLiked(data.is_liked);
-          setLikesCount(data.likes_count);
+          setIsLiked(response.data?.is_liked);
+          setLikesCount(response.data?.likes_count);
         }, 150);
         
         // Complete animation cycle
@@ -185,12 +147,10 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           setIsLikeAnimating(false);
         }, 300);
         
-        onLikeToggle?.(movie.id, data.is_liked, data.likes_count);
+        onLikeToggle?.(movie.id, response.data?.is_liked, response.data?.likes_count);
       } else {
-        console.error('HTTP error:', response.status, response.statusText);
-        if (response.status === 419) {
-          console.error('CSRF token mismatch. Please refresh the page.');
-        } else if (response.status === 401) {
+        console.error('HTTP error:', response.status, response.error);
+        if (response.status === 401) {
           // User is not authenticated, redirect to login
           const currentUrl = window.location.pathname + window.location.search;
           router.visit(route('login') + '?redirect=' + encodeURIComponent(currentUrl));

@@ -5,6 +5,7 @@ import { LazyImage } from '@/components/ui/lazy-image';
 import { LoveCircleButton } from '@/components/ui/love-circle-button';
 import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
 export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>, searchQuery?: string }) {
   const imgUrl = 'https://image.tmdb.org/t/p/w500/';
@@ -74,35 +75,12 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
     }));
     
     try {
-      // Get CSRF token from Inertia shared data or meta tag
-      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        setTvshowStates(prev => ({
-          ...prev,
-          [tvshow.id]: {
-            ...prev[tvshow.id],
-            isLikeAnimating: false,
-            isLikeToggling: false,
-          }
-        }));
-        return;
-      }
-      
-      const method = currentState.isLiked ? 'DELETE' : 'POST';
-      const response = await fetch(`/api/tvshows/${tvshow.slug}/like`, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json',
-        },
-        credentials: 'same-origin',
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = currentState.isLiked 
+        ? await api.delete(`/api/tvshows/${tvshow.slug}/like`)
+        : await api.post(`/api/tvshows/${tvshow.slug}/like`);
       
       if (response.ok) {
-        const data = await response.json();
         
         // Change status at the midpoint of animation
         setTimeout(() => {
@@ -110,8 +88,8 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
             ...prev,
             [tvshow.id]: {
               ...prev[tvshow.id],
-              isLiked: data.is_liked,
-              likesCount: data.likes_count,
+              isLiked: response.data.is_liked,
+              likesCount: response.data.likes_count,
             }
           }));
         }, 150);
@@ -127,7 +105,7 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
           }));
         }, 300);
       } else {
-        console.error('HTTP error:', response.status, response.statusText);
+        console.error('HTTP error:', response.status, response.error);
         if (response.status === 419) {
           console.error('CSRF token mismatch. Please refresh the page.');
         } else if (response.status === 401) {
@@ -190,42 +168,17 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
     }));
     
     try {
-      // Get CSRF token from Inertia shared data or meta tag
-      const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        setTvshowStates(prev => ({
-          ...prev,
-          [tvshow.id]: {
-            ...prev[tvshow.id],
-            isWatchLaterAnimating: false,
-            isWatchLaterToggling: false,
-          }
-        }));
-        return;
-      }
-      
-      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json',
-        },
-        credentials: 'same-origin',
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = await api.post(`/api/tvshows/${tvshow.slug}/toggle-watch-later`);
       
       if (response.ok) {
-        const data = await response.json();
-        
         // Change status at the midpoint of animation
         setTimeout(() => {
           setTvshowStates(prev => ({
             ...prev,
             [tvshow.id]: {
               ...prev[tvshow.id],
-              isWatchLater: data.is_watch_later,
+              isWatchLater: response.data.is_watch_later,
             }
           }));
         }, 150);
@@ -241,7 +194,7 @@ export default function Tvshows({ tvshows, searchQuery }: { tvshows: Array<any>,
           }));
         }, 300);
       } else {
-        console.error('HTTP error:', response.status, response.statusText);
+        console.error('HTTP error:', response.status, response.error);
         if (response.status === 419) {
           console.error('CSRF token mismatch. Please refresh the page.');
         } else if (response.status === 401) {

@@ -626,74 +626,73 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         PG-13&nbsp;&nbsp;•&nbsp;&nbsp;0 views
                       </div>
                       <div className="flex items-center justify-end gap-x-2 text-gray-500 text-base lg:text-lg w-full lg:text-right whitespace-nowrap">
-                        {/* Likes with tooltip */}
-                        <Tooltip
-                          content={
-                            likesCount > 0
-                              ? loadingLikedUsers
-                                ? <div>Loading...</div>
-                                : likedUsers.length > 0
-                                ? (
-                                  <div className="max-w-xs">
-                                    <div className="font-medium mb-1 text-xs">Liked by:</div>
-                                    <div className="space-y-0.5 max-h-20 overflow-y-auto">
-                                      {likedUsers.slice(0, 5).map((user, index) => (
-                                        <div key={user.id} className="text-xs opacity-90 hover:opacity-100 transition-opacity">
-                                          {user.name}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {likedUsers.length > 5 && (
-                                      <div className="text-xs opacity-60 mt-1 text-center">
-                                        and {likedUsers.length - 5} more...
+                        {/* Likes with tooltip - Only show for authenticated users */}
+                        {isAuthenticated && (
+                          <Tooltip
+                            content={
+                              likesCount > 0
+                                ? loadingLikedUsers
+                                  ? <div>Loading...</div>
+                                  : likedUsers.length > 0
+                                  ? (
+                                    <div className="max-w-xs">
+                                      <div className="font-medium mb-1 text-xs">Liked by:</div>
+                                      <div className="space-y-0.5 max-h-20 overflow-y-auto">
+                                        {likedUsers.slice(0, 5).map((user, index) => (
+                                          <div key={user.id} className="text-xs opacity-90 hover:opacity-100 transition-opacity">
+                                            {user.name}
+                                          </div>
+                                        ))}
                                       </div>
-                                    )}
+                                      {likedUsers.length > 5 && (
+                                        <div className="text-xs opacity-60 mt-1 text-center">
+                                          and {likedUsers.length - 5} more...
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                  : <div>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</div>
+                                : (
+                                  <div>
+                                    {isLiked ? "Unlike this movie" : "Like this movie"}
                                   </div>
                                 )
-                                : <div>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</div>
-                              : (
-                                <div>
-                                  {isAuthenticated
-                                    ? (isLiked ? "Unlike this movie" : "Like this movie")
-                                    : "Login to like this movie"
-                                  }
-                                </div>
-                              )
-                          }
-                          position="top"
-                          delayMs={500}
-                        >
-                          <button
-                            onClick={handleLikeToggle}
-                            onMouseEnter={() => {
-                              if (likesCount > 0) {
-                                fetchLikedUsers();
-                              }
-                            }}
-                            disabled={isLikeToggling}
-                            className="flex items-center gap-x-1 transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
+                            }
+                            position="top"
+                            delayMs={500}
                           >
-                            <div
-                              className={`transition-all duration-300 ease-in-out ${
-                                isLikeAnimating ? 'rotate-180' : 'rotate-0'
-                              }`}
-                              style={{
-                                transform: isLikeAnimating 
-                                  ? 'rotate(180deg)' 
-                                  : 'rotate(0deg)',
+                            <button
+                              onClick={handleLikeToggle}
+                              onMouseEnter={() => {
+                                if (likesCount > 0) {
+                                  fetchLikedUsers();
+                                }
                               }}
+                              disabled={isLikeToggling}
+                              className="flex items-center gap-x-1 transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
                             >
-                              <HeartIcon 
-                                className={`w-5 h-5 lg:w-6 lg:h-6 transition-colors duration-200 ${
-                                  isLiked 
-                                    ? 'text-red-500 fill-red-500 hover:text-red-600 hover:fill-red-600' 
-                                    : 'text-gray-500 hover:text-gray-600'
-                                }`} 
-                              />
-                            </div>
-                            <span className="mr-2 ml-1 lg:mr-4 text-xs lg:text-base">{likesCount}</span>
-                          </button>
-                        </Tooltip>
+                              <div
+                                className={`transition-all duration-300 ease-in-out ${
+                                  isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                                }`}
+                                style={{
+                                  transform: isLikeAnimating 
+                                    ? 'rotate(180deg)' 
+                                    : 'rotate(0deg)',
+                                }}
+                              >
+                                <HeartIcon 
+                                  className={`w-5 h-5 lg:w-6 lg:h-6 transition-colors duration-200 ${
+                                    isLiked 
+                                      ? 'text-red-500 fill-red-500 hover:text-red-600 hover:fill-red-600' 
+                                      : 'text-gray-500 hover:text-gray-600'
+                                  }`} 
+                                />
+                              </div>
+                              <span className="mr-2 ml-1 lg:mr-4 text-xs lg:text-base">{likesCount}</span>
+                            </button>
+                          </Tooltip>
+                        )}
                         <Tooltip 
                           content="Go to comments section"
                           position="top"

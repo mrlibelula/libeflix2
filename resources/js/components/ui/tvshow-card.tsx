@@ -4,6 +4,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { LoveCircleButton } from '@/components/ui/love-circle-button';
+import { api } from '@/lib/api';
 
 interface TvshowCardProps {
   tvshow: {
@@ -56,25 +57,16 @@ export function TvshowCard({
         onWatchLaterToggle(tvshow.id, false);
       }
       
-      // Make API call to backend using fetch
-      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        credentials: 'include',
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = await api.post(`/api/tvshows/${tvshow.slug}/toggle-watch-later`);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(response.error || `HTTP error! status: ${response.status}`);
       }
-
-      const result = await response.json();
       
       // Verify the result matches our expectation (should be false since we're removing)
-      if (result.is_watch_later !== false && onWatchLaterToggle) {
-        onWatchLaterToggle(tvshow.id, result.is_watch_later);
+      if (response.data?.is_watch_later !== false && onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, response.data.is_watch_later);
       }
     } catch (error) {
       console.error('Error removing from watch later:', error);
@@ -114,25 +106,16 @@ export function TvshowCard({
         onWatchLaterToggle(tvshow.id, newStatus);
       }
       
-      // Make API call to backend using fetch
-      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        credentials: 'include',
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = await api.post(`/api/tvshows/${tvshow.slug}/toggle-watch-later`);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(response.error || `HTTP error! status: ${response.status}`);
       }
-
-      const result = await response.json();
       
       // Verify the result matches our optimistic update
-      if (result.is_watch_later !== newStatus && onWatchLaterToggle) {
-        onWatchLaterToggle(tvshow.id, result.is_watch_later);
+      if (response.data?.is_watch_later !== newStatus && onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, response.data.is_watch_later);
       }
     } catch (error) {
       console.error('Error toggling watch later:', error);
@@ -172,25 +155,18 @@ export function TvshowCard({
         onLikeToggle(tvshow.id, newStatus, newCount);
       }
       
-      // Make API call to backend using fetch
-      const response = await fetch(`/api/tvshows/${tvshow.slug || tvshow.id}/like`, {
-        method: newStatus ? 'POST' : 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        credentials: 'include',
-      });
+      // Make API call using our new API utility that handles CSRF automatically
+      const response = newStatus 
+        ? await api.post(`/api/tvshows/${tvshow.slug}/like`)
+        : await api.delete(`/api/tvshows/${tvshow.slug}/like`);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(response.error || `HTTP error! status: ${response.status}`);
       }
-
-      const result = await response.json();
       
       // Update with actual server response
       if (onLikeToggle) {
-        onLikeToggle(tvshow.id, result.is_liked, result.likes_count);
+        onLikeToggle(tvshow.id, response.data.is_liked, response.data.likes_count);
       }
     } catch (error) {
       console.error('Error toggling like:', error);

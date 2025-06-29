@@ -350,8 +350,8 @@ export default function Dashboard({
       }
       
       const endpoint = item.type === 'movie' 
-        ? `/api/movies/${item.id}/toggle-watch-later` 
-        : `/api/tvshows/${item.id}/toggle-watch-later`;
+        ? `/api/movies/${item.slug}/toggle-watch-later` 
+        : `/api/tvshows/${item.slug}/toggle-watch-later`;
       
       const response = await fetch(endpoint, {
         method: 'POST',

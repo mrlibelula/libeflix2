@@ -95,7 +95,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
 
     setIsTogglingWatchLater(true);
     try {
-      const response = await axios.post(`/api/movies/${movie.id}/toggle-watch-later`);
+      const response = await axios.post(`/api/movies/${movie.slug}/toggle-watch-later`);
       if (response.data.success) {
         const newStatus = response.data.is_watch_later;
         setIsWatchLater(newStatus);

@@ -405,7 +405,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
         return;
       }
       
-      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
+      const response = await fetch(`/api/tvshows/${tvshow.slug}/toggle-watch-later`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -846,61 +846,61 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                     <div className="mr-2" />
                   </Button>
 
-                  <Tooltip 
-                    content={
-                      isAuthenticated
-                        ? (isWatchLater ? "Remove from watch later" : "Add to watch later")
-                        : "Login to add to watch later"
-                    }
-                    position="top"
-                    delayMs={500}
-                  >
-                    <div
-                      className={`transition-all duration-300 ease-in-out ${
-                        isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
-                      }`}
-                      style={{
-                        transform: isWatchLaterAnimating 
-                          ? 'rotate(180deg)' 
-                          : 'rotate(0deg)',
-                      }}
+                  {isAuthenticated && (
+                    <Tooltip 
+                      content={
+                        isWatchLater ? "Remove from watch later" : "Add to watch later"
+                      }
+                      position="top"
+                      delayMs={500}
                     >
-                      <AddCircleButton 
-                        isWatchLater={isWatchLater}
-                        isToggling={isWatchLaterToggling}
-                        onClick={handleWatchLaterToggle}
-                        className={`${isWatchLaterToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
-                    </div>
-                  </Tooltip>
+                      <div
+                        className={`transition-all duration-300 ease-in-out ${
+                          isWatchLaterAnimating ? 'rotate-180' : 'rotate-0'
+                        }`}
+                        style={{
+                          transform: isWatchLaterAnimating 
+                            ? 'rotate(180deg)' 
+                            : 'rotate(0deg)',
+                        }}
+                      >
+                        <AddCircleButton 
+                          isWatchLater={isWatchLater}
+                          isToggling={isWatchLaterToggling}
+                          onClick={handleWatchLaterToggle}
+                          className={`${isWatchLaterToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                    </Tooltip>
+                  )}
 
-                  <Tooltip 
-                    content={
-                      isAuthenticated
-                        ? (isLiked ? "Unlike this TV show" : "Like this TV show")
-                        : "Login to like this TV show"
-                    }
-                    position="top"
-                    delayMs={500}
-                  >
-                    <div
-                      className={`transition-all duration-300 ease-in-out ${
-                        isLikeAnimating ? 'rotate-180' : 'rotate-0'
-                      }`}
-                      style={{
-                        transform: isLikeAnimating 
-                          ? 'rotate(180deg)' 
-                          : 'rotate(0deg)',
-                      }}
+                  {isAuthenticated && (
+                    <Tooltip 
+                      content={
+                        isLiked ? "Unlike this TV show" : "Like this TV show"
+                      }
+                      position="top"
+                      delayMs={500}
                     >
-                      <LoveCircleButton 
-                        isLiked={isLiked} 
-                        onClick={handleLikeToggle}
-                        disabled={isLikeToggling}
-                        className={`${isLikeToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
-                    </div>
-                  </Tooltip>
+                      <div
+                        className={`transition-all duration-300 ease-in-out ${
+                          isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                        }`}
+                        style={{
+                          transform: isLikeAnimating 
+                            ? 'rotate(180deg)' 
+                            : 'rotate(0deg)',
+                        }}
+                      >
+                        <LoveCircleButton 
+                          isLiked={isLiked} 
+                          onClick={handleLikeToggle}
+                          disabled={isLikeToggling}
+                          className={`${isLikeToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                    </Tooltip>
+                  )}
 
                   <Tooltip 
                     content={
