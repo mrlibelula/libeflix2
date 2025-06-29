@@ -1,7 +1,9 @@
-import React from 'react';
-import { StarIcon, CheckIcon } from 'lucide-react';
-import { Link } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { StarIcon, CheckIcon, HeartIcon, PlusIcon } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
+import { AddCircleButton } from '@/components/ui/add-circle-button';
+import { LoveCircleButton } from '@/components/ui/love-circle-button';
 
 interface TvshowCardProps {
   tvshow: {
@@ -13,11 +15,13 @@ interface TvshowCardProps {
     first_air_date: string;
     overview?: string;
     is_watch_later?: boolean;
+    is_liked?: boolean;
     likes_count?: number;
   };
   imgBaseUrl: string;
   isPriority?: boolean;
   onWatchLaterToggle?: (tvshowId: number, newStatus: boolean) => void;
+  onLikeToggle?: (tvshowId: number, newStatus: boolean, newCount: number) => void;
   showCheckIcon?: boolean;
 }
 
@@ -26,13 +30,151 @@ export function TvshowCard({
   imgBaseUrl, 
   isPriority = false, 
   onWatchLaterToggle,
+  onLikeToggle,
   showCheckIcon = false 
 }: TvshowCardProps) {
-  const handleRemoveFromWatchLater = (e: React.MouseEvent) => {
+  const handleRemoveFromWatchLater = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onWatchLaterToggle) {
-      onWatchLaterToggle(tvshow.id, false);
+    
+    if (isTogglingWatchLater) return;
+    
+    setIsTogglingWatchLater(true);
+    
+    try {
+      // Optimistically update the parent state first
+      if (onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, false);
+      }
+      
+      // Make API call to backend using fetch
+      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Verify the result matches our expectation (should be false since we're removing)
+      if (result.is_watch_later !== false && onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, result.is_watch_later);
+      }
+    } catch (error) {
+      console.error('Error removing from watch later:', error);
+      // Revert on error - restore to watch later since removal failed
+      if (onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, true);
+      }
+    } finally {
+      setIsTogglingWatchLater(false);
+    }
+  };
+
+  const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
+  const [isTogglingLike, setIsTogglingLike] = useState(false);
+
+  const handleWatchLaterToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isTogglingWatchLater) return;
+    
+    setIsTogglingWatchLater(true);
+    
+    try {
+      const newStatus = !tvshow.is_watch_later;
+      
+      // Optimistically update the parent state first
+      if (onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, newStatus);
+      }
+      
+      // Make API call to backend using fetch
+      const response = await fetch(`/api/tvshows/${tvshow.id}/toggle-watch-later`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Verify the result matches our optimistic update
+      if (result.is_watch_later !== newStatus && onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, result.is_watch_later);
+      }
+    } catch (error) {
+      console.error('Error toggling watch later:', error);
+      // Revert on error
+      if (onWatchLaterToggle) {
+        onWatchLaterToggle(tvshow.id, !tvshow.is_watch_later);
+      }
+    } finally {
+      setIsTogglingWatchLater(false);
+    }
+  };
+
+  const handleLikeToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isTogglingLike) return;
+    
+    setIsTogglingLike(true);
+    
+    try {
+      const newStatus = !tvshow.is_liked;
+      const newCount = newStatus 
+        ? (tvshow.likes_count || 0) + 1 
+        : Math.max(0, (tvshow.likes_count || 0) - 1);
+      
+      // Optimistically update the parent state first
+      if (onLikeToggle) {
+        onLikeToggle(tvshow.id, newStatus, newCount);
+      }
+      
+      // Make API call to backend using fetch
+      const response = await fetch(`/api/tvshows/${tvshow.slug || tvshow.id}/like`, {
+        method: newStatus ? 'POST' : 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Update with actual server response
+      if (onLikeToggle) {
+        onLikeToggle(tvshow.id, result.is_liked, result.likes_count);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Revert on error
+      if (onLikeToggle) {
+        onLikeToggle(tvshow.id, !tvshow.is_liked, tvshow.likes_count || 0);
+      }
+    } finally {
+      setIsTogglingLike(false);
     }
   };
 
@@ -49,8 +191,9 @@ export function TvshowCard({
           priority={isPriority}
         />
         
-        {/* Check icon for removal from watch later */}
-        {showCheckIcon && (
+        {/* Interactive buttons */}
+        {showCheckIcon ? (
+          /* Check icon for removal from watch later */
           <div className="absolute top-2 right-2">
             <button
               onClick={handleRemoveFromWatchLater}
@@ -59,6 +202,24 @@ export function TvshowCard({
             >
               <CheckIcon className="w-4 h-4" />
             </button>
+          </div>
+        ) : (
+          /* Watch later and like buttons */
+          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {onWatchLaterToggle && (
+              <AddCircleButton
+                isWatchLater={tvshow.is_watch_later || false}
+                isToggling={isTogglingWatchLater}
+                onClick={handleWatchLaterToggle}
+              />
+            )}
+            {onLikeToggle && (
+              <LoveCircleButton
+                isLiked={tvshow.is_liked || false}
+                onClick={handleLikeToggle}
+                disabled={isTogglingLike}
+              />
+            )}
           </div>
         )}
 

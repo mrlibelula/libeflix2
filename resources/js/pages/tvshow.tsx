@@ -815,7 +815,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
         {tvshow.first_air_date && <meta property="video:release_date" content={tvshow.first_air_date} />}
       </Head>
       {/* hero */}
-      <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto scrollbar">
+      <div className="relative flex flex-col min-h-[calc(100vh-5.5rem)] max-h-[calc(100vh-5.5rem)] overflow-hidden overflow-y-auto sidebar-scrollbar">
         <div 
           style={{ backgroundImage: `url(${backdropUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} className="w-full h-[calc(100vh-5.5rem)] filter grayscale opacity-10" 
         />

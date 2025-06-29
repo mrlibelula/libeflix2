@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Tool;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -58,6 +59,7 @@ class HandleInertiaRequests extends Middleware
                 'canAccessPremium' => $user ? $user->canAccessPremiumContent() : false,
                 'isAdmin' => $user ? $user->isAdmin() : false,
             ],
+            'genres' => Tool::getMoviesAndTVShowsGenresWithSlugs(),
             'isProduction' => app()->environment('production'),
             'csrf_token' => csrf_token(),
             'ziggy' => fn (): array => [

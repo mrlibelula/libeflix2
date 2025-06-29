@@ -3,7 +3,7 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import AppLogo from './app-logo';
@@ -81,6 +81,8 @@ const footerNavItems: NavItem[] = [
 
 export function AppSidebar() {
     const { isAuthenticated, isLoading } = useAuth();
+    const page = usePage<{ genres?: Array<{ name: string; slug: string }> }>();
+    const genres = page.props.genres || [];
 
     // Show loading state during hydration
     if (isLoading) {
@@ -98,7 +100,7 @@ export function AppSidebar() {
                     </SidebarMenu>
                 </SidebarHeader>
                 <SidebarContent>
-                    <NavMain items={mainNavItems} />
+                    <NavMain items={mainNavItems} genres={genres} />
                 </SidebarContent>
                 <SidebarFooter>
                     <NavFooter items={footerNavItems} className="mt-auto" />
@@ -124,7 +126,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={mainNavItems} genres={genres} />
             </SidebarContent>
 
             <SidebarFooter>

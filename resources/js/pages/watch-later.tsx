@@ -6,6 +6,8 @@ import { TvshowRibbon } from "@/components/tvshow-ribbon";
 import { SeasonRibbon } from "@/components/season-ribbon";
 import { EpisodeRibbon } from "@/components/episode-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { SummaryCard } from "@/components/ui/summary-card";
+import { Clapperboard, Tv, Library, PlaySquare } from "lucide-react";
 
 export default function WatchLater({ 
   watchLaterMovies, 
@@ -205,38 +207,35 @@ export default function WatchLater({
       <div className="flex flex-col gap-y-10 py-5">
         {/* Content Summary */}
         <div className="px-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div 
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryCard
+              title="Movies"
+              count={watchLaterMoviesList.length}
+              iconNode={Clapperboard}
               onClick={handleScrollToMovies}
-              className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors duration-200"
-            >
-              <h3 className="font-semibold text-blue-800 dark:text-blue-200">Movies</h3>
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{watchLaterMoviesList.length}</p>
-            </div>
-            
-            <div 
+              className="bg-gradient-to-br from-zinc-100 to-zinc-100 hover:from-zinc-300 hover:to-zinc-200 dark:from-zinc-500/20 dark:to-zinc-700/30 dark:hover:from-zinc-600/60 dark:hover:to-zinc-800/60"
+            />
+            <SummaryCard
+              title="TV Shows"
+              count={watchLaterTvshowsList.length}
+              iconNode={Tv}
               onClick={handleScrollToTvshows}
-              className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors duration-200"
-            >
-              <h3 className="font-semibold text-green-800 dark:text-green-200">TV Shows</h3>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-300">{watchLaterTvshowsList.length}</p>
-            </div>
-            
-            <div 
+              className="bg-gradient-to-br dark:from-zinc-500/20 dark:to-zinc-700/30 dark:hover:from-zinc-600/60 dark:hover:to-zinc-800/60"
+            />
+            <SummaryCard
+              title="Seasons"
+              count={watchLaterSeasonsList.length}
+              iconNode={Library}
               onClick={handleScrollToSeasons}
-              className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 cursor-pointer hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors duration-200"
-            >
-              <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Seasons</h3>
-              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-300">{watchLaterSeasonsList.length}</p>
-            </div>
-            
-            <div 
+              className="bg-gradient-to-br dark:from-zinc-500/20 dark:to-zinc-700/30 dark:hover:from-zinc-600/60 dark:hover:to-zinc-800/60"
+            />
+            <SummaryCard
+              title="Episodes"
+              count={watchLaterEpisodesList.length}
+              iconNode={PlaySquare}
               onClick={handleScrollToEpisodes}
-              className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors duration-200"
-            >
-              <h3 className="font-semibold text-purple-800 dark:text-purple-200">Episodes</h3>
-              <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">{watchLaterEpisodesList.length}</p>
-            </div>
+              className="bg-gradient-to-br dark:from-zinc-500/20 dark:to-zinc-700/30 dark:hover:from-zinc-600/60 dark:hover:to-zinc-800/60"
+            />
           </div>
         </div>
 

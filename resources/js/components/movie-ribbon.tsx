@@ -18,6 +18,7 @@ interface MovieRibbonProps {
   ribbonId?: string;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
+  hideSortOptions?: SortField[];
 }
 
 type SortField = 'name' | 'year' | 'rating' | 'added';
@@ -41,6 +42,7 @@ export function MovieRibbon({
   ribbonId,
   onWatchLaterToggle,
   onLikeToggle,
+  hideSortOptions = [],
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
@@ -53,12 +55,15 @@ export function MovieRibbon({
   const [carouselApi, setCarouselApi] = useState<any>(null);
   
   // Sort options configuration
-  const sortOptions: SortOption[] = [
+  const allSortOptions: SortOption[] = [
     { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
     { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
     { field: 'year', direction: 'desc', icon: CalendarIcon, label: 'Year' },
     { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
   ];
+
+  // Filter out hidden sort options
+  const sortOptions = allSortOptions.filter(option => !hideSortOptions.includes(option.field));
 
   // Helper function to get initial sidebar width from cookie
   const getInitialSidebarWidth = () => {

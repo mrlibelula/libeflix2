@@ -2,8 +2,83 @@
 
 namespace App\Services;
 
+use App\Models\Movie;
+use App\Models\TvShow;
+
 class Tool
 {
+    /**
+     * Get "Movies and TV Shows" merged genres, unique. Can be sorted
+     *
+     * @param bool $sorted
+     * @return array
+     */
+    public static function getMoviesAndTVShowsGenres(bool $sorted = true): array
+    {
+        $moviesAndTvshowsGenres = collect(array_merge(self::getMoviesGenres(), self::getTVShowsGenres()))->unique()->toArray();
+        if ($sorted) sort($moviesAndTvshowsGenres);
+        return $moviesAndTvshowsGenres ?? [];
+    }
+
+    /**
+     * Get "Movies and TV Shows" merged genres with slugs, unique. Can be sorted
+     *
+     * @param bool $sorted
+     * @return array
+     */
+    public static function getMoviesAndTVShowsGenresWithSlugs(bool $sorted = true): array
+    {
+        $genres = self::getMoviesAndTVShowsGenres($sorted);
+        
+        return collect($genres)->map(function ($genre) {
+            return [
+                'name' => $genre,
+                'slug' => \Illuminate\Support\Str::slug($genre)
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get unique "Movies" genres
+     *
+     * @return array
+     */
+    public static function getMoviesGenres(): array
+    {
+        $moviesGenres = Movie::select('genres')->get();
+        $moviesGenresSet = collect([]);
+        
+        $moviesGenres = collect(json_decode($moviesGenres, true));
+        $moviesGenres = $moviesGenres->flatten();
+        $moviesGenres->each(function ($genre) use ($moviesGenresSet) {
+            $genreArr = collect(json_decode($genre));
+            $genreArr->each(function ($genre) use ($moviesGenresSet) {
+                $moviesGenresSet->push($genre->name);
+            });
+        });
+        
+        return $moviesGenresSet->unique()->toArray();
+    }
+
+    /**
+     * Get unique "TV Shows" genres
+     *
+     * @return array
+     */
+    public static function getTVShowsGenres(): array
+    {
+        $tvShowsGenres = TvShow::select('genres')->get();
+        $tvShowsGenres = collect(json_decode($tvShowsGenres, true));
+        $tvShowsGenres = $tvShowsGenres->flatten();
+        
+        // remove all numbers and null values from the array
+        $tvShowsGenres = $tvShowsGenres->filter(function ($genre) {
+            return !is_numeric($genre) && $genre !== null;
+        });
+
+        return $tvShowsGenres->unique()->toArray();
+    }
+
     /**
      * Convert vote average to stars.
      * Scale: 0-10 maps to 0-5 stars.

@@ -129,7 +129,7 @@
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         @inertiaHead
     </head>
-    <body class="font-sans antialiased scrollbar">
+    <body class="font-sans antialiased sidebar-scrollbar">
         <!-- Initial loader that shows before React/Inertia initializes -->
         <div id="app-loader">
             {{-- <div class="app-loader-logo">

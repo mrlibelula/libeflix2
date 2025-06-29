@@ -3,6 +3,7 @@
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EpisodeController;
+use App\Http\Controllers\GenreController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\PopularTopController;
 use App\Http\Controllers\SeasonController;
@@ -41,6 +42,9 @@ Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.sho
 Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 Route::get('movie/{slug}', [MovieController::class, 'show'])->name('movie.show');
 Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');
+
+// Genre routes
+Route::get('genre/{genreSlug}', [GenreController::class, 'show'])->name('genre.show');
 
 // Premium content routes (require subscription for non-free content)
 Route::middleware(['premium.content'])->group(function () {

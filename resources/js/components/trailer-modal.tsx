@@ -172,7 +172,7 @@ export function TrailerModal({ isOpen, onOpenChange, movieTitle, movieId }: Trai
                     All Trailers ({trailers.length})
                   </h3>
                 </div>
-                <div className="space-y-2 max-h-48 lg:max-h-[34rem] pr-2 overflow-y-auto custom-scrollbar">
+                <div className="space-y-2 max-h-48 lg:max-h-[34rem] pr-2 overflow-y-auto sidebar-scrollbar">
                   {trailers.map((trailer) => (
                                           <div
                         key={trailer.id}

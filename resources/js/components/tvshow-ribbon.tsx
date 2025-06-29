@@ -28,7 +28,9 @@ interface TvshowRibbonProps {
   title?: string;
   ribbonId?: string;
   onWatchLaterToggle?: (tvshowId: number, newStatus: boolean) => void;
+  onLikeToggle?: (tvshowId: number, newStatus: boolean, newCount: number) => void;
   showCheckIcon?: boolean;
+  hideSortOptions?: SortField[];
 }
 
 // Configuration for pagination
@@ -41,7 +43,9 @@ export function TvshowRibbon({
   title = "Watch Later TV Shows" + (tvshows.length > 0 ? ` (${tvshows.length})` : ""),
   ribbonId,
   onWatchLaterToggle,
+  onLikeToggle,
   showCheckIcon = false,
+  hideSortOptions = [],
 }: TvshowRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
@@ -54,12 +58,15 @@ export function TvshowRibbon({
   const [carouselApi, setCarouselApi] = useState<any>(null);
   
   // Sort options configuration
-  const sortOptions: SortOption[] = [
+  const allSortOptions: SortOption[] = [
     { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
     { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
     { field: 'year', direction: 'desc', icon: CalendarIcon, label: 'Year' },
     { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
   ];
+
+  // Filter out hidden sort options
+  const sortOptions = allSortOptions.filter(option => !hideSortOptions.includes(option.field));
 
   // Helper function to get initial sidebar width from cookie
   const getInitialSidebarWidth = () => {
@@ -402,6 +409,7 @@ export function TvshowRibbon({
                         imgBaseUrl={imgBaseUrl}
                         isPriority={isPriority}
                         onWatchLaterToggle={onWatchLaterToggle}
+                        onLikeToggle={onLikeToggle}
                         showCheckIcon={showCheckIcon}
                       />
                     </RibbonItem>

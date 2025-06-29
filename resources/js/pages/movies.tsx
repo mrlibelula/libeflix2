@@ -152,6 +152,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           ribbonId="now-streaming"
           onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
           onLikeToggle={handleLikeToggle}
+          hideSortOptions={['added']}
         />
 
         <MovieRibbon
@@ -161,6 +162,7 @@ export default function Movies({ movies, imgBaseUrl, recentlyAddedMovies, search
           ribbonId="recently-added"
           onWatchLaterToggle={isAuthenticated ? handleWatchLaterToggle : undefined}
           onLikeToggle={handleLikeToggle}
+          hideSortOptions={['added']}
         />
         
     </AppLayout>
