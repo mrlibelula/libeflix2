@@ -90,7 +90,7 @@ export function NavMain({ items = [], genres = [] }: { items: NavItem[]; genres?
                 <>
                     <button
                         onClick={toggleGenres}
-                        className="mt-2 flex items-center justify-between w-full px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opa] duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0 rounded-md"
+                        className="my-1 flex items-center justify-between w-full px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opa] duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0 rounded-md"
                         aria-expanded={isGenresExpanded}
                         aria-label={isGenresExpanded ? "Collapse genres" : "Expand genres"}
                     >
@@ -113,7 +113,7 @@ export function NavMain({ items = [], genres = [] }: { items: NavItem[]; genres?
                                             preserveScroll={false}
                                             preserveState={false}
                                         >
-                                            <span>{genre.name}</span>
+                                            <span>&nbsp;&nbsp;&nbsp;{genre.name}</span>
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>

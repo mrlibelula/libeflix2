@@ -607,9 +607,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       {/* genres */}
                       <div className="flex flex-wrap gap-2">
                         {movie.genres.map((genre: any) => (
-                          <span key={genre.id} className="text-gray-500 text-sm lg:text-base">
+                          <Link 
+                            key={genre.id} 
+                            href={`/genre/${genre.slug}`} 
+                            className="text-sm lg:text-base text-rose-600 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300 cursor-pointer transition-colors duration-200"
+                          >
                             #{genre.name}
-                          </span>
+                          </Link>
                         ))}
                       </div>
                       

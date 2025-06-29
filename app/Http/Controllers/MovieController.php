@@ -223,7 +223,9 @@ class MovieController extends Controller
         
         // Decode subtitles JSON to make it accessible in React
         $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
-        $movie->genres = json_decode($movie->genres, true) ?: [];
+        
+        // Add genre slugs to genres
+        $movie->genres = MovieService::genresWithSlugs($movie);
         
         // Decode and process credits
         $credits = json_decode($movie->credits, true) ?: [];

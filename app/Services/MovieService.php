@@ -611,4 +611,20 @@ class MovieService
 
         return $slug;
     }
+
+    /**
+     * Returns all genres with appended slugs
+     * 
+     * @param Movie $movie
+     * @return array
+     */
+    public static function genresWithSlugs(Movie $movie): array
+    {
+        $genres = is_array($movie->genres) ? $movie->genres : (json_decode($movie->genres, true) ?: []);
+        
+        return array_map(function ($genre) {
+            $genre['slug'] = Str::slug($genre['name']);
+            return $genre;
+        }, $genres);
+    }
 }
