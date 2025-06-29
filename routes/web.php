@@ -41,6 +41,7 @@ Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.sho
 // Movies routes - accessible without auth but enhanced when authenticated
 Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
 Route::get('movie/{slug}', [MovieController::class, 'show'])->name('movie.show');
+Route::get('free-media', [MovieController::class, 'freeMedia'])->name('free-media.index');
 Route::get('popular-top', [PopularTopController::class, 'index'])->name('popular-top.index');
 
 // Genre routes
@@ -156,6 +157,8 @@ Route::get('api/movies/{movie}/trailers', [MovieController::class, 'getTrailers'
 Route::get('api/movies/{movieId}/trailers-by-id', [MovieController::class, 'getTrailersById'])->name('api.movies.trailers-by-id');
 Route::get('api/movies/{movie}/recommendations', [MovieController::class, 'getRecommendations'])->name('api.movies.recommendations');
 Route::get('api/movies/{movie}/similar', [MovieController::class, 'getSimilarMovies'])->name('api.movies.similar');
+Route::get('api/movies/{movie}/certification', [MovieController::class, 'getCertification'])->name('api.movies.certification');
+Route::get('api/movies/{movie}/reviews', [MovieController::class, 'getReviews'])->name('api.movies.reviews');
 
 // Public likes routes (for viewing likes count without authentication)
 Route::get('api/movies/{movie}/likes', [MovieController::class, 'getLikes'])->name('api.movies.likes.public');

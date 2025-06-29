@@ -16,6 +16,10 @@ import axios from 'axios';
 import { LazyImage } from "@/components/ui/lazy-image";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { CommentsSection } from "@/components/ui/comments-section";
+import { CertificationSkeleton } from "@/components/ui/certification-skeleton";
+import { ReviewsListSkeleton } from "@/components/ui/review-skeleton";
+import { ReviewItem } from "@/components/ui/review-item";
+import { TopCertificationSkeleton } from "@/components/ui/top-certification-skeleton";
 
 // console.log('movie.tsx loaded, CommentsSection imported:', CommentsSection);
 
@@ -44,6 +48,36 @@ interface MovieData {
   subtitle_languages?: string[];
   is_liked?: boolean;
   likes_count?: number;
+}
+
+// Interface for certification data
+interface CertificationData {
+  certification: string;
+  note?: string;
+  release_date?: string;
+  type?: number;
+  description?: {
+    certification: string;
+    meaning: string;
+    order: number;
+  };
+}
+
+// Interface for review data
+interface ReviewData {
+  id: string;
+  author: string;
+  author_details: {
+    name?: string;
+    username?: string;
+    rating?: number;
+  };
+  content: string;
+  created_at: string;
+  updated_at: string;
+  url: string;
+  avatar_url?: string;
+  rating?: number;
 }
 
 export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500, imgBaseUrl780, imgBaseUrl1280, isProduction }: { movie: any, encFilePath: string, imgBaseUrl300: string, imgBaseUrl500: string, imgBaseUrl780: string, imgBaseUrl1280: string, isProduction: boolean }) {
@@ -113,6 +147,16 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const [likedUsers, setLikedUsers] = useState<Array<{id: number, name: string}>>([]);
   const [loadingLikedUsers, setLoadingLikedUsers] = useState(false);
 
+  // State for certification functionality
+  const [certification, setCertification] = useState<CertificationData | null>(null);
+  const [loadingCertification, setLoadingCertification] = useState(true);
+  const [certificationError, setCertificationError] = useState<string | null>(null);
+
+  // State for reviews functionality
+  const [reviews, setReviews] = useState<ReviewData[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+
   // Video element ref for Picture-in-Picture
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasUserInitiatedPlayback, setHasUserInitiatedPlayback] = useState(false);
@@ -161,6 +205,44 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
     }
   };
 
+  // Function to fetch certification data
+  const fetchCertification = async () => {
+    try {
+      setLoadingCertification(true);
+      setCertificationError(null);
+      const response = await axios.get(`/api/movies/${movie.slug}/certification`);
+      if (response.data.success) {
+        setCertification(response.data.certification);
+      } else {
+        setCertificationError('Failed to load certification');
+      }
+    } catch (error) {
+      console.error('Error fetching certification:', error);
+      setCertificationError('Failed to load certification');
+    } finally {
+      setLoadingCertification(false);
+    }
+  };
+
+  // Function to fetch reviews data
+  const fetchReviews = async () => {
+    try {
+      setLoadingReviews(true);
+      setReviewsError(null);
+      const response = await axios.get(`/api/movies/${movie.slug}/reviews`);
+      if (response.data.success) {
+        setReviews(response.data.reviews);
+      } else {
+        setReviewsError('Failed to load reviews');
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      setReviewsError('Failed to load reviews');
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
   // Listen for sidebar state changes
   useEffect(() => {
     const handleSidebarStateChange = (event: CustomEvent<SidebarStateDetail>) => {
@@ -187,6 +269,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   useEffect(() => {
     fetchRecommendations();
     fetchSimilarMovies();
+  }, [movie.slug]);
+
+  // Fetch certification and reviews when component mounts
+  useEffect(() => {
+    fetchCertification();
+    fetchReviews();
   }, [movie.slug]);
 
   // Effect for Picture-in-Picture on scroll
@@ -626,8 +714,19 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     </div>
                     
                     <div className="flex flex-row lg:flex-col lg:items-end items-start gap-y-6 lg:w-[30%] w-full">
-                      <div className="w-full lg:text-right text-sm lg:text-base text-gray-500">
-                        PG-13&nbsp;&nbsp;•&nbsp;&nbsp;0 views
+                      <div className="w-full whitespace-nowrap lg:text-right text-sm lg:text-base text-gray-500">
+                        {loadingCertification ? (
+                          <div className="flex items-center justify-end gap-x-2">
+                            <TopCertificationSkeleton />
+                            <span>&nbsp;&nbsp;•&nbsp;&nbsp;0 views</span>
+                          </div>
+                        ) : certificationError ? (
+                          <span>Rating not available&nbsp;&nbsp;•&nbsp;&nbsp;0 views</span>
+                        ) : certification && certification.certification ? (
+                          <span>"{certification.certification}"&nbsp;&nbsp;•&nbsp;&nbsp;0 views</span>
+                        ) : (
+                          <span>Not Rated&nbsp;&nbsp;•&nbsp;&nbsp;0 views</span>
+                        )}
                       </div>
                       <div className="flex items-center justify-end gap-x-2 text-gray-500 text-base lg:text-lg w-full lg:text-right whitespace-nowrap">
                         {/* Likes with tooltip - Only show for authenticated users */}
@@ -748,15 +847,11 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                           "{movie.tagline}"
                         </div>
                       )}
-
-                      {/* <div className="mx-auto">
-                        <img src={`${imgBaseUrl500}${movie.poster_path}`} alt={movie.title} className="w-[9em] h-[18rem] lg:w-[15rem] lg:h-[20rem] rounded-lg object-cover border-2 border-gray-100 dark:border-gray-700 shadow-lg shadow-gray-500 dark:shadow-gray-700 overflow-hidden" />
-                      </div> */}
                       
-                      <div className="w-full">
+                      <div className="w-full flex flex-col gap-y-8">
                         <div className="hidden lg:block">
                           {movie.tagline && (
-                            <div className="text-base lg:text-lg italic mb-4">
+                            <div className="text-base lg:text-lg italic">
                               "{movie.tagline}"
                             </div>
                           )}
@@ -766,11 +861,38 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                             {movie.overview}
                           </div>
                         )}
+                        {loadingCertification ? (
+                          <CertificationSkeleton />
+                        ) : certificationError ? (
+                          <div className="w-full text-red-500">
+                            Failed to load certification information
+                          </div>
+                        ) : certification && certification.certification ? (
+                          <>
+                            <div className="w-full">
+                              Certification "{certification.certification}"
+                            </div>
+                            {certification.description && (
+                              <div className="text-gray-500 text-base lg:text-lg">
+                                {certification.description.meaning}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="w-full">
+                            Certification Not Available
+                          </div>
+                        )}
                       </div>
+
+                      <div className="flex items-start justify-center lg:justify-end lg:pl-7">
+                        <img src={`${imgBaseUrl500}${movie.poster_path}`} alt={movie.title} className="w-[12rem] h-[18rem] lg:w-[15rem] lg:h-[19rem] rounded-lg object-cover overflow-hidden" />
+                      </div>
+
                     </div>
 
                     {/* Cast and Crew Tabs */}
-                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]" 
+                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2.5rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]" 
                       style={{
                         '--dynamic-sidebar-width': sidebarWidth
                       } as React.CSSProperties}>
@@ -850,7 +972,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       </Tabs>
                     </div>
                     <div 
-                      className="flex flex-col gap-y-10 w-[calc(100vw-2rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]"
+                      className="flex flex-col gap-y-10 w-[calc(100vw-2.5rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]"
                       style={{
                         '--dynamic-sidebar-width': sidebarWidth
                       } as React.CSSProperties}
@@ -934,6 +1056,27 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         )}
                       </div>
 
+                      <div className="flex flex-col gap-y-4 w-full">
+                        <h2 className="text-xl font-bold mb-4">Reviews</h2>
+                        {loadingReviews ? (
+                          <ReviewsListSkeleton />
+                        ) : reviewsError ? (
+                          <div className="text-red-500 text-center py-8">
+                            {reviewsError}
+                          </div>
+                        ) : reviews.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-7">
+                            {reviews.map((review) => (
+                              <ReviewItem key={review.id} review={review} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-8">
+                            No reviews available
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex flex-col-reverse gap-y-10 lg:gap-y-0 lg:flex-row lg:gap-x-10 w-full"
                         style={{
                           '--dynamic-sidebar-width': sidebarWidth
@@ -950,7 +1093,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                             loginLink={
                               <Link 
                                 href={route('login') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)}
-                                className="text-blue-500 hover:text-blue-600 underline transition-colors duration-200"
+                                className="text-rose-600 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300 underline transition-colors duration-200"
                               >
                                 Login to join the conversation
                               </Link>
@@ -961,7 +1104,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         {/* other logos, backdrops and posters */}
                         {shuffledBackdrops.length > 0 && (
                           <div className="flex flex-col gap-y-4 w-full">
-                            <h2 className="text-xl font-bold mb-4">Images</h2>
+                            <h2 className="text-xl font-bold mb-4">Backdrops</h2>
                             
                             <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 xl:gap-10">
                               {shuffledBackdrops.map((backdrop: any, index: number) => (

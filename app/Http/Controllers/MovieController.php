@@ -35,7 +35,7 @@ class MovieController extends Controller
         $showOnlyFreeMovies = env('SHOW_ONLY_FREE_MOVIES_IN_PRODUCTION', false);
 
         $user = Auth::user();
-        
+
 
 
         $searchQuery = $request->get('search');
@@ -65,12 +65,12 @@ class MovieController extends Controller
         if ($searchQuery && strlen($searchQuery) >= 2) {
             $moviesQuery->where(function ($q) use ($searchQuery) {
                 $q->where('title', 'LIKE', "%{$searchQuery}%")
-                  ->orWhere('original_name', 'LIKE', "%{$searchQuery}%")
-                  ->orWhere('tagline', 'LIKE', "%{$searchQuery}%")
-                  ->orWhere('overview', 'LIKE', "%{$searchQuery}%")
-                  ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$searchQuery}%"])
-                  ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$searchQuery}%"])
-                  ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$searchQuery}%"]);
+                    ->orWhere('original_name', 'LIKE', "%{$searchQuery}%")
+                    ->orWhere('tagline', 'LIKE', "%{$searchQuery}%")
+                    ->orWhere('overview', 'LIKE', "%{$searchQuery}%")
+                    ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$searchQuery}%"])
+                    ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$searchQuery}%"])
+                    ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$searchQuery}%"]);
             })->orderByRaw("CASE 
                 WHEN title LIKE ? THEN 1
                 WHEN original_name LIKE ? THEN 2
@@ -87,7 +87,7 @@ class MovieController extends Controller
         // Efficiently load user's watch later movie IDs in a single query using direct DB query to avoid caching
         $watchLaterMovieIds = $user ? WatchLaterService::getUserWatchLaterMovieIds($user) : [];
 
-        
+
         $movies = $movies->map(function ($movie) use ($user, $watchLaterMovieIds) {
             $movie->is_local = true; // Mark all database movies as local
             $movie->is_watch_later = in_array($movie->id, $watchLaterMovieIds);
@@ -96,9 +96,9 @@ class MovieController extends Controller
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
-            
 
-            
+
+
             return $movie;
         });
 
@@ -108,7 +108,7 @@ class MovieController extends Controller
         } else {
             $recentlyAddedMoviesQuery = Movie::select('id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles', 'google_drive_file_id');
         }
-        
+
         $recentlyAddedMovies = $recentlyAddedMoviesQuery
             ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
             ->orderBy('created_at', 'desc')
@@ -154,11 +154,11 @@ class MovieController extends Controller
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
-            
+
             // Add trailer count
             $trailers = json_decode($movie->trailers, true) ?: [];
             $movie->trailer_count = count($trailers);
-            
+
             return $movie;
         });
 
@@ -206,52 +206,52 @@ class MovieController extends Controller
         }
 
         $isProduction = App::environment('production');
-        
+
         // In production, only allow access to movies with Google Drive IDs
         if ($isProduction && empty($movie->google_drive_file_id)) {
             return redirect()->route('movies.index');
         }
-        
+
         $user = Auth::user();
-        
+
         // Add like data
         $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
         $movie->likes_count = $movie->likesCount();
-        
+
         // Add comments count
         $movie->comments_count = $movie->commentsCount();
-        
+
         // Decode subtitles JSON to make it accessible in React
         $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
-        
+
         // Add genre slugs to genres
         $movie->genres = MovieService::genresWithSlugs($movie);
-        
+
         // Decode and process credits
         $credits = json_decode($movie->credits, true) ?: [];
-        
+
         // Add profile path URLs to cast and crew
         if (isset($credits['cast'])) {
             $credits['cast'] = array_map(function ($cast) {
-                $cast['profilePathUrl'] = isset($cast['profile_path']) && $cast['profile_path'] 
-                    ? env('TMDB_IMAGE_BASE_URL_300') . $cast['profile_path'] 
+                $cast['profilePathUrl'] = isset($cast['profile_path']) && $cast['profile_path']
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $cast['profile_path']
                     : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $cast;
             }, $credits['cast']);
         }
-        
+
         if (isset($credits['crew'])) {
             // Add profile path URLs to crew
             $credits['crew'] = array_map(function ($crew) {
-                $crew['profilePathUrl'] = isset($crew['profile_path']) && $crew['profile_path'] 
-                    ? env('TMDB_IMAGE_BASE_URL_300') . $crew['profile_path'] 
+                $crew['profilePathUrl'] = isset($crew['profile_path']) && $crew['profile_path']
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $crew['profile_path']
                     : env('DEFAULT_CREDIT_IMAGE_URL');
                 return $crew;
             }, $credits['crew']);
-            
+
             // Define priority positions in order
             $priorityPositions = ['director', 'executive producer', 'producer'];
-            
+
             // Separate crew members by priority positions
             $priorityCrew = [
                 'director' => [],
@@ -259,11 +259,11 @@ class MovieController extends Controller
                 'producer' => [],
             ];
             $otherCrew = [];
-            
+
             foreach ($credits['crew'] as $crewMember) {
                 if (isset($crewMember['job'])) {
                     $jobLower = strtolower($crewMember['job']);
-                    
+
                     if (in_array($jobLower, $priorityPositions)) {
                         $priorityCrew[$jobLower][] = $crewMember;
                     } else {
@@ -273,7 +273,7 @@ class MovieController extends Controller
                     $otherCrew[] = $crewMember;
                 }
             }
-            
+
             // Merge in priority order: Director, Executive Producer, Producer, then others
             $sortedCrew = [];
             foreach ($priorityPositions as $position) {
@@ -281,12 +281,12 @@ class MovieController extends Controller
             }
             $credits['crew'] = array_merge($sortedCrew, $otherCrew);
         }
-        
+
         // Assign the processed credits back to the movie
         $movie->credits = $credits;
 
         $movie->images = json_decode($movie->images, true);
-        
+
         return Inertia::render('movie', [
             'movie' => $movie,
             'isProduction' => $isProduction,
@@ -337,7 +337,7 @@ class MovieController extends Controller
         }
 
         $user = Auth::user();
-        
+
         $isWatchLater = MovieService::isWatchLater($movie, $user);
 
         // Use database transaction to ensure the operation is fully committed
@@ -354,7 +354,7 @@ class MovieController extends Controller
 
         // Ensure session is properly updated
         session()->save();
-        
+
         return response()->json([
             'success' => true,
             'is_watch_later' => $newStatus,
@@ -374,7 +374,7 @@ class MovieController extends Controller
     public function getTrailers(Movie $movie)
     {
         $trailers = MovieService::getMovieTrailers($movie->id);
-        
+
         return response()->json($trailers);
     }
 
@@ -389,7 +389,7 @@ class MovieController extends Controller
         try {
             // First check if it's a local movie
             $localMovie = Movie::find($movieId);
-            
+
             if ($localMovie) {
                 // Use local movie trailers
                 $trailers = MovieService::getMovieTrailers($movieId);
@@ -397,7 +397,7 @@ class MovieController extends Controller
                 // Fetch trailers from TMDB API for external movies
                 $trailers = MovieService::getTrailersFromTMDB($movieId);
             }
-            
+
             return response()->json($trailers);
         } catch (\Exception $e) {
             return response()->json([
@@ -418,12 +418,12 @@ class MovieController extends Controller
         try {
             $recommendations = MovieService::getMovieRecommendations($movie);
             $user = Auth::user();
-            
+
             // Process recommendations to include image URLs and check for local availability
             $processedRecommendations = collect($recommendations)->map(function ($recommendation) use ($user) {
                 // Check if this movie exists in our local database
                 $localMovie = Movie::where('id', $recommendation['id'])->first();
-                
+
                 $baseData = [
                     'id' => $recommendation['id'],
                     'title' => $recommendation['title'],
@@ -432,7 +432,7 @@ class MovieController extends Controller
                     'vote_average' => $recommendation['vote_average'],
                     'release_date' => $recommendation['release_date'],
                     'overview' => $recommendation['overview'],
-                    'poster_url' => $recommendation['poster_path'] 
+                    'poster_url' => $recommendation['poster_path']
                         ? env('TMDB_IMAGE_BASE_URL_300') . $recommendation['poster_path']
                         : null,
                     'backdrop_url' => $recommendation['backdrop_path']
@@ -445,7 +445,7 @@ class MovieController extends Controller
                 // In production, only consider movies with Google Drive IDs as locally available
                 if ($localMovie && (!app()->environment('production') || !empty($localMovie->google_drive_file_id))) {
                     $subtitles = json_decode($localMovie->subtitles, true) ?: [];
-                    
+
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
                     $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
@@ -462,7 +462,7 @@ class MovieController extends Controller
 
                 return $baseData;
             })->take(20); // Limit to 10 recommendations
-            
+
             return response()->json([
                 'success' => true,
                 'recommendations' => $processedRecommendations
@@ -487,12 +487,12 @@ class MovieController extends Controller
         try {
             $similarMovies = MovieService::getSimilarMovies($movie);
             $user = Auth::user();
-            
+
             // Process similar movies to include image URLs and check for local availability
             $processedSimilarMovies = collect($similarMovies)->map(function ($movie) use ($user) {
                 // Check if this movie exists in our local database
                 $localMovie = Movie::where('id', $movie['id'])->first();
-                
+
                 $baseData = [
                     'id' => $movie['id'],
                     'title' => $movie['title'],
@@ -501,7 +501,7 @@ class MovieController extends Controller
                     'vote_average' => $movie['vote_average'],
                     'release_date' => $movie['release_date'],
                     'overview' => $movie['overview'],
-                    'poster_url' => $movie['poster_path'] 
+                    'poster_url' => $movie['poster_path']
                         ? env('TMDB_IMAGE_BASE_URL_300') . $movie['poster_path']
                         : null,
                     'backdrop_url' => $movie['backdrop_path']
@@ -514,7 +514,7 @@ class MovieController extends Controller
                 // In production, only consider movies with Google Drive IDs as locally available
                 if ($localMovie && (!app()->environment('production') || !empty($localMovie->google_drive_file_id))) {
                     $subtitles = json_decode($localMovie->subtitles, true) ?: [];
-                    
+
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
                     $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
@@ -531,7 +531,7 @@ class MovieController extends Controller
 
                 return $baseData;
             })->take(20); // Limit to 10 similar movies
-            
+
             return response()->json([
                 'success' => true,
                 'similar_movies' => $processedSimilarMovies
@@ -555,7 +555,7 @@ class MovieController extends Controller
     public function initiateRecommendationsFetch(Movie $movie)
     {
         $cacheKey = "movie_recommendations_{$movie->id}";
-        
+
         // Check if we already have cached data
         $cachedData = Cache::get($cacheKey);
         if ($cachedData) {
@@ -578,7 +578,7 @@ class MovieController extends Controller
 
         // Dispatch the job
         \App\Jobs\FetchMovieRecommendationsJob::dispatch($movie);
-        
+
         return response()->json([
             'success' => true,
             'status' => 'initiated',
@@ -597,7 +597,7 @@ class MovieController extends Controller
     {
         $cacheKey = "movie_recommendations_{$movie->id}";
         $status = Cache::get($cacheKey . '_status', 'not_started');
-        
+
         switch ($status) {
             case 'completed':
                 $data = Cache::get($cacheKey);
@@ -606,14 +606,14 @@ class MovieController extends Controller
                     'status' => 'completed',
                     'data' => $data
                 ]);
-                
+
             case 'loading':
                 return response()->json([
                     'success' => true,
                     'status' => 'loading',
                     'message' => 'Still fetching recommendations...'
                 ]);
-                
+
             case 'failed':
                 $error = Cache::get($cacheKey . '_error', 'Unknown error');
                 return response()->json([
@@ -621,7 +621,7 @@ class MovieController extends Controller
                     'status' => 'failed',
                     'message' => $error
                 ]);
-                
+
             default:
                 return response()->json([
                     'success' => false,
@@ -643,7 +643,7 @@ class MovieController extends Controller
             $query = $request->get('q', '');
             $limit = $request->get('limit', 10);
             $shouldLog = $request->get('log', 'true') !== 'false'; // Default to true, false only if explicitly set
-            
+
             if (empty($query) || strlen($query) < 2) {
                 return response()->json([
                     'success' => true,
@@ -653,24 +653,24 @@ class MovieController extends Controller
 
             $user = Auth::user();
             $startTime = microtime(true);
-            
+
             // Search movies with comprehensive criteria
             $movies = Movie::select('id', 'title', 'original_name', 'slug', 'poster_path', 'release_date', 'vote_average', 'overview', 'tagline', 'subtitles')
                 ->where(function ($q) use ($query) {
                     // Search in title
                     $q->where('title', 'LIKE', "%{$query}%")
-                      // Search in original_name
-                      ->orWhere('original_name', 'LIKE', "%{$query}%")
-                      // Search in tagline
-                      ->orWhere('tagline', 'LIKE', "%{$query}%")
-                      // Search in overview
-                      ->orWhere('overview', 'LIKE', "%{$query}%")
-                      // Search in alternative_titles JSON (convert to string and search)
-                      ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
-                      // Search in keywords JSON (convert to string and search)
-                      ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                      // Search in credits JSON (convert to string and search)
-                      ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                        // Search in original_name
+                        ->orWhere('original_name', 'LIKE', "%{$query}%")
+                        // Search in tagline
+                        ->orWhere('tagline', 'LIKE', "%{$query}%")
+                        // Search in overview
+                        ->orWhere('overview', 'LIKE', "%{$query}%")
+                        // Search in alternative_titles JSON (convert to string and search)
+                        ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                        // Search in keywords JSON (convert to string and search)
+                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                        // Search in credits JSON (convert to string and search)
+                        ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
                 })
                 ->orderByRaw("CASE 
                     WHEN title LIKE ? THEN 1
@@ -685,14 +685,14 @@ class MovieController extends Controller
             // Process results
             $results = $movies->map(function ($movie) use ($user) {
                 $subtitles = json_decode($movie->subtitles, true) ?: [];
-                
+
                 return [
                     'id' => $movie->id,
                     'title' => $movie->title,
                     'original_name' => $movie->original_name,
                     'slug' => $movie->slug,
                     'poster_path' => $movie->poster_path,
-                    'poster_url' => $movie->poster_path 
+                    'poster_url' => $movie->poster_path
                         ? env('TMDB_IMAGE_BASE_URL_300') . $movie->poster_path
                         : null,
                     'release_date' => $movie->release_date,
@@ -775,7 +775,7 @@ class MovieController extends Controller
 
             $user = Auth::user();
             $clickTimestamp = now();
-            
+
             // Calculate time from search to click
             $searchTime = \Carbon\Carbon::parse($request->input('search_timestamp'));
             $timeToClickMs = $clickTimestamp->diffInMilliseconds($searchTime);
@@ -892,7 +892,7 @@ class MovieController extends Controller
 
             $query = $request->input('query');
             $user = Auth::user();
-            
+
             // Only log if it meets our criteria
             if (!$this->shouldLogSearch($query, $user->id, 0)) {
                 return response()->json(['success' => true, 'logged' => false]);
@@ -911,24 +911,24 @@ class MovieController extends Controller
             // First get the total count of matching movies
             $resultsCount = Movie::where(function ($q) use ($query) {
                 $q->where('title', 'LIKE', "%{$query}%")
-                  ->orWhere('original_name', 'LIKE', "%{$query}%")
-                  ->orWhere('tagline', 'LIKE', "%{$query}%")
-                  ->orWhere('overview', 'LIKE', "%{$query}%")
-                  ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
-                  ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                  ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                    ->orWhere('original_name', 'LIKE', "%{$query}%")
+                    ->orWhere('tagline', 'LIKE', "%{$query}%")
+                    ->orWhere('overview', 'LIKE', "%{$query}%")
+                    ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                    ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                    ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
             })->count();
 
             // Then get top 5 results for summary
             $movies = Movie::select('id', 'title', 'slug')
                 ->where(function ($q) use ($query) {
                     $q->where('title', 'LIKE', "%{$query}%")
-                      ->orWhere('original_name', 'LIKE', "%{$query}%")
-                      ->orWhere('tagline', 'LIKE', "%{$query}%")
-                      ->orWhere('overview', 'LIKE', "%{$query}%")
-                      ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
-                      ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                      ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                        ->orWhere('original_name', 'LIKE', "%{$query}%")
+                        ->orWhere('tagline', 'LIKE', "%{$query}%")
+                        ->orWhere('overview', 'LIKE', "%{$query}%")
+                        ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
+                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
+                        ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
                 })
                 ->orderByRaw("CASE 
                     WHEN title LIKE ? THEN 1
@@ -1028,25 +1028,25 @@ class MovieController extends Controller
     {
         try {
             $deletedCount = 0;
-            
+
             // Delete very short queries (1-2 characters) that are likely partial typing
             $shortQueries = SearchQuery::whereRaw('LENGTH(query) <= 2')->count();
             SearchQuery::whereRaw('LENGTH(query) <= 2')->delete();
             $deletedCount += $shortQueries;
-            
+
             // Find and delete progressive typing sequences
             // e.g., keep "keanu reeves" but delete "kea", "kean", "keanu", "keanu r", "keanu ree"
             $users = SearchQuery::distinct('user_id')->pluck('user_id');
-            
+
             foreach ($users as $userId) {
                 $userSearches = SearchQuery::where('user_id', $userId)
                     ->whereNull('clicked_result_at') // Don't delete searches that led to clicks
                     ->orderBy('created_at')
                     ->get();
-                
+
                 $toDelete = [];
                 $lastQuery = '';
-                
+
                 foreach ($userSearches as $search) {
                     // If this query is a prefix of the last query, mark the shorter one for deletion
                     if (!empty($lastQuery) && str_starts_with($lastQuery, $search->query) && strlen($search->query) < strlen($lastQuery)) {
@@ -1063,13 +1063,13 @@ class MovieController extends Controller
                     }
                     $lastQuery = $search->query;
                 }
-                
+
                 if (!empty($toDelete)) {
                     SearchQuery::whereIn('id', $toDelete)->delete();
                     $deletedCount += count($toDelete);
                 }
             }
-            
+
             return response()->json([
                 'success' => true,
                 'message' => "Cleaned up {$deletedCount} partial/duplicate search queries",
@@ -1115,5 +1115,144 @@ class MovieController extends Controller
     {
         $slug = $request->route('slug');
         return Movie::where('slug', $slug)->first();
+    }
+
+    /**
+     * Get movie certification data from TMDB API.
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCertification(Movie $movie)
+    {
+        try {
+            $certification = MovieService::getMovieCertification($movie);
+
+            // If we got certification data, get the description
+            if (!empty($certification) && isset($certification['certification'])) {
+                $certificationDescription = MovieService::getCertificationDescription($certification['certification']);
+                $certification['description'] = $certificationDescription;
+            }
+
+            return response()->json([
+                'success' => true,
+                'certification' => $certification
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch certification',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get movie reviews from TMDB API.
+     *
+     * @param Movie $movie
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getReviews(Movie $movie)
+    {
+        try {
+            $reviews = MovieService::getMovieReviews($movie);
+
+            // Process reviews to include formatted dates and avatar URLs
+            // Sort by updated_at descending (newest first)
+            $processedReviews = collect($reviews)
+                // ->sortByDesc('updated_at')
+                ->map(function ($review) {
+                    $avatarUrl = null;
+                    if (isset($review['author_details']['avatar_path']) && $review['author_details']['avatar_path']) {
+                        $avatarPath = $review['author_details']['avatar_path'];
+                        // Check if it's a gravatar URL (starts with https://www.gravatar.com)
+                        if (str_starts_with($avatarPath, 'https://www.gravatar.com')) {
+                            $avatarUrl = $avatarPath;
+                        } else {
+                            // Remove leading slash and use TMDB image URL
+                            $avatarPath = ltrim($avatarPath, '/');
+                            $avatarUrl = env('TMDB_IMAGE_BASE_URL_500') . '/' . $avatarPath;
+                        }
+                    }
+
+                    return [
+                        'id' => $review['id'],
+                        'author' => $review['author'],
+                        'author_details' => $review['author_details'],
+                        'content' => $review['content'],
+                        'created_at' => $review['created_at'],
+                        'updated_at' => $review['updated_at'],
+                        'url' => $review['url'],
+                        'avatar_url' => $avatarUrl,
+                        'rating' => $review['author_details']['rating'] ?? null,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'reviews' => $processedReviews
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch reviews',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Display free movies and TV shows.
+     *
+     * @return \Inertia\Response
+     */
+    public function freeMedia()
+    {
+        $user = Auth::user();
+        
+        // Get free movies
+        $freeMovies = Movie::select(['id', 'title', 'poster_path', 'vote_average', 'release_date', 'slug', 'subtitles', 'google_drive_file_id', 'is_free'])
+            ->where('is_free', true)
+            ->whereNotNull('google_drive_file_id')
+            ->selectRaw('COALESCE(json_array_length(trailers), 0) as trailer_count')
+            ->orderBy('title', 'asc')
+            ->get();
+
+        // Get user's watch later movie IDs
+        $watchLaterMovieIds = $user ? WatchLaterService::getUserWatchLaterMovieIds($user) : [];
+
+        // Process movies
+        $freeMovies = $freeMovies->map(function ($movie) use ($user, $watchLaterMovieIds) {
+            $movie->is_local = true;
+            $movie->is_watch_later = in_array($movie->id, $watchLaterMovieIds);
+            $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
+            $movie->likes_count = $movie->likesCount();
+            $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
+            if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
+            if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
+            return $movie;
+        });
+
+        // Get free TV shows using the is_free column
+        $freeTvshows = \App\Models\Tvshow::select('id', 'name', 'backdrop_path', 'poster_path', 'vote_average', 'vote_count', 'first_air_date', 'videos', 'images', 'selected_logo', 'slug')
+            ->where('is_free', true)
+            ->withCount('seasons')
+            ->withCount('episodes')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        // Add likes and watch later information to each TV show
+        $freeTvshows->each(function ($tvshow) use ($user) {
+            $tvshow->likes_count = $tvshow->likesCount();
+            $tvshow->is_liked = $user ? $tvshow->isLikedBy($user) : false;
+            $tvshow->is_watch_later = $user ? WatchLaterService::isWatchLater($tvshow, $user) : false;
+        });
+
+        return Inertia::render('free-media', [
+            'freeMovies' => $freeMovies,
+            'freeTvshows' => $freeTvshows,
+            'imgBaseUrl' => env('TMDB_IMAGE_BASE_URL_300'),
+        ]);
     }
 }

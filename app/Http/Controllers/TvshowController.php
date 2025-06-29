@@ -169,7 +169,7 @@ class TvshowController extends Controller
         $season->is_watch_later = $user ? WatchLaterService::isWatchLater($season, $user) : false;
         
         // Process episodes with the same logic as before
-        $season->episodes->each(function ($episode) use ($user) {
+        $season->episodes->each(function ($episode) use ($user, $tvshow) {
             $episode->stillUrl = $episode->still_path 
                 ? env('TMDB_IMAGE_BASE_URL_300') . $episode->still_path 
                 : env('DEFAULT_EPISODE_STILL_IMAGE_URL');
@@ -177,6 +177,9 @@ class TvshowController extends Controller
             
             // Add watch later status to episode
             $episode->is_watch_later = $user ? WatchLaterService::isWatchLater($episode, $user) : false;
+            
+            // Include parent TV show's free status - episodes inherit TV show's free status
+            $episode->tvshow_is_free = $tvshow->is_free;
             
             // Pre-encode the file path if it's a string (means it's a valid file path)
             if (is_string($episode->is_in_storage) && !empty($episode->is_in_storage)) {

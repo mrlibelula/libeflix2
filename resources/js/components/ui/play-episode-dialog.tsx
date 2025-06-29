@@ -105,7 +105,8 @@ export function PlayEpisodeDialog({
   }>();
 
   // Check if user can access this episode
-  const canAccessEpisode = episode?.is_free || props.auth.canAccessPremium || props.auth.isAdmin;
+  // Episode is accessible if: individual episode is free OR parent TV show is free OR user has premium access OR user is admin
+  const canAccessEpisode = episode?.is_free || episode?.tvshow_is_free || props.auth.canAccessPremium || props.auth.isAdmin;
   const isAuthenticated = !!props.auth.user;
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);

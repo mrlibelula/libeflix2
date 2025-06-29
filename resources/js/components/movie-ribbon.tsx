@@ -333,7 +333,7 @@ export function MovieRibbon({
 
   return (
     <div 
-      className="relative px-4 mx-auto w-full max-w-[calc(100vw-10px)] md:max-w-[calc(100vw-var(--dynamic-sidebar-width)-30px)] focus:outline-none"
+      className="relative px-4 mx-auto w-full max-w-[calc(100vw-15px)] md:max-w-[calc(100vw-var(--dynamic-sidebar-width)-50px)] focus:outline-none"
       data-ribbon={ribbonId || title}
       tabIndex={movies.length === 0 ? 0 : -1}
       style={{

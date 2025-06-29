@@ -57,7 +57,7 @@ class MovieService
             ->whereNotNull('google_drive_file_id')
             ->get()
             ->toArray();
-        
+
         if (count($localMovies) !== count($remoteMovies)) {
             echo "Error: Not all movies have been updated" . PHP_EOL;
             return false;
@@ -90,7 +90,7 @@ class MovieService
 
             $gdriveMovies = Movie::select($columns)
                 ->whereNotNull('google_drive_file_id')
-                ->orderBy($orderBy) 
+                ->orderBy($orderBy)
                 ->get();
         }
 
@@ -226,6 +226,54 @@ class MovieService
     }
 
     /**
+     * Get movie certification from TMDB API
+     *
+     * @param Movie $movie
+     * @return array
+     */
+    public static function getMovieCertification(Movie $movie): array
+    {
+        $baseUrl = env('TMDB_BASE_URL') . '/movie/' . $movie->id . '/release_dates?api_key=' . env('TMDB_API_KEY');
+        $response = Http::get($baseUrl);
+        $responseArrayData = $response->json();
+        $results = $responseArrayData['results'] ?? [];
+        
+        // Find US certification
+        foreach ($results as $country) {
+            if (isset($country['iso_3166_1']) && $country['iso_3166_1'] === 'US') {
+                if (isset($country['release_dates']) && !empty($country['release_dates'])) {
+                    foreach ($country['release_dates'] as $releaseDate) {
+                        if (isset($releaseDate['certification']) && !empty($releaseDate['certification'])) {
+                            return [
+                                'certification' => $releaseDate['certification'],
+                                'note' => $releaseDate['note'] ?? null,
+                                'release_date' => $releaseDate['release_date'] ?? null,
+                                'type' => $releaseDate['type'] ?? null,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        
+        return []; // Return empty if no US certification found
+    }
+
+    /**
+     * Get movie reviews from TMDB API
+     *
+     * @param Movie $movie
+     * @return array
+     */
+    public static function getMovieReviews(Movie $movie): array
+    {
+        $baseUrl = env('TMDB_BASE_URL') . '/movie/' . $movie->id . '/reviews?api_key=' . env('TMDB_API_KEY');
+        $response = Http::get($baseUrl);
+        $responseArrayData = $response->json();
+        return $responseArrayData['results'] ?? [];
+    }
+
+    /**
      * Get the subtitles of a movie in json format
      * 
      * @param Movie $movie
@@ -243,7 +291,7 @@ class MovieService
         });
 
         $vttSubtitles = [];
-        
+
         if ($vttFiles->count()) {
             $vttSubtitles = $vttFiles->map(function ($vttFile) use ($movie) {
                 $language = Str::afterLast($vttFile, '_');
@@ -400,7 +448,7 @@ class MovieService
                     return null;
                 }
             });
-            
+
             // Grab additional movie data from TMDB
             if ($foundMovie) {
                 $foundMoviesCount++;
@@ -408,7 +456,7 @@ class MovieService
                 $baseUrlMovieData = env('TMDB_BASE_URL') . '/movie/' . $foundMovie['id'] . '?api_key=' . env('TMDB_API_KEY') . '&append_to_response=credits,videos,images';
                 $baseUrlMovieAlternativeTitles = env('TMDB_BASE_URL') . '/movie/' . $foundMovie['id'] . '/alternative_titles?api_key=' . env('TMDB_API_KEY');
                 $baseUrlMovieKeywords = env('TMDB_BASE_URL') . '/movie/' . $foundMovie['id'] . '/keywords?api_key=' . env('TMDB_API_KEY');
-                
+
                 $responseMovieData = Http::get($baseUrlMovieData);
                 $responseArrayData = collect($responseMovieData->json());
                 $responseMovieAlternativeTitles = Http::get($baseUrlMovieAlternativeTitles);
@@ -566,7 +614,7 @@ class MovieService
         echo "\033[32m* 'Already persisted' movies: " . $alreadyPersistedMoviesCount . "\033[0m" . PHP_EOL;
         echo "\033[32m* Total persisted movies: " . $totalPersistedMoviesCount . "\033[0m" . PHP_EOL;
         echo '---------------------------------------------' . PHP_EOL;
-        
+
         echo "\n\033[32mExecution time: " . round($executionTime / 60, 2) . " minutes\033[0m" . PHP_EOL;
 
         echo "\n\033[36mReport file: " . $storage->path('import-report.json') . "\033[0m" . PHP_EOL;
@@ -621,10 +669,68 @@ class MovieService
     public static function genresWithSlugs(Movie $movie): array
     {
         $genres = is_array($movie->genres) ? $movie->genres : (json_decode($movie->genres, true) ?: []);
-        
+
         return array_map(function ($genre) {
             $genre['slug'] = Str::slug($genre['name']);
             return $genre;
         }, $genres);
+    }
+
+    /**
+     * Returns all certifications
+     * 
+     * @return array
+     */
+    public static function certifications(): array
+    {
+        return [
+            [
+                "certification" => "R",
+                "meaning" => "Under 17 requires accompanying parent or adult guardian 21 or older. The parent/guardian is required to stay with the child under 17 through the entire movie, even if the parent gives the child/teenager permission to see the film alone. These films may contain strong profanity, graphic sexuality, nudity, strong violence, horror, gore, and strong drug use. A movie rated R for profanity often has more severe or frequent language than the PG-13 rating would permit. An R-rated movie may have more blood, gore, drug use, nudity, or graphic sexuality than a PG-13 movie would admit.",
+                "order" => 4
+            ],
+            [
+                "certification" => "PG",
+                "meaning" => "Some material may not be suitable for children under 10. These films may contain some mild language, crude/suggestive humor, scary moments and/or violence. No drug content is present. There are a few exceptions to this rule. A few racial insults may also be heard.",
+                "order" => 2
+            ],
+            [
+                "certification" => "NC-17",
+                "meaning" => "These films contain excessive graphic violence, intense or explicit sex, depraved, abhorrent behavior, explicit drug abuse, strong language, explicit nudity, or any other elements which, at present, most parents would consider too strong and therefore off-limits for viewing by their children and teens. NC-17 does not necessarily mean obscene or pornographic in the oft-accepted or legal meaning of those words.",
+                "order" => 5
+            ],
+            [
+                "certification" => "G",
+                "meaning" => "All ages admitted. There is no content that would be objectionable to most parents. This is one of only two ratings dating back to 1968 that still exists today.",
+                "order" => 1
+            ],
+            [
+                "certification" => "NR",
+                "meaning" => "No rating information.",
+                "order" => 0
+            ],
+            [
+                "certification" => "PG-13",
+                "meaning" => "Some material may be inappropriate for children under 13. Films given this rating may contain sexual content, brief or partial nudity, some strong language and innuendo, humor, mature themes, political themes, terror and/or intense action violence. However, bloodshed is rarely present. This is the minimum rating at which drug content is present.",
+                "order" => 3
+            ]
+        ];
+    }
+
+    /**
+     * Get certification description by certification code
+     * 
+     * @param string $certificationCode
+     * @return array|null
+     */
+    public static function getCertificationDescription(string $certificationCode): ?array
+    {   
+        foreach (self::certifications() as $certification) {
+            if ($certification['certification'] === $certificationCode) {
+                return $certification;
+            }
+        }
+        
+        return null;
     }
 }

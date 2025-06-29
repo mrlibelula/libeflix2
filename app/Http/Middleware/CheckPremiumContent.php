@@ -36,8 +36,17 @@ class CheckPremiumContent
         // Handle model-bound routes
         elseif ($movie && !$movie->is_free) {
             $isPremiumContent = true;
-        } elseif ($episode && !$episode->is_free) {
-            $isPremiumContent = true;
+        } elseif ($episode) {
+            // Episode is premium if both the episode itself AND the parent TV show are NOT free
+            $season = $episode->season;
+            $tvshow = $season ? $season->tvshow : null;
+            
+            $isEpisodeFree = $episode->is_free;
+            $isTvshowFree = $tvshow ? $tvshow->is_free : false;
+            
+            if (!($isEpisodeFree || $isTvshowFree)) {
+                $isPremiumContent = true;
+            }
         } elseif ($slug) {
             // Handle TV show episodes or movies by slug
             $tvshow = \App\Models\Tvshow::where('slug', $slug)->first();
@@ -157,7 +166,14 @@ class CheckPremiumContent
             }
             
             if ($episode) {
-                return !$episode->is_free;
+                // Episode is free if either the episode itself is free OR the parent TV show is free
+                $season = $episode->season;
+                $tvshow = $season ? $season->tvshow : null;
+                
+                $isEpisodeFree = $episode->is_free;
+                $isTvshowFree = $tvshow ? $tvshow->is_free : false;
+                
+                return !($isEpisodeFree || $isTvshowFree);
             }
             
             // If not found in database, assume it's premium content for security
