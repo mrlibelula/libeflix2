@@ -300,7 +300,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
           <div className="flex items-center gap-x-4">
             <div className="flex items-center gap-x-2">
               {/* Watch Later button - Only show for local movies and authenticated users */}
-              {isLocalMovie && onWatchLaterToggle && (
+              {isLocalMovie && onWatchLaterToggle && isAuthenticated && (
                 <button
                   onClick={handleToggleWatchLater}
                   disabled={isToggling || !isReady}
@@ -326,13 +326,13 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
                 </button>
               )}
 
-              {/* Heart button - Only show for local movies */}
-              {isLocalMovie && (
+              {/* Heart button - Only show for local movies and authenticated users */}
+              {isLocalMovie && isAuthenticated && (
                 <button
                   onClick={handleLikeToggle}
                   disabled={isLikeToggling || !isReady}
                   className="transition-all duration-200 ease-in-out hover:scale-110 disabled:opacity-50 cursor-pointer"
-                  title={isAuthenticated ? (isLiked ? "Unlike movie" : "Like movie") : "Login to like movie"}
+                  title={isLiked ? "Unlike movie" : "Like movie"}
                 >
                   <div
                     className={`transition-all duration-300 ease-in-out ${

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StarIcon, CheckIcon, HeartIcon, PlusIcon } from 'lucide-react';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { AddCircleButton } from '@/components/ui/add-circle-button';
 import { LoveCircleButton } from '@/components/ui/love-circle-button';
@@ -33,6 +33,15 @@ export function TvshowCard({
   onLikeToggle,
   showCheckIcon = false 
 }: TvshowCardProps) {
+  const { props } = usePage<{ 
+    auth?: {
+      user?: any;
+    };
+  }>();
+
+  // Check if user is authenticated
+  const isAuthenticated = !!props.auth?.user;
+
   const handleRemoveFromWatchLater = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -85,6 +94,14 @@ export function TvshowCard({
     e.preventDefault();
     e.stopPropagation();
     
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
+    
     if (isTogglingWatchLater) return;
     
     setIsTogglingWatchLater(true);
@@ -131,6 +148,14 @@ export function TvshowCard({
   const handleLikeToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with current page as redirect parameter
+      const currentUrl = window.location.pathname + window.location.search;
+      router.visit('/login?redirect=' + encodeURIComponent(currentUrl));
+      return;
+    }
     
     if (isTogglingLike) return;
     
@@ -204,16 +229,16 @@ export function TvshowCard({
             </button>
           </div>
         ) : (
-          /* Watch later and like buttons */
+          /* Watch later and like buttons - Only show for authenticated users */
           <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            {onWatchLaterToggle && (
+            {onWatchLaterToggle && isAuthenticated && (
               <AddCircleButton
                 isWatchLater={tvshow.is_watch_later || false}
                 isToggling={isTogglingWatchLater}
                 onClick={handleWatchLaterToggle}
               />
             )}
-            {onLikeToggle && (
+            {onLikeToggle && isAuthenticated && (
               <LoveCircleButton
                 isLiked={tvshow.is_liked || false}
                 onClick={handleLikeToggle}
