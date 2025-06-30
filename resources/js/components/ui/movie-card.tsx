@@ -239,7 +239,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
         )}
         
         {/* FREE label for movies from database that are tagged as free */}
-        {movie.is_local && movie.is_free && (
+        {movie.is_local && movie.is_free === true && (
           <div className="absolute top-2 left-2 z-10">
             <div className="bg-green-500 text-white text-[0.65rem] font-semibold px-1 rounded shadow-lg border-2 border-green-400 animate-pulse">
               FREE TO WATCH
@@ -255,7 +255,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
           </div>
         )}
 
-                {/* Movie action buttons overlay */}
+        {/* Movie action buttons overlay */}
         <div 
           className="absolute bottom-2 left-2 right-2 flex items-center justify-between"
           onClick={(e) => {
@@ -272,7 +272,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
             )}
           </div>
 
-                      {/* Right side - Action buttons */}
+            {/* Right side - Action buttons */}
             <div className="flex items-center gap-1 action-buttons-container">
             {/* Watch Later icon (only for local movies) */}
             {movie.is_local && (
