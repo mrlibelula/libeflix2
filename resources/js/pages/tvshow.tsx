@@ -447,6 +447,71 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
     }
   };
 
+  // Function to handle main play button - plays first episode of first available season
+  const handleMainPlayButton = async () => {
+    // Find the first available season (preferably season 1, or the earliest available season)
+    let firstSeason = tvshow.seasons.find((s: any) => 
+      s.season_number === 1 && s.seasonFolderExists
+    );
+    
+    // If Season 1 isn't available, get the earliest available season
+    if (!firstSeason) {
+      const availableSeasons = tvshow.seasons
+        .filter((s: any) => s.season_number > 0 && s.seasonFolderExists)
+        .sort((a: any, b: any) => a.season_number - b.season_number);
+        
+      if (availableSeasons.length > 0) {
+        firstSeason = availableSeasons[0];
+      }
+    }
+    
+    if (!firstSeason) {
+      console.error('No available seasons found');
+      return;
+    }
+    
+    // Switch to first season if not already selected
+    if (!selectedSeason || selectedSeason.season_number !== firstSeason.season_number) {
+      setSelectedSeason(firstSeason);
+    }
+    
+    // Get episodes for the first season
+    let firstSeasonEpisodes = seasonEpisodes[firstSeason.season_number];
+    
+    // Load episodes if not already loaded
+    if (!firstSeasonEpisodes) {
+      try {
+        firstSeasonEpisodes = await loadSeasonEpisodes(firstSeason.season_number);
+        setSeasonEpisodes(prev => ({
+          ...prev,
+          [firstSeason.season_number]: firstSeasonEpisodes
+        }));
+      } catch (error) {
+        console.error('Error loading episodes for first season:', error);
+        return;
+      }
+    }
+    
+    if (!firstSeasonEpisodes || firstSeasonEpisodes.length === 0) {
+      console.error('No episodes found for first season');
+      return;
+    }
+    
+    // Find the first playable episode
+    const firstPlayableEpisode = firstSeasonEpisodes.find((episode: any) => 
+      isEpisodePlayable(episode)
+    );
+    
+    if (!firstPlayableEpisode) {
+      console.error('No playable episodes found in first season');
+      return;
+    }
+    
+    // Open the episode dialog with the first playable episode
+    setSelectedEpisode(firstPlayableEpisode);
+    setIsDialogOpen(true);
+  };
+
   useEffect(() => {
     // Check URL parameters first to see if there's a specific season requested
     const urlParams = new URLSearchParams(window.location.search);
@@ -839,7 +904,12 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
 
                 {/* hero actions */}
                 <div className="flex items-center justify-center gap-x-3 px-5 py-3 mt-6 animate-fadeIn">
-                  <Button className="text-xl font-semibold h-[3rem] cursor-pointer" tabIndex={1} disabled={false}>
+                  <Button 
+                  className="text-xl font-semibold h-[3rem] cursor-pointer" 
+                  tabIndex={1} 
+                  disabled={false}
+                  onClick={handleMainPlayButton}
+                >
                     <Play className="ml-2 mr-1 h-4 w-4 fill-white dark:fill-black" />
                     Play
                     {false && <LoaderCircle className="h-4 w-4 animate-spin spinner-rose" />}

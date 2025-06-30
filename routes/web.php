@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EpisodeController;
@@ -167,7 +168,10 @@ Route::get('api/tvshows/{tvshow}/likes', [TvshowController::class, 'getLikes'])-
 Route::get('api/episodes/{episode}/likes', [EpisodeController::class, 'getLikes'])->name('api.episodes.likes.public');
 Route::get('api/seasons/{season}/likes', [SeasonController::class, 'getLikes'])->name('api.seasons.likes.public');
 
-// Public comment routes moved to top of file to avoid conflicts
+// Admin routes - admin dashboard
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('admin/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+});
 
 // Admin routes - protected by admin role
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {

@@ -8,6 +8,7 @@ import { EpisodeRibbon } from "@/components/episode-ribbon";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { Clapperboard, Tv, Library, PlaySquare } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function WatchLater({ 
   watchLaterMovies, 
@@ -133,17 +134,63 @@ export default function WatchLater({
     }
   }, []);
 
-  const handleSeasonWatchLaterToggle = useCallback((seasonId: number, newStatus: boolean) => {
+  const handleSeasonWatchLaterToggle = useCallback(async (seasonId: number, newStatus: boolean) => {
     if (!newStatus) {
-      // Remove from watch later list
+      // Optimistically remove from watch later list first
       setWatchLaterSeasonsList(prev => prev.filter(season => season.id !== seasonId));
+      
+      try {
+        // Make API call to persist the change
+        const response = await api.post(`/api/seasons/${seasonId}/toggle-watch-later`);
+        
+        if (!response.ok) {
+          throw new Error(response.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        // Verify the result matches our expectation (should be false since we're removing)
+        // If not, revert the change
+        if (response.data?.is_watch_later !== false) {
+          // Find the season data and restore it
+          // Since we don't have the full season data here, we'll just log the issue
+          console.warn('Season watch later status mismatch after API call');
+        }
+      } catch (error) {
+        console.error('Error removing season from watch later:', error);
+        // Revert the optimistic update by putting the season back
+        // We would need the full season data to restore it properly
+        // For now, we'll just refresh the page as a fallback
+        window.location.reload();
+      }
     }
   }, []);
 
-  const handleEpisodeWatchLaterToggle = useCallback((episodeId: number, newStatus: boolean) => {
+  const handleEpisodeWatchLaterToggle = useCallback(async (episodeId: number, newStatus: boolean) => {
     if (!newStatus) {
-      // Remove from watch later list
+      // Optimistically remove from watch later list first
       setWatchLaterEpisodesList(prev => prev.filter(episode => episode.id !== episodeId));
+      
+      try {
+        // Make API call to persist the change
+        const response = await api.post(`/api/episodes/${episodeId}/toggle-watch-later`);
+        
+        if (!response.ok) {
+          throw new Error(response.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        // Verify the result matches our expectation (should be false since we're removing)
+        // If not, revert the change
+        if (response.data?.is_watch_later !== false) {
+          // Find the episode data and restore it
+          // Since we don't have the full episode data here, we'll just log the issue
+          console.warn('Episode watch later status mismatch after API call');
+        }
+      } catch (error) {
+        console.error('Error removing episode from watch later:', error);
+        // Revert the optimistic update by putting the episode back
+        // We would need the full episode data to restore it properly
+        // For now, we'll just refresh the page as a fallback
+        window.location.reload();
+      }
     }
   }, []);
 
