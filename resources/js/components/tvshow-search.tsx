@@ -462,7 +462,7 @@ export function TvshowSearch({ onClose }: TvshowSearchProps) {
           {results.length >= 8 && (
             <div className="border-t mt-1 pt-1">
               <Link
-                href={`/tvshows?search=${encodeURIComponent(query)}`}
+                href={`/search?q=${encodeURIComponent(query)}`}
                 className="flex items-center justify-center gap-2 rounded-sm px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 onClick={() => onClose && onClose()}
               >
