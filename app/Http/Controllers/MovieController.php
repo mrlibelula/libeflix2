@@ -439,6 +439,7 @@ class MovieController extends Controller
                         ? env('TMDB_IMAGE_BASE_URL_780') . $recommendation['backdrop_path']
                         : null,
                     'is_local' => false,
+                    'is_free' => false,
                 ];
 
                 // If movie exists locally, add additional data
@@ -449,6 +450,7 @@ class MovieController extends Controller
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
                     $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
+                    $baseData['is_free'] = $localMovie->is_free;
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();
@@ -508,6 +510,7 @@ class MovieController extends Controller
                         ? env('TMDB_IMAGE_BASE_URL_780') . $movie['backdrop_path']
                         : null,
                     'is_local' => false,
+                    'is_free' => false,
                 ];
 
                 // If movie exists locally, add additional data
@@ -518,6 +521,7 @@ class MovieController extends Controller
                     $baseData['is_local'] = true;
                     $baseData['slug'] = $localMovie->slug;
                     $baseData['google_drive_file_id'] = $localMovie->google_drive_file_id;
+                    $baseData['is_free'] = $localMovie->is_free;
                     $baseData['is_watch_later'] = MovieService::isWatchLater($localMovie, $user);
                     $baseData['has_subtitles'] = !empty($subtitles);
                     $baseData['subtitle_languages'] = collect($subtitles)->pluck('languageCode')->take(3)->toArray();

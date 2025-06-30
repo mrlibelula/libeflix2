@@ -22,6 +22,7 @@ interface MovieCardProps {
     subtitle_languages?: string[];
     is_liked?: boolean;
     likes_count?: number;
+    is_free?: boolean;
   };
   onClick?: () => void;
   className?: string;
@@ -233,6 +234,15 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
             <div className="bg-gray-600/90 text-white text-xs font-semibold px-2 py-1 rounded shadow-lg">
               COMING SOON
+            </div>
+          </div>
+        )}
+        
+        {/* FREE label for movies from database that are tagged as free */}
+        {movie.is_local && movie.is_free && (
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-green-500 text-white text-[0.65rem] font-semibold px-1 rounded shadow-lg border-2 border-green-400 animate-pulse">
+              FREE TO WATCH
             </div>
           </div>
         )}
