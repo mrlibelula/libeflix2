@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from '@inertiajs/react';
 import { StarIcon, PlusIcon, CheckIcon, HeartIcon, ClapperboardIcon } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import axios from 'axios';
@@ -24,14 +25,14 @@ interface MovieCardProps {
     likes_count?: number;
     is_free?: boolean;
   };
-  onClick?: () => void;
+  onMovieClick?: (movie: any) => void;
   className?: string;
   onWatchLaterChange?: (movieId: number, isWatchLater: boolean) => void;
   onTrailerClick?: (movieId: number, movieTitle: string) => void;
   onLikeChange?: (movieId: number, isLiked: boolean, likesCount: number) => void;
 }
 
-export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, onTrailerClick, onLikeChange }: MovieCardProps) {
+export function MovieCard({ movie, onMovieClick, className = '', onWatchLaterChange, onTrailerClick, onLikeChange }: MovieCardProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
   
@@ -64,7 +65,7 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
   const hasGoogleDriveFile = movie.google_drive_file_id && movie.google_drive_file_id.trim() !== '';
   const isClickableInProduction = !isProductionEnvironment || hasGoogleDriveFile;
   
-  const handleClick = (e: React.MouseEvent) => {
+  const handleCardClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on action buttons or their container
     if ((e.target as Element).closest('.action-button') || 
         (e.target as Element).closest('.action-buttons-container')) {
@@ -73,15 +74,15 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
       return;
     }
 
+    if (onMovieClick) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMovieClick(movie);
+      return;
+    }
+
     // Check if movie should be clickable based on production environment
-    if (movie.is_local && movie.slug && isClickableInProduction) {
-      if (onClick) {
-        onClick();
-      } else {
-        // Navigate to local movie page
-        window.location.href = `/movie/${movie.slug}`;
-      }
-    } else {
+    if (!movie.is_local || !movie.slug || !isClickableInProduction) {
       // External movie or not clickable in production - prevent navigation
       e.preventDefault();
       e.stopPropagation();
@@ -202,12 +203,15 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
   
   // Check if movie is not clickable specifically due to missing google_drive_file_id in production
   const isUnavailableInProduction = isProductionEnvironment && movie.is_local && movie.slug && !hasGoogleDriveFile;
-  const shouldShowClickableCursor = (movie.is_local && movie.slug && isClickableInProduction) || onClick;
+  const movieUrl = movie.is_local && movie.slug && isClickableInProduction ? `/movie/${movie.slug}` : '#';
+  const shouldShowClickableCursor = (movie.is_local && movie.slug && isClickableInProduction) || onMovieClick;
 
   return (
-    <div 
+    <Link 
+      href={movieUrl}
+      as="div"
       className={`group transition-all duration-300 ${shouldShowClickableCursor ? 'cursor-pointer' : 'cursor-default'} ${className}`}
-      onClick={handleClick}
+      onClick={handleCardClick}
     >
       <div className={`relative overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800 ${
         isUnavailableInProduction ? 'opacity-60' : ''
@@ -249,9 +253,20 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
         
         {/* Rating overlay */}
         {rating > 0 && (
-          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-            <StarIcon className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-            <span>{rating}%</span>
+          <div className="absolute bottom-2 left-2 z-10">
+            <div className="flex items-center gap-1 bg-black/60 text-white text-xs font-semibold px-2 py-1 rounded">
+              <StarIcon className="w-3 h-3 text-yellow-400 fill-current" />
+              <span>{rating}%</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Subtitles badge */}
+        {movie.has_subtitles && (
+          <div className="absolute top-2 right-2 z-10">
+            <div className="bg-black/60 text-white text-[0.65rem] font-semibold px-1.5 py-0.5 rounded shadow-lg">
+              CC
+            </div>
           </div>
         )}
 
@@ -338,17 +353,14 @@ export function MovieCard({ movie, onClick, className = '', onWatchLaterChange, 
         </div>
       </div>
       
-      <div className="mt-2 space-y-1">
-        <h3 className="font-medium text-sm line-clamp-2 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="mt-2">
+        <h3 className="font-semibold text-sm truncate text-gray-800 dark:text-gray-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
           {movie.title}
         </h3>
-        {releaseYear && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {releaseYear}
-          </p>
-        )}
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          {releaseYear}
+        </p>
       </div>
-
-    </div>
+    </Link>
   );
 } 

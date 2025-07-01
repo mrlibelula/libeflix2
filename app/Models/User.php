@@ -24,6 +24,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_active',
+        'is_banned',
+        'is_pending',
     ];
 
     /**
@@ -162,7 +165,94 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
+            'is_banned' => 'boolean',
+            'is_pending' => 'boolean',
         ];
+    }
+
+    /**
+     * Get the user's status.
+     *
+     * @return string
+     */
+    public function getStatus(): string
+    {
+        if ($this->is_banned) {
+            return 'banned';
+        }
+        
+        if ($this->is_pending) {
+            return 'pending';
+        }
+        
+        if (!$this->is_active) {
+            return 'inactive';
+        }
+        
+        return 'active';
+    }
+
+    /**
+     * Check if user is active.
+     *
+     * @return bool
+     */
+    public function isActive(): bool
+    {
+        return $this->is_active && !$this->is_banned;
+    }
+
+    /**
+     * Check if user is banned.
+     *
+     * @return bool
+     */
+    public function isBanned(): bool
+    {
+        return $this->is_banned;
+    }
+
+    /**
+     * Check if user is pending.
+     *
+     * @return bool
+     */
+    public function isPending(): bool
+    {
+        return $this->is_pending;
+    }
+
+    /**
+     * Activate the user.
+     */
+    public function activate(): void
+    {
+        $this->update(['is_active' => true, 'is_banned' => false]);
+    }
+
+    /**
+     * Deactivate the user.
+     */
+    public function deactivate(): void
+    {
+        $this->update(['is_active' => false]);
+    }
+
+    /**
+     * Ban the user.
+     */
+    public function ban(): void
+    {
+        $this->update(['is_banned' => true, 'is_active' => false]);
+    }
+
+    /**
+     * Unban the user.
+     */
+    public function unban(): void
+    {
+        $this->update(['is_banned' => false, 'is_active' => true]);
     }
 
     /**

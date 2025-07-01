@@ -719,12 +719,31 @@ class TvshowController extends Controller
     {
         try {
             $user = Auth::user();
+            if (!$user) {
+                Log::warning('❌ Unauthorized user attempted click tracking');
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+
+            // Validate required fields
+            try {
+                $request->validate([
+                    'query' => 'required|string|max:500',
+                    'result_type' => 'required|in:tvshow,episode,season',
+                    'result_data' => 'required|array',
+                    'search_timestamp' => 'required|string'
+                ]);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                Log::error('❌ Request validation failed', [
+                    'errors' => $e->errors(),
+                    'input' => $request->all()
+                ]);
+                throw $e;
+            }
+
             $query = $request->input('query');
             $resultType = $request->input('result_type'); // 'tvshow', 'season', 'episode'
             $resultData = $request->input('result_data'); // Full result object
             $searchTimestamp = $request->input('search_timestamp');
-
-
 
             // Parse the search timestamp
             $searchTime = \Carbon\Carbon::parse($searchTimestamp);
@@ -753,13 +772,20 @@ class TvshowController extends Controller
 
             // Extract season information for season and episode results
             if ($resultType === 'season' || $resultType === 'episode') {
-                $clickData['clicked_season_id'] = $resultData['season_id'] ?? null;
+                // For seasons, the 'id' field IS the season_id
+                if ($resultType === 'season') {
+                    $clickData['clicked_season_id'] = $resultData['id'];
+                } else {
+                    // For episodes, check for season_id field
+                    $clickData['clicked_season_id'] = $resultData['season_id'] ?? null;
+                }
                 $clickData['clicked_season_name'] = $resultData['season_name'] ?? null;
                 $clickData['clicked_season_number'] = $resultData['season_number'] ?? null;
             }
 
-            // Extract episode information for episode results
+            // Extract episode information for episode results  
             if ($resultType === 'episode') {
+                // Episodes have 'id' field in the search results, which is the episode_id
                 $clickData['clicked_episode_id'] = $resultData['id'];
                 $clickData['clicked_episode_name'] = $resultData['name'];
                 $clickData['clicked_episode_number'] = $resultData['episode_number'];
@@ -769,9 +795,14 @@ class TvshowController extends Controller
             $searchQuery = null;
             
             // First, try to find exact match with expanded time window
+            // Create separate date objects to avoid modifying the original
+            $startTime = \Carbon\Carbon::parse($searchTimestamp)->subMinutes(10);
+            $endTime = \Carbon\Carbon::parse($searchTimestamp)->addMinutes(10);
+            
             $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
                 ->where('query', $query)
-                ->whereBetween('created_at', [$searchTime->subMinutes(10), $searchTime->addMinutes(10)])
+                ->whereBetween('created_at', [$startTime, $endTime])
+                ->whereNull('clicked_result_at') // Only match unclicked searches
                 ->orderByDesc('created_at')
                 ->first();
 
@@ -780,11 +811,12 @@ class TvshowController extends Controller
                 $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
                     ->where('query', $query)
                     ->where('created_at', '>', now()->subMinutes(15))
+                    ->whereNull('clicked_result_at') // Only match unclicked searches
                     ->orderByDesc('created_at')
                     ->first();
             }
 
-            // If still not found, try to find any search record without click data
+            // If still not found, try to find any search record without click data (last hour)
             if (!$searchQuery) {
                 $searchQuery = SearchQueryTvshow::where('user_id', $user->id)
                     ->where('query', $query)
@@ -798,10 +830,32 @@ class TvshowController extends Controller
 
             if ($searchQuery) {
                 // Update the existing search record
-                $searchQuery->update($clickData);
-
+                $updated = $searchQuery->update($clickData);
+                
+                if (!$updated) {
+                    Log::error('❌ Failed to update TV show search record', [
+                        'search_id' => $searchQuery->id,
+                        'click_data' => $clickData
+                    ]);
+                } else {
+                    // Reload the model to verify the update
+                    $searchQuery->refresh();
+                }
 
             } else {
+                // No matching search record found - log this for debugging
+                Log::warning('No TV show search record found for click tracking', [
+                    'user_id' => $user->id,
+                    'query' => $query,
+                    'result_type' => $resultType,
+                    'search_timestamp' => $searchTimestamp,
+                    'searched_time_ranges' => [
+                        'exact_window' => [$startTime->toISOString(), $endTime->toISOString()],
+                        'recent_15min' => now()->subMinutes(15)->toISOString(),
+                        'last_hour' => now()->subHours(1)->toISOString()
+                    ]
+                ]);
+                
                 // Create new search record if not found (fallback)
                 $newSearchQuery = SearchQueryTvshow::create(array_merge([
                     'user_id' => $user->id,
@@ -826,13 +880,11 @@ class TvshowController extends Controller
                         'click_timestamp' => $clickTimestamp->toISOString(),
                     ],
                 ], $clickData));
-
-
             }
 
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
-            Log::error('Failed to track TV show search click', [
+            Log::error('❌ Failed to track TV show search click', [
                 'query' => $request->get('query'),
                 'result_type' => $request->get('result_type'),
                 'user_id' => Auth::id(),
@@ -1894,5 +1946,50 @@ class TvshowController extends Controller
                 'seasons' => count($seasonResults),
             ]
         ]);
+    }
+
+    /**
+     * Clean up tvshow search record when user clicks on movie
+     */
+    public function cleanupSearchRecord(Request $request)
+    {
+        try {
+            $request->validate([
+                'query' => 'required|string|max:500',
+                'timestamp' => 'required|string'
+            ]);
+
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+
+            $query = $request->input('query');
+            $timestamp = $request->input('timestamp');
+
+            // Find and delete the unused tvshow search record
+            $deletedCount = SearchQueryTvshow::where('user_id', $user->id)
+                ->where('query', $query)
+                ->where('created_at', '>=', \Carbon\Carbon::parse($timestamp)->subMinutes(5))
+                ->whereNull('clicked_result_at') // Only delete if not clicked yet
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'deleted_records' => $deletedCount,
+                'message' => 'TV show search record cleaned up'
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to cleanup tvshow search record', [
+                'query' => $request->get('query'),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cleanup search record'
+            ], 500);
+        }
     }
 }

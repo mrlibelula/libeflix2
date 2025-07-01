@@ -1074,19 +1074,64 @@ class MovieController extends Controller
                 }
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => "Cleaned up {$deletedCount} partial/duplicate search queries",
-                'deleted_count' => $deletedCount
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to cleanup search queries',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+                    return response()->json([
+            'success' => true,
+            'message' => "Cleaned up {$deletedCount} partial/duplicate search queries",
+            'deleted_count' => $deletedCount
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to cleanup search queries',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+/**
+ * Clean up movie search record when user clicks on tvshow/episode/season
+ */
+public function cleanupSearchRecord(Request $request)
+{
+    try {
+        $request->validate([
+            'query' => 'required|string|max:500',
+            'timestamp' => 'required|string'
+        ]);
+
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $query = $request->input('query');
+        $timestamp = $request->input('timestamp');
+
+        // Find and delete the unused movie search record
+        $deletedCount = SearchQuery::where('user_id', $user->id)
+            ->where('query', $query)
+            ->where('created_at', '>=', \Carbon\Carbon::parse($timestamp)->subMinutes(5))
+            ->whereNull('clicked_result_at') // Only delete if not clicked yet
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted_records' => $deletedCount,
+            'message' => 'Movie search record cleaned up'
+        ]);
+    } catch (\Exception $e) {
+        Log::warning('Failed to cleanup movie search record', [
+            'query' => $request->get('query'),
+            'user_id' => Auth::id(),
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to cleanup search record'
+        ], 500);
+    }
+}
 
     /**
      * Get users who liked a movie.

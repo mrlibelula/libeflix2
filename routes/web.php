@@ -38,7 +38,9 @@ Route::get('csrf-token', function () {
 // TV Shows routes
 Route::get('tvshows', [TvshowController::class, 'index'])->name('tvshows.index');
 Route::get('tvshow/{slug}', [TvshowController::class, 'show'])->name('tvshow.show');
-Route::get('search', [TvshowController::class, 'searchResults'])->name('search.results');
+Route::get('search', function () {
+    return Inertia::render('search');
+})->name('search.results');
 
 // Movies routes - accessible without auth but enhanced when authenticated
 Route::get('movies', [MovieController::class, 'index'])->name('movies.index');
@@ -93,6 +95,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Movie likes API routes
     Route::post('api/movies/{movie}/like', [MovieController::class, 'like'])->name('api.movies.like');
     Route::delete('api/movies/{movie}/like', [MovieController::class, 'unlike'])->name('api.movies.unlike');
+    
+    // Search cleanup routes
+    Route::delete('api/movies/search/cleanup', [MovieController::class, 'cleanupSearchRecord'])->name('api.movies.search.cleanup');
+    Route::delete('api/tvshows/search/cleanup', [TvshowController::class, 'cleanupSearchRecord'])->name('api.tvshows.search.cleanup');
     
     // Comments API routes
     Route::get('api/comments', [CommentController::class, 'index'])->name('api.comments.index');
@@ -171,8 +177,30 @@ Route::get('api/seasons/{season}/likes', [SeasonController::class, 'getLikes'])-
 
 // Admin routes - admin dashboard
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
-    Route::get('users', [AdminController::class, 'users'])->name('admin.users');
+    Route::get('dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('users', [AdminController::class, 'users'])->name('users');
+    
+    // User management routes
+    Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
+    Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');
+    Route::get('users/{user}', [AdminController::class, 'showUser'])->name('users.show');
+    Route::get('users/{user}/edit', [AdminController::class, 'editUser'])->name('users.edit');
+    Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
+    Route::delete('users/{user}', [AdminController::class, 'deleteUser'])->name('users.destroy');
+    
+    // User status management API routes
+    Route::post('api/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('api.users.toggle-status');
+    
+    // Role management API routes
+    Route::post('api/users/{user}/assign-role', [AdminController::class, 'assignRole'])->name('api.users.assign-role');
+    Route::post('api/users/{user}/remove-role', [AdminController::class, 'removeRole'])->name('api.users.remove-role');
+    
+    // Permission management API routes
+    Route::post('api/users/{user}/give-permission', [AdminController::class, 'givePermission'])->name('api.users.give-permission');
+    Route::post('api/users/{user}/revoke-permission', [AdminController::class, 'revokePermission'])->name('api.users.revoke-permission');
+    
+    // User stats API route
+    Route::get('api/users/stats', [AdminController::class, 'getUserStats'])->name('api.users.stats');
 });
 
 // Admin routes - protected by admin role

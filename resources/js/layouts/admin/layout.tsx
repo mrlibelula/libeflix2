@@ -38,6 +38,11 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
+        title: 'Search Engine Analytics',
+        href: '/admin/search-engine',
+        icon: null,
+    },
+    {
         title: 'Comments',
         href: '/admin/comments',
         icon: null,
@@ -62,6 +67,26 @@ export default function AdminLayout({ children }: PropsWithChildren) {
 
     const currentPath = window.location.pathname;
 
+    // Function to check if a nav item should be active
+    const isNavItemActive = (href: string) => {
+        // Exact match
+        if (currentPath === href) {
+            return true;
+        }
+        
+        // For Users section, also match sub-routes
+        if (href === '/admin/users' && currentPath.startsWith('/admin/users')) {
+            return true;
+        }
+        
+        // Add more sub-route matching for other sections as needed
+        // if (href === '/admin/content-management' && currentPath.startsWith('/admin/content-management')) {
+        //     return true;
+        // }
+        
+        return false;
+    };
+
     return (
         <div className="px-4 py-6">
             <Heading title="Libeflix Admin Panel" description="Manage movies, tv shows, users, roles, permissions, analytics, engagement, and more" />
@@ -76,7 +101,7 @@ export default function AdminLayout({ children }: PropsWithChildren) {
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
-                                    'bg-muted': currentPath === item.href,
+                                    'bg-muted': isNavItemActive(item.href),
                                 })}
                             >
                                 <Link href={item.href} prefetch>
@@ -89,8 +114,10 @@ export default function AdminLayout({ children }: PropsWithChildren) {
 
                 <Separator className="my-6 md:hidden" />
 
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">{children}</section>
+                <div className="flex-1 md:max-w-[52rem]">
+                    <section className="md:max-w-[52rem]">
+                        {children}
+                    </section>
                 </div>
             </div>
         </div>

@@ -128,10 +128,10 @@ class CheckPremiumContent
                 ->with('message', 'Premium subscription required to access this content.');
         }
         
-        \Illuminate\Support\Facades\Log::info('Premium content access granted: Valid subscription', [
-            'user_id' => $user->id,
-            'user_email' => $user->email
-        ]);
+        // \Illuminate\Support\Facades\Log::info('Premium content access granted: Valid subscription', [
+        //     'user_id' => $user->id,
+        //     'user_email' => $user->email
+        // ]);
 
         return $next($request);
     }

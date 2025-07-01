@@ -30,11 +30,12 @@ interface MoviePosterProps {
   movie: Movie;
   imgBaseUrl: string;
   isPriority?: boolean;
+  onMovieClick?: (movie: Movie) => void;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
 }
 
-export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLaterToggle, onLikeToggle }: MoviePosterProps) {
+export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onMovieClick, onWatchLaterToggle, onLikeToggle }: MoviePosterProps) {
   const [isWatchLater, setIsWatchLater] = useState(movie.is_watch_later || false);
   const [isToggling, setIsToggling] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -173,6 +174,13 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
   };
 
   const handlePosterClick = (e: React.MouseEvent) => {
+    if (onMovieClick) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMovieClick(movie);
+      return;
+    }
+
     // Only allow navigation for local movies
     if (!isLocalMovie || !movie.slug) {
       e.preventDefault();
@@ -238,7 +246,7 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onWatchLate
     <>
       {/* Conditionally wrap with Link only for local movies */}
       {isClickable ? (
-        <Link href={`/movie/${movie.slug}`}>
+        <Link href={`/movie/${movie.slug}`} onClick={handlePosterClick}>
           {posterContent}
         </Link>
       ) : (

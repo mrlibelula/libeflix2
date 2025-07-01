@@ -88,7 +88,7 @@ class FetchMovieRecommendationsJob implements ShouldQueue
             Cache::put($this->cacheKey, $data, 3600); // Cache for 1 hour
             Cache::put($this->cacheKey . '_status', 'completed', 300);
 
-            Log::info("Successfully fetched recommendations for movie ID: {$this->movie->id}");
+            // Log::info("Successfully fetched recommendations for movie ID: {$this->movie->id}");
 
         } catch (\Exception $e) {
             Log::error("Failed to fetch recommendations for movie ID: {$this->movie->id}", [

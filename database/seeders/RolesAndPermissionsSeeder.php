@@ -110,13 +110,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'view tvshows',
         ]);
 
-        // Assign admin role to User with ID 1
-        $adminUser = User::find(1);
+        // Assign admin role to User with email = 'luis@libe.dev'
+        $adminUser = User::where('email', 'luis@libe.dev')->first();
         if ($adminUser) {
             $adminUser->assignRole('admin');
             $this->command->info("Admin role assigned to user: {$adminUser->name} (ID: {$adminUser->id})");
         } else {
-            $this->command->warn("User with ID 1 not found. Please create a user first or run this seeder after user creation.");
+            $this->command->warn("User with email luis@libe.dev not found. Please create a user first or run this seeder after user creation.");
         }
     }
 }

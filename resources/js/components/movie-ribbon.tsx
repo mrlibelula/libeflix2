@@ -16,6 +16,7 @@ interface MovieRibbonProps {
   imgBaseUrl: string;
   title?: string;
   ribbonId?: string;
+  onMovieClick?: (movie: any) => void;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
   hideSortOptions?: SortField[];
@@ -40,6 +41,7 @@ export function MovieRibbon({
   imgBaseUrl, 
   title = "Now Streaming" + (movies.length > 0 ? ` (${movies.length})` : ""),
   ribbonId,
+  onMovieClick,
   onWatchLaterToggle,
   onLikeToggle,
   hideSortOptions = [],
@@ -419,15 +421,13 @@ export function MovieRibbon({
                 const isPriority = index < 8;
 
                 return (
-                  <RibbonItem
-                    key={movie.id}
-                  >
+                  <RibbonItem key={movie.id} className="p-2">
                     <MoviePoster
                       movie={movie}
                       imgBaseUrl={imgBaseUrl}
-                      isPriority={isPriority}
                       onWatchLaterToggle={onWatchLaterToggle}
                       onLikeToggle={onLikeToggle}
+                      onMovieClick={onMovieClick}
                     />
                   </RibbonItem>
                 );

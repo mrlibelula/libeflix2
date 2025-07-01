@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from '@inertiajs/react';
 import { CheckIcon, PlayIcon } from 'lucide-react';
 import { LazyImage } from '@/components/ui/lazy-image';
 
@@ -43,22 +44,27 @@ export function EpisodeCard({
     }
   };
 
-  const handleClick = () => {
-    if (episode.is_in_storage && episode.encFilePath && onEpisodeClick) {
+  const handleCardClick = (e: React.MouseEvent) => {
+    // If we have a custom click handler (for search tracking), use it.
+    if (onEpisodeClick) {
+      // Prevent the Link's default navigation
+      e.preventDefault();
+      e.stopPropagation();
       onEpisodeClick(episode);
-    } else if (episode.tvshow?.slug) {
-      // Navigate to the TV show page with the specific season and episode
-      window.location.href = `/tvshow/${episode.tvshow.slug}?season=${episode.season_number}&episode=${episode.episode_number}&autoplay=true`;
     }
+    // If no custom handler, the Link will navigate normally.
   };
 
   // Episode is playable if it can be navigated to the TV show page
-  const isPlayable = !!(episode.tvshow?.slug);
+  const isPlayable = !!episode.tvshow?.slug;
+  const episodeUrl = isPlayable && episode.tvshow ? `/tvshow/${episode.tvshow.slug}?season=${episode.season_number}&episode=${episode.episode_number}&autoplay=true` : '#';
 
   return (
-    <div 
-      className={`group block w-[280px] flex-shrink-0 ${isPlayable ? 'cursor-pointer' : ''}`}
-      onClick={handleClick}
+    <Link 
+      href={episodeUrl}
+      onClick={handleCardClick}
+      className={`group block w-[280px] flex-shrink-0 ${isPlayable ? 'cursor-pointer' : 'cursor-default'}`}
+      as="div"
     >
       <div className="relative w-full h-[157px] rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-800 shadow-md hover:shadow-lg transition-shadow duration-200">
         <LazyImage
@@ -115,7 +121,7 @@ export function EpisodeCard({
         )}
         <div className="flex items-center justify-between mt-1">
           <p className="text-xs text-zinc-600 dark:text-zinc-400">
-            {episode.is_in_storage && episode.encFilePath ? 'Direct streaming' : 'Available to watch'}
+            Available to watch
           </p>
           {episode.likes_count !== null && episode.likes_count !== undefined && Number(episode.likes_count) > 0 && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -124,6 +130,6 @@ export function EpisodeCard({
           )}
         </div>
       </div>
-    </div>
+    </Link>
   );
 } 
