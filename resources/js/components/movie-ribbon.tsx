@@ -421,7 +421,7 @@ export function MovieRibbon({
                 const isPriority = index < 8;
 
                 return (
-                  <RibbonItem key={movie.id} className="p-2">
+                  <RibbonItem key={movie.id}>
                     <MoviePoster
                       movie={movie}
                       imgBaseUrl={imgBaseUrl}
