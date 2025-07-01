@@ -18,18 +18,13 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
-        title: 'Roles',
-        href: '/admin/roles',
-        icon: null,
-    },
-    {
-        title: 'Permissions',
-        href: '/admin/permissions',
-        icon: null,
-    },
-    {
         title: 'Content Management',
         href: '/admin/content-management',
+        icon: null,
+    },
+    {
+        title: 'FFMPEG conversion',
+        href: '/admin/ffmpeg-conversion',
         icon: null,
     },
     {

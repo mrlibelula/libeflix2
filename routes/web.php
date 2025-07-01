@@ -171,7 +171,8 @@ Route::get('api/seasons/{season}/likes', [SeasonController::class, 'getLikes'])-
 
 // Admin routes - admin dashboard
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('admin/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('users', [AdminController::class, 'users'])->name('admin.users');
 });
 
 // Admin routes - protected by admin role
