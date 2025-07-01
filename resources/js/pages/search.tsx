@@ -165,8 +165,8 @@ export default function Search() {
     try {
       // Search both movies and tvshows simultaneously
       const [movieResponse, tvshowResponse] = await Promise.all([
-        api.get(`/api/movies/search?q=${encodeURIComponent(query)}&limit=50&log=false`),
-        api.get(`/api/tvshows/search?q=${encodeURIComponent(query)}&limit=50&log=false`)
+        api.get(`/api/movies/search?q=${encodeURIComponent(query)}&log=false`),
+        api.get(`/api/tvshows/search?q=${encodeURIComponent(query)}&log=false`)
       ]);
 
       if (movieResponse.ok && tvshowResponse.ok) {

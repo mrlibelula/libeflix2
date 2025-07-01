@@ -31,7 +31,7 @@ class GenreController extends Controller
         $genre = $genreData['name'];
         $user = $request->user();
 
-        // Get movies with the specified genre
+        // Get movies with the specified genre - Remove limit to get all movies in genre
         $movies = Movie::where(function ($query) use ($genre) {
             // For MySQL/PostgreSQL
             if (config('database.default') === 'mysql') {
@@ -44,8 +44,7 @@ class GenreController extends Controller
             }
         })
         ->orderBy('vote_average', 'desc')
-        ->limit(50)
-        ->get()
+        ->get() // Removed limit to show all movies in genre
             ->map(function ($movie) use ($user) {
                 return [
                     'id' => $movie->id,
@@ -68,7 +67,7 @@ class GenreController extends Controller
                 ];
             });
 
-        // Get TV shows with the specified genre
+        // Get TV shows with the specified genre - Remove limit to get all TV shows in genre
         $tvshows = Tvshow::where(function ($query) use ($genre) {
             // For MySQL/PostgreSQL
             if (config('database.default') === 'mysql') {
@@ -81,8 +80,7 @@ class GenreController extends Controller
             }
         })
         ->orderBy('vote_average', 'desc')
-        ->limit(50)
-        ->get()
+        ->get() // Removed limit to show all TV shows in genre
             ->map(function ($tvshow) use ($user) {
                 return [
                     'id' => $tvshow->id,

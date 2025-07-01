@@ -658,7 +658,7 @@ class MovieController extends Controller
             $user = Auth::user();
             $startTime = microtime(true);
 
-            // Search movies with comprehensive criteria
+            // Search movies with comprehensive criteria - Remove limit to get all relevant movies
             $movies = Movie::select('id', 'title', 'original_name', 'slug', 'poster_path', 'release_date', 'vote_average', 'overview', 'tagline', 'subtitles')
                 ->where(function ($q) use ($query) {
                     // Search in title
@@ -683,8 +683,7 @@ class MovieController extends Controller
                     WHEN overview LIKE ? THEN 4
                     ELSE 5
                 END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
-                ->limit($limit)
-                ->get();
+                ->get(); // Removed limit to get all matching movies
 
             // Process results
             $results = $movies->map(function ($movie) use ($user) {

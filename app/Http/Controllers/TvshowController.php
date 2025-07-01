@@ -439,15 +439,14 @@ class TvshowController extends Controller
             
             $allResults = collect();
             
-            // 1. Search TV shows directly
+            // 1. Search TV shows directly - Remove limit to get all relevant shows
             $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo')
                 ->with(['seasons' => function($seasonQuery) {
                     $seasonQuery->select('id', 'tvshow_id', 'name', 'overview');
                 }]);
 
             $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)
-                ->limit($limit)
-                ->get();
+                ->get(); // Removed limit to get all matching TV shows
 
             // Parse query for better TV show relevance scoring
             $parsedQuery = $this->parseCompoundQuery($query);
@@ -485,27 +484,26 @@ class TvshowController extends Controller
                 ]);
             }
             
-            // 2. Search episodes (with season and TV show info)
-            $episodeResults = $this->searchEpisodes($query, $limit);
+            // 2. Search episodes (with season and TV show info) - Remove limit to get all episodes
+            $episodeResults = $this->searchEpisodes($query);
             foreach ($episodeResults as $episode) {
                 $allResults->push($episode);
             }
             
-            // 3. Search seasons (with TV show info)
-            $seasonResults = $this->searchSeasons($query, $limit);
+            // 3. Search seasons (with TV show info) - Remove limit to get all seasons
+            $seasonResults = $this->searchSeasons($query);
             foreach ($seasonResults as $season) {
                 $allResults->push($season);
             }
 
-            // Sort by relevance score and type priority, then limit
+            // Sort by relevance score and type priority - Remove limit to return all results
             $sortedResults = $allResults
                 ->sortByDesc(function ($item) {
                     // Primary sort by type: tvshow > episode > season
                     $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
                     return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
                 })
-                ->take($limit)
-                ->values();
+                ->values(); // Removed take($limit) to return all results
 
             $searchTime = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -619,7 +617,7 @@ class TvshowController extends Controller
             
             // 1. Search TV shows
             $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo');
-            $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)->limit(3)->get();
+            $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)->get(); // Removed limit
             
             foreach ($tvshows as $tvshow) {
                 $allResults->push([
@@ -631,14 +629,14 @@ class TvshowController extends Controller
                 ]);
             }
             
-            // 2. Search episodes (limited for summary)
-            $episodeResults = $this->searchEpisodes($query, 2);
+            // 2. Search episodes - Get all episodes
+            $episodeResults = $this->searchEpisodes($query);
             foreach ($episodeResults as $episode) {
                 $allResults->push($episode);
             }
             
-            // 3. Search seasons (limited for summary)
-            $seasonResults = $this->searchSeasons($query, 2);
+            // 3. Search seasons - Get all seasons  
+            $seasonResults = $this->searchSeasons($query);
             foreach ($seasonResults as $season) {
                 $allResults->push($season);
             }
@@ -1173,10 +1171,9 @@ class TvshowController extends Controller
      * Enhanced search episodes with compound query support and better context awareness
      *
      * @param string $query
-     * @param int $limit
      * @return array
      */
-    private function searchEpisodes(string $query, int $limit = 10): array
+    private function searchEpisodes(string $query): array
     {
         $results = [];
         
@@ -1247,8 +1244,22 @@ class TvshowController extends Controller
                               ->orWhere('episodes.overview', 'LIKE', "%{$originalQuery}%");
                         }
                     })
-                    ->limit($limit)
-                    ->get();
+                    // Add database-level ordering to prioritize name matches
+                    ->orderByRaw(
+                        config('database.default') === 'mysql' 
+                            ? "CASE 
+                                WHEN episodes.name LIKE ? THEN 1 
+                                WHEN episodes.overview LIKE ? THEN 2 
+                                ELSE 3 
+                              END, episodes.name"
+                            : "CASE 
+                                WHEN episodes.name LIKE ? THEN 1 
+                                WHEN episodes.overview LIKE ? THEN 2 
+                                ELSE 3 
+                              END, episodes.name",
+                        ["%{$originalQuery}%", "%{$originalQuery}%"]
+                    )
+                    ->get(); // Removed limit to get all context episodes
                 
                 // Process context episodes with higher relevance
                 foreach ($contextEpisodes as $episode) {
@@ -1256,48 +1267,60 @@ class TvshowController extends Controller
                     $results[] = $this->formatEpisodeResult($episode, $relevanceScore);
                 }
                 
-                // If we don't have enough results, search more broadly but with lower relevance
-                if (count($results) < $limit) {
-                    $remainingLimit = $limit - count($results);
-                    $broadEpisodes = (clone $episodesQuery)
-                        ->whereNotIn('tvshows.id', $showIds) // Exclude already searched shows
-                        ->where(function ($q) use ($searchTerms, $originalQuery) {
-                            // If we have search terms, use them; otherwise fall back to original query
-                            if (!empty($searchTerms)) {
-                                $first = true;
-                                
-                                foreach ($searchTerms as $term) {
-                                    if ($first) {
-                                        $q->where('episodes.name', 'LIKE', "%{$term}%")
-                                          ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
-                                        $first = false;
-                                    } else {
-                                        $q->orWhere('episodes.name', 'LIKE', "%{$term}%")
-                                          ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
-                                    }
-                                    
-                                    if (config('database.default') === 'mysql') {
-                                        $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$term}%"]);
-                                    } else {
-                                        $q->orWhere('episodes.credits', 'LIKE', "%{$term}%");
-                                    }
+                // Search more broadly in non-context shows
+                $broadEpisodes = (clone $episodesQuery)
+                    ->whereNotIn('tvshows.id', $showIds) // Exclude already searched shows
+                    ->where(function ($q) use ($searchTerms, $originalQuery) {
+                        // If we have search terms, use them; otherwise fall back to original query
+                        if (!empty($searchTerms)) {
+                            $first = true;
+                            
+                            foreach ($searchTerms as $term) {
+                                if ($first) {
+                                    $q->where('episodes.name', 'LIKE', "%{$term}%")
+                                      ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
+                                    $first = false;
+                                } else {
+                                    $q->orWhere('episodes.name', 'LIKE', "%{$term}%")
+                                      ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
                                 }
-                            } else {
-                                // No search terms, use original query
-                                $q->where('episodes.name', 'LIKE', "%{$originalQuery}%")
-                                  ->orWhere('episodes.overview', 'LIKE', "%{$originalQuery}%");
+                                
+                                if (config('database.default') === 'mysql') {
+                                    $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$term}%"]);
+                                } else {
+                                    $q->orWhere('episodes.credits', 'LIKE', "%{$term}%");
+                                }
                             }
-                        })
-                        ->limit($remainingLimit)
-                        ->get();
-                    
-                    foreach ($broadEpisodes as $episode) {
-                        $relevanceScore = $this->calculateEpisodeRelevance($episode, $searchTerms, $originalQuery, false);
-                        $results[] = $this->formatEpisodeResult($episode, $relevanceScore);
-                    }
+                        } else {
+                            // No search terms, use original query
+                            $q->where('episodes.name', 'LIKE', "%{$originalQuery}%")
+                              ->orWhere('episodes.overview', 'LIKE', "%{$originalQuery}%");
+                        }
+                    })
+                    // Add database-level ordering to prioritize name matches
+                    ->orderByRaw(
+                        config('database.default') === 'mysql' 
+                            ? "CASE 
+                                WHEN episodes.name LIKE ? THEN 1 
+                                WHEN episodes.overview LIKE ? THEN 2 
+                                ELSE 3 
+                              END, episodes.name"
+                            : "CASE 
+                                WHEN episodes.name LIKE ? THEN 1 
+                                WHEN episodes.overview LIKE ? THEN 2 
+                                ELSE 3 
+                              END, episodes.name",
+                        ["%{$originalQuery}%", "%{$originalQuery}%"]
+                    )
+                    ->get(); // Removed limit to get all broad search episodes
+                
+                foreach ($broadEpisodes as $episode) {
+                    $relevanceScore = $this->calculateEpisodeRelevance($episode, $searchTerms, $originalQuery, false);
+                    $results[] = $this->formatEpisodeResult($episode, $relevanceScore);
                 }
             } else {
                 // No show context, search all episodes normally
+                // Enhanced database-level ordering with better relevance scoring
                 $episodes = $episodesQuery
                     ->where(function ($q) use ($originalQuery) {
                         $q->where('episodes.name', 'LIKE', "%{$originalQuery}%")
@@ -1309,8 +1332,38 @@ class TvshowController extends Controller
                             $q->orWhere('episodes.credits', 'LIKE', "%{$originalQuery}%");
                         }
                     })
-                    ->limit($limit)
-                    ->get();
+                    // Enhanced database-level ordering with better relevance scoring
+                    ->orderByRaw(
+                        config('database.default') === 'mysql' 
+                            ? "CASE 
+                                WHEN LOWER(episodes.name) = LOWER(?) THEN 1
+                                WHEN episodes.name LIKE ? THEN 2
+                                WHEN episodes.name LIKE ? THEN 3
+                                WHEN episodes.name LIKE ? THEN 4
+                                WHEN episodes.overview LIKE ? THEN 5
+                                ELSE 6
+                              END, 
+                              CASE WHEN episodes.vote_average IS NOT NULL THEN episodes.vote_average ELSE 0 END DESC,
+                              episodes.name"
+                            : "CASE 
+                                WHEN LOWER(episodes.name) = LOWER(?) THEN 1
+                                WHEN episodes.name LIKE ? THEN 2
+                                WHEN episodes.name LIKE ? THEN 3
+                                WHEN episodes.name LIKE ? THEN 4
+                                WHEN episodes.overview LIKE ? THEN 5
+                                ELSE 6
+                              END, 
+                              CASE WHEN episodes.vote_average IS NOT NULL THEN episodes.vote_average ELSE 0 END DESC,
+                              episodes.name",
+                        [
+                            $originalQuery,                    // Exact match
+                            "{$originalQuery} %",              // Starts with query
+                            "% {$originalQuery}",              // Ends with query  
+                            "%{$originalQuery}%",              // Contains query anywhere
+                            "%{$originalQuery}%"               // Overview contains query
+                        ]
+                    )
+                    ->get(); // Removed limit to get all matching episodes
                 
                 foreach ($episodes as $episode) {
                     $relevanceScore = $this->calculateEpisodeRelevance($episode, [$originalQuery], $originalQuery, false);
@@ -1318,7 +1371,7 @@ class TvshowController extends Controller
                 }
             }
             
-            // Sort results by relevance score
+            // Sort results by relevance score (no limit applied)
             usort($results, function ($a, $b) {
                 return $b['relevance_score'] <=> $a['relevance_score'];
             });
@@ -1447,10 +1500,9 @@ class TvshowController extends Controller
      * Enhanced search seasons with compound query support and better context awareness
      *
      * @param string $query
-     * @param int $limit
      * @return array
      */
-    private function searchSeasons(string $query, int $limit = 10): array
+    private function searchSeasons(string $query): array
     {
         $results = [];
         
@@ -1499,8 +1551,7 @@ class TvshowController extends Controller
                         $q->orWhere('seasons.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
                     })
-                    ->limit($limit)
-                    ->get();
+                    ->get(); // Removed limit to get all context seasons
                 
                 // Process context seasons with higher relevance
                 foreach ($contextSeasons as $season) {
@@ -1508,27 +1559,23 @@ class TvshowController extends Controller
                     $results[] = $this->formatSeasonResult($season, $relevanceScore);
                 }
                 
-                // If we don't have enough results, search more broadly but with lower relevance
-                if (count($results) < $limit) {
-                    $remainingLimit = $limit - count($results);
-                    $broadSeasons = (clone $seasonsQuery)
-                        ->whereNotIn('tvshows.id', $showIds) // Exclude already searched shows
-                        ->where(function ($q) use ($searchTerms, $originalQuery) {
-                            foreach ($searchTerms as $term) {
-                                $q->where('seasons.name', 'LIKE', "%{$term}%")
-                                  ->orWhere('seasons.overview', 'LIKE', "%{$term}%");
-                            }
-                            
-                            $q->orWhere('seasons.name', 'LIKE', "%{$originalQuery}%")
-                              ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
-                        })
-                        ->limit($remainingLimit)
-                        ->get();
-                    
-                    foreach ($broadSeasons as $season) {
-                        $relevanceScore = $this->calculateSeasonRelevance($season, $searchTerms, $originalQuery, false);
-                        $results[] = $this->formatSeasonResult($season, $relevanceScore);
-                    }
+                // Search more broadly in non-context shows
+                $broadSeasons = (clone $seasonsQuery)
+                    ->whereNotIn('tvshows.id', $showIds) // Exclude already searched shows
+                    ->where(function ($q) use ($searchTerms, $originalQuery) {
+                        foreach ($searchTerms as $term) {
+                            $q->where('seasons.name', 'LIKE', "%{$term}%")
+                              ->orWhere('seasons.overview', 'LIKE', "%{$term}%");
+                        }
+                        
+                        $q->orWhere('seasons.name', 'LIKE', "%{$originalQuery}%")
+                          ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
+                    })
+                    ->get(); // Removed limit to get all broad search seasons
+                
+                foreach ($broadSeasons as $season) {
+                    $relevanceScore = $this->calculateSeasonRelevance($season, $searchTerms, $originalQuery, false);
+                    $results[] = $this->formatSeasonResult($season, $relevanceScore);
                 }
             } else {
                 // No show context, search all seasons normally
@@ -1537,8 +1584,7 @@ class TvshowController extends Controller
                         $q->where('seasons.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
                     })
-                    ->limit($limit)
-                    ->get();
+                    ->get(); // Removed limit to get all matching seasons
                 
                 foreach ($seasons as $season) {
                     $relevanceScore = $this->calculateSeasonRelevance($season, [$originalQuery], $originalQuery, false);
@@ -1546,7 +1592,7 @@ class TvshowController extends Controller
                 }
             }
             
-            // Sort results by relevance score
+            // Sort results by relevance score (no limit applied)
             usort($results, function ($a, $b) {
                 return $b['relevance_score'] <=> $a['relevance_score'];
             });
@@ -1819,8 +1865,7 @@ class TvshowController extends Controller
             }]);
 
         $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $searchQuery)
-            ->limit(20) // More results for search results page
-            ->get();
+            ->get(); // Removed limit to get all matching TV shows
 
         // Add TV show results with enhanced relevance scoring
         foreach ($tvshows as $tvshow) {
@@ -1859,27 +1904,26 @@ class TvshowController extends Controller
             ]);
         }
         
-        // 2. Search episodes (with season and TV show info)
-        $episodeResults = $this->searchEpisodes($searchQuery, 30); // More episodes for results page
+        // 2. Search episodes (with season and TV show info) - Get all episodes
+        $episodeResults = $this->searchEpisodes($searchQuery);
         foreach ($episodeResults as $episode) {
             $allResults->push($episode);
         }
         
-        // 3. Search seasons (with TV show info)
-        $seasonResults = $this->searchSeasons($searchQuery, 20); // More seasons for results page
+        // 3. Search seasons (with TV show info) - Get all seasons
+        $seasonResults = $this->searchSeasons($searchQuery);
         foreach ($seasonResults as $season) {
             $allResults->push($season);
         }
 
-        // Sort by relevance score and type priority, then limit to manageable number
+        // Sort by relevance score and type priority - Return all results
         $sortedResults = $allResults
             ->sortByDesc(function ($item) {
                 // Primary sort by type: tvshow > episode > season
                 $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
                 return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
             })
-            ->take(100) // Reasonable limit for search results page
-            ->values();
+            ->values(); // Return all results without limiting
 
         $searchTime = round((microtime(true) - $startTime) * 1000, 2);
 
