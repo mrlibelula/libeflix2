@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Tool;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,20 @@ use Spatie\Permission\Models\Permission;
 
 class AdminController extends Controller
 {
+    /**
+     * Helper method to decode user ID and find user
+     */
+    private function findUserByEncodedId(string $encodedUserId): User
+    {
+        try {
+            $userId = Tool::decodeString($encodedUserId);
+            $user = User::findOrFail($userId);
+            return $user;
+        } catch (\Exception $e) {
+            abort(404, 'User not found');
+        }
+    }
+
     public function dashboard()
     {
         return Inertia::render('admin/dashboard');
@@ -54,6 +69,12 @@ class AdminController extends Controller
         $query->orderBy($sortBy, $sortOrder);
         
         $users = $query->paginate(15);
+        
+        // Encode user IDs in the paginated results
+        $users->getCollection()->transform(function ($user) {
+            $user->encoded_id = Tool::encodeNumber($user->id);
+            return $user;
+        });
         
         // Get all roles for the interface
         $roles = Role::all();
@@ -127,9 +148,13 @@ class AdminController extends Controller
         return redirect()->route('admin.users')->with('success', 'User created successfully.');
     }
     
-    public function showUser(User $user)
+    public function showUser(string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
         $user->load(['roles', 'permissions', 'subscriptions']);
+        
+        // Add encoded ID to user object for frontend use
+        $user->encoded_id = Tool::encodeNumber($user->id);
         
         return Inertia::render('admin/users/show', [
             'user' => $user,
@@ -137,9 +162,14 @@ class AdminController extends Controller
         ]);
     }
     
-    public function editUser(User $user)
+    public function editUser(string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
         $user->load(['roles', 'permissions']);
+        
+        // Add encoded ID to user object for frontend use
+        $user->encoded_id = Tool::encodeNumber($user->id);
+        
         $roles = Role::all();
         $permissions = Permission::all();
         
@@ -150,8 +180,10 @@ class AdminController extends Controller
         ]);
     }
     
-    public function updateUser(Request $request, User $user)
+    public function updateUser(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
@@ -191,8 +223,10 @@ class AdminController extends Controller
         return redirect()->route('admin.users')->with('success', 'User updated successfully.');
     }
     
-    public function deleteUser(User $user)
+    public function deleteUser(string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         // Prevent deleting the first admin user
         if ($user->id === 1) {
             return redirect()->route('admin.users')->with('error', 'Cannot delete the primary admin user.');
@@ -203,8 +237,10 @@ class AdminController extends Controller
         return redirect()->route('admin.users')->with('success', 'User deleted successfully.');
     }
     
-    public function toggleUserStatus(Request $request, User $user)
+    public function toggleUserStatus(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'status' => 'required|in:active,inactive,banned,unbanned'
         ]);
@@ -227,8 +263,10 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'User status updated successfully.']);
     }
     
-    public function assignRole(Request $request, User $user)
+    public function assignRole(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'role' => 'required|exists:roles,name'
         ]);
@@ -238,8 +276,10 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'Role assigned successfully.']);
     }
     
-    public function removeRole(Request $request, User $user)
+    public function removeRole(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'role' => 'required|exists:roles,name'
         ]);
@@ -249,8 +289,10 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'Role removed successfully.']);
     }
     
-    public function givePermission(Request $request, User $user)
+    public function givePermission(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'permission' => 'required|exists:permissions,name'
         ]);
@@ -260,8 +302,10 @@ class AdminController extends Controller
         return response()->json(['success' => true, 'message' => 'Permission granted successfully.']);
     }
     
-    public function revokePermission(Request $request, User $user)
+    public function revokePermission(Request $request, string $encodedUserId)
     {
+        $user = $this->findUserByEncodedId($encodedUserId);
+        
         $request->validate([
             'permission' => 'required|exists:permissions,name'
         ]);

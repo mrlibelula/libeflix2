@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 
 interface User {
   id: number;
+  encoded_id: string;
   name: string;
   email: string;
   email_verified_at: string | null;
@@ -47,7 +48,7 @@ export default function ShowUser({ user, subscription_details }: Props) {
     },
     {
       title: user.name,
-      href: `/admin/users/${user.id}`,
+      href: `/admin/users/${user.encoded_id}`,
     },
   ];
 
@@ -90,7 +91,7 @@ export default function ShowUser({ user, subscription_details }: Props) {
               description="User details and account information" 
             />
             <div className="flex gap-2">
-              <Link href={`/admin/users/${user.id}/edit`}>
+              <Link href={`/admin/users/${user.encoded_id}/edit`}>
                 <Button>Edit User</Button>
               </Link>
               <Link href="/admin/users">

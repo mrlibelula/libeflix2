@@ -183,21 +183,21 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     // User management routes
     Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
     Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');
-    Route::get('users/{user}', [AdminController::class, 'showUser'])->name('users.show');
-    Route::get('users/{user}/edit', [AdminController::class, 'editUser'])->name('users.edit');
-    Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
-    Route::delete('users/{user}', [AdminController::class, 'deleteUser'])->name('users.destroy');
+    Route::get('users/{encodedUserId}', [AdminController::class, 'showUser'])->name('users.show');
+    Route::get('users/{encodedUserId}/edit', [AdminController::class, 'editUser'])->name('users.edit');
+    Route::put('users/{encodedUserId}', [AdminController::class, 'updateUser'])->name('users.update');
+    Route::delete('users/{encodedUserId}', [AdminController::class, 'deleteUser'])->name('users.destroy');
     
     // User status management API routes
-    Route::post('api/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('api.users.toggle-status');
+    Route::post('api/users/{encodedUserId}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('api.users.toggle-status');
     
     // Role management API routes
-    Route::post('api/users/{user}/assign-role', [AdminController::class, 'assignRole'])->name('api.users.assign-role');
-    Route::post('api/users/{user}/remove-role', [AdminController::class, 'removeRole'])->name('api.users.remove-role');
+    Route::post('api/users/{encodedUserId}/assign-role', [AdminController::class, 'assignRole'])->name('api.users.assign-role');
+    Route::post('api/users/{encodedUserId}/remove-role', [AdminController::class, 'removeRole'])->name('api.users.remove-role');
     
     // Permission management API routes
-    Route::post('api/users/{user}/give-permission', [AdminController::class, 'givePermission'])->name('api.users.give-permission');
-    Route::post('api/users/{user}/revoke-permission', [AdminController::class, 'revokePermission'])->name('api.users.revoke-permission');
+    Route::post('api/users/{encodedUserId}/give-permission', [AdminController::class, 'givePermission'])->name('api.users.give-permission');
+    Route::post('api/users/{encodedUserId}/revoke-permission', [AdminController::class, 'revokePermission'])->name('api.users.revoke-permission');
     
     // User stats API route
     Route::get('api/users/stats', [AdminController::class, 'getUserStats'])->name('api.users.stats');

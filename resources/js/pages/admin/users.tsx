@@ -38,6 +38,7 @@ import {
 
 interface User {
   id: number;
+  encoded_id: string;
   name: string;
   email: string;
   email_verified_at: string | null;
@@ -146,7 +147,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
 
   const toggleUserStatus = async (user: User, status: string) => {
     try {
-      const response = await fetch(`/admin/api/users/${user.id}/toggle-status`, {
+      const response = await fetch(`/admin/api/users/${user.encoded_id}/toggle-status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +169,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
 
   const assignRole = async (user: User, roleName: string) => {
     try {
-      const response = await fetch(`/admin/api/users/${user.id}/assign-role`, {
+      const response = await fetch(`/admin/api/users/${user.encoded_id}/assign-role`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,7 +191,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
 
   const removeRole = async (user: User, roleName: string) => {
     try {
-      const response = await fetch(`/admin/api/users/${user.id}/remove-role`, {
+      const response = await fetch(`/admin/api/users/${user.encoded_id}/remove-role`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,7 +217,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
 
   const confirmDelete = () => {
     if (deleteDialog.user) {
-      router.delete(`/admin/users/${deleteDialog.user.id}`, {
+      router.delete(`/admin/users/${deleteDialog.user.encoded_id}`, {
         onSuccess: () => {
           toast.success('User deleted successfully');
           setDeleteDialog({ open: false, user: null });
@@ -397,7 +398,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
                                </td>
                                <td className="py-3 px-4">
                                  <div className="flex items-center gap-2">
-                                   <Link href={`/admin/users/${user.id}/edit`}>
+                                   <Link href={`/admin/users/${user.encoded_id}/edit`}>
                                      <Button variant="outline" size="sm">
                                        Edit
                                      </Button>
@@ -425,7 +426,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
                                      </DropdownMenuTrigger>
                                  <DropdownMenuContent align="end" className="w-48">
                                    <DropdownMenuItem asChild>
-                                     <Link href={`/admin/users/${user.id}`}>
+                                     <Link href={`/admin/users/${user.encoded_id}`}>
                                        View Details
                                      </Link>
                                    </DropdownMenuItem>

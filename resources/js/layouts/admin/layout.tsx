@@ -23,13 +23,8 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
-        title: 'FFMPEG conversion',
-        href: '/admin/ffmpeg-conversion',
-        icon: null,
-    },
-    {
-        title: 'Analytics',
-        href: '/admin/analytics',
+        title: 'FFMpeg Tasks',
+        href: '/admin/ffmpeg-tasks',
         icon: null,
     },
     {
@@ -55,6 +50,11 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Storage Monitor',
         href: '/admin/storage-monitor',
+        icon: null,
+    },
+    {
+        title: 'Analytics',
+        href: '/admin/analytics',
         icon: null,
     },
 ];

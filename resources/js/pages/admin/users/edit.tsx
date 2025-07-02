@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 
 interface User {
   id: number;
+  encoded_id: string;
   name: string;
   email: string;
   email_verified_at: string | null;
@@ -51,11 +52,11 @@ export default function EditUser({ user, roles, permissions }: Props) {
     },
     {
       title: user.name,
-      href: `/admin/users/${user.id}`,
+      href: `/admin/users/${user.encoded_id}`,
     },
     {
       title: 'Edit',
-      href: `/admin/users/${user.id}/edit`,
+      href: `/admin/users/${user.encoded_id}/edit`,
     },
   ];
 
@@ -73,7 +74,7 @@ export default function EditUser({ user, roles, permissions }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    put(`/admin/users/${user.id}`, {
+    put(`/admin/users/${user.encoded_id}`, {
       onSuccess: () => {
         toast.success('User updated successfully');
       },
@@ -121,7 +122,7 @@ export default function EditUser({ user, roles, permissions }: Props) {
               description="Update user information, roles, and permissions" 
             />
             <div className="flex gap-2">
-              <Link href={`/admin/users/${user.id}`}>
+              <Link href={`/admin/users/${user.encoded_id}`}>
                 <Button variant="outline">View Details</Button>
               </Link>
               <Link href="/admin/users">

@@ -7,6 +7,126 @@ use App\Models\TvShow;
 
 class Tool
 {
+
+    protected const ENCODING_OFFSET = 123456789;
+    protected static string $alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    /**
+     * Tether conversion calculator.
+     * This method is used to calculate the conversion of USDT to BOB and vice versa.
+     * It also calculates the fee and the final amount.
+     * It also returns the summary of the conversion.
+     * direction: 'usdt_to_bob' or 'bob_to_usdt'
+     * 
+     * @param float $amount
+     * @param float $price
+     * @param float $fee
+     * @param string $direction
+     * @return array
+     */
+    public static function tetherConversionCalculator(float $amount, float $price, float $fee = 0.05, string $direction = 'usdt_to_bob'): array
+    {
+        // only in command line
+        if (PHP_SAPI !== 'cli') {
+            throw new \Exception('This method can only be used in command line interface');
+        }
+
+        // Validate direction parameter
+        if (!in_array($direction, ['usdt_to_bob', 'bob_to_usdt'])) {
+            throw new \InvalidArgumentException('Direction must be either "usdt_to_bob" or "bob_to_usdt"');
+        }
+
+        // Validate inputs
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Amount must be greater than 0');
+        }
+
+        if ($price <= 0) {
+            throw new \InvalidArgumentException('Price must be greater than 0');
+        }
+
+        if ($fee < 0 || $fee >= 1) {
+            throw new \InvalidArgumentException('Fee must be between 0 and 1 (0% to 99%)');
+        }
+
+        // Calculate conversion based on direction
+        if ($direction === 'usdt_to_bob') {
+            // Convert USDT to BOB: amount * exchange_rate
+            $convertedAmount = $amount * $price;
+            $targetCurrency = 'BOB';
+            $sourceCurrency = 'USDT';
+        } else {
+            // Convert BOB to USDT: amount / exchange_rate
+            $convertedAmount = $amount / $price;
+            $targetCurrency = 'USDT';
+            $sourceCurrency = 'BOB';
+        }
+
+        // Apply transaction fee (subtract fee from the converted amount)
+        $finalAmount = $convertedAmount * (1 - $fee);
+
+        // Return array with converted amount and currency information
+        return [
+            'original_amount' => $amount,
+            'original_currency' => $sourceCurrency,
+            'net_total' => round($convertedAmount, 6), // Amount before fees
+            'fee_amount' => round($convertedAmount - $finalAmount, 6), // Fee in target currency
+            'fee_currency' => $targetCurrency, // Currency of the fee
+            'converted_amount' => round($finalAmount, 6), // Final amount after fees
+            'target_currency' => $targetCurrency,
+            'exchange_rate' => $price,
+            'fee_percentage' => $fee * 100,
+            'formatted_net' => number_format(round($convertedAmount, 6), 6) . ' ' . $targetCurrency,
+            'formatted_final' => number_format(round($finalAmount, 6), 6) . ' ' . $targetCurrency,
+            'summary' => [
+                'direction' => $direction,
+                'price' => $direction === 'usdt_to_bob' ? (1 . " {$sourceCurrency} = " . $price . " {$targetCurrency}") : ($price . " {$sourceCurrency} = 1 {$targetCurrency}"),
+                'conversion' => "{$amount} {$sourceCurrency} = " . number_format(round($convertedAmount, 6), 6) . " {$targetCurrency}",
+                'fee_deducted' => number_format(round($convertedAmount - $finalAmount, 6), 6) . " {$targetCurrency} (" . ($fee * 100) . "% fee)",
+                'final_amount' => number_format(round($finalAmount, 6), 6) . " {$targetCurrency}"
+            ]
+        ];
+    }
+
+    /**
+     * Encodes a number into a 6-character, non-obvious string.
+     */
+    public static function encodeNumber(int $number): string
+    {
+        $alphabetLength = strlen(self::$alphabet);
+        $encodedString = '';
+        
+        // Add the offset to the original number
+        $numberToEncode = $number + self::ENCODING_OFFSET;
+
+        while ($numberToEncode > 0) {
+            $remainder = $numberToEncode % $alphabetLength;
+            $encodedString = self::$alphabet[$remainder] . $encodedString;
+            $numberToEncode = (int)($numberToEncode / $alphabetLength);
+        }
+
+        return str_pad($encodedString, 6, self::$alphabet[0], STR_PAD_LEFT);
+    }
+
+    /**
+     * Decodes a string back to its original number.
+     */
+    public static function decodeString(string $encoded): int
+    {
+        $alphabetLength = strlen(self::$alphabet);
+        $decodedNumber = 0;
+
+        foreach (str_split($encoded) as $char) {
+            $charPosition = strpos(self::$alphabet, $char);
+            if ($charPosition !== false) {
+                $decodedNumber = $decodedNumber * $alphabetLength + $charPosition;
+            }
+        }
+        
+        // Subtract the same offset to get the original number
+        return $decodedNumber - self::ENCODING_OFFSET;
+    }
+
     /**
      * Get "Movies and TV Shows" merged genres, unique. Can be sorted
      *
