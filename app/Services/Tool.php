@@ -12,19 +12,29 @@ class Tool
     protected static string $alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
     /**
-     * Tether conversion calculator.
-     * This method is used to calculate the conversion of USDT to BOB and vice versa.
-     * It also calculates the fee and the final amount.
-     * It also returns the summary of the conversion.
-     * direction: 'usdt_to_bob' or 'bob_to_usdt'
+     * Tether conversion calculator for P2P exchanges.
+     * This method is used to calculate the conversion of USDT, BOB and USD.
+     * It handles flat fees (e.g., 0.05 USDT) commonly used by exchanges like Binance.
+     * 
+     * IMPORTANT: Fee is only applied when SELLING USDT (usdt_to_bob, usdt_to_usd)
+     * No fee is applied when BUYING USDT (bob_to_usdt, usd_to_usdt)
+     * 
+     * direction: 'usdt_to_bob' or 'bob_to_usdt' or 'usd_to_usdt' or 'usdt_to_usd'.
+     * 
+     * Examples:
+     * - (direction: 'usdt_to_bob', amount: 100, price: 15.26, fee: 0.05) -> 99.95 USDT converted to BOB with 0.05 USDT fee
+     * - (direction: 'bob_to_usdt', amount: 3500, price: 15.26, fee: 0.05) -> 3500 BOB converted to USDT with NO fee
+     * - (direction: 'usd_to_usdt', amount: 500, price: 1, fee: 0.05) -> 500 USD converted to USDT with NO fee
+     * - (direction: 'usdt_to_usd', amount: 500, price: 1, fee: 0.05) -> 499.95 USDT converted to USD with 0.05 USDT fee
      * 
      * @param float $amount
      * @param float $price
-     * @param float $fee
+     * @param float $fee - Flat fee in USDT (e.g., 0.05 USDT) - only applied when selling USDT
      * @param string $direction
+     * @param int $digits - Number of decimal places for rounding
      * @return array
      */
-    public static function tetherConversionCalculator(float $amount, float $price, float $fee = 0.05, string $direction = 'usdt_to_bob'): array
+    public static function tetherConversionCalculator(float $amount, float $price, float $fee = 0.05, string $direction = 'usdt_to_bob', int $digits = 6): array
     {
         // only in command line
         if (PHP_SAPI !== 'cli') {
@@ -32,8 +42,8 @@ class Tool
         }
 
         // Validate direction parameter
-        if (!in_array($direction, ['usdt_to_bob', 'bob_to_usdt'])) {
-            throw new \InvalidArgumentException('Direction must be either "usdt_to_bob" or "bob_to_usdt"');
+        if (!in_array($direction, ['usdt_to_bob', 'bob_to_usdt', 'usd_to_usdt', 'usdt_to_usd'])) {
+            throw new \InvalidArgumentException('Direction must be either "usdt_to_bob" or "bob_to_usdt" or "usd_to_usdt" or "usdt_to_usd"');
         }
 
         // Validate inputs
@@ -45,45 +55,96 @@ class Tool
             throw new \InvalidArgumentException('Price must be greater than 0');
         }
 
-        if ($fee < 0 || $fee >= 1) {
-            throw new \InvalidArgumentException('Fee must be between 0 and 1 (0% to 99%)');
+        if ($fee < 0) {
+            throw new \InvalidArgumentException('Fee must be greater than or equal to 0');
         }
 
         // Calculate conversion based on direction
+        // Fee is only applied when selling USDT (usdt_to_bob, usdt_to_usd)
         if ($direction === 'usdt_to_bob') {
             // Convert USDT to BOB: amount * exchange_rate
-            $convertedAmount = $amount * $price;
+            // Fee is deducted from the original USDT amount before conversion (selling USDT)
+            $usdtAfterFee = $amount - $fee;
+            
+            if ($usdtAfterFee <= 0) {
+                throw new \InvalidArgumentException('Amount must be greater than the fee to perform conversion');
+            }
+            
+            $convertedAmount = $usdtAfterFee * $price;
+            $finalAmount = $convertedAmount;
             $targetCurrency = 'BOB';
             $sourceCurrency = 'USDT';
-        } else {
+            $feeInTargetCurrency = $fee * $price; // Fee equivalent in BOB
+            $feePercentage = ($fee / $amount) * 100;
+        } else if ($direction === 'bob_to_usdt') {
             // Convert BOB to USDT: amount / exchange_rate
+            // No fee applied (buying USDT)
             $convertedAmount = $amount / $price;
+            $finalAmount = $convertedAmount; // No fee deducted
+            
             $targetCurrency = 'USDT';
             $sourceCurrency = 'BOB';
+            $feeInTargetCurrency = 0; // No fee when buying USDT
+            $feePercentage = 0; // No fee percentage
+        } else if ($direction === 'usd_to_usdt') {
+            // Convert USD to USDT: amount * exchange_rate
+            // No fee applied (buying USDT)
+            $convertedAmount = $amount * $price;
+            $finalAmount = $convertedAmount; // No fee deducted
+            
+            $targetCurrency = 'USDT';
+            $sourceCurrency = 'USD';
+            $feeInTargetCurrency = 0; // No fee when buying USDT
+            $feePercentage = 0; // No fee percentage
+        } else if ($direction === 'usdt_to_usd') {
+            // Convert USDT to USD: amount / exchange_rate
+            // Fee is deducted from the original USDT amount before conversion (selling USDT)
+            $usdtAfterFee = $amount - $fee;
+            
+            if ($usdtAfterFee <= 0) {
+                throw new \InvalidArgumentException('Amount must be greater than the fee to perform conversion');
+            }
+
+            $convertedAmount = $usdtAfterFee / $price;
+            $finalAmount = $convertedAmount;
+            $targetCurrency = 'USD';
+            $sourceCurrency = 'USDT';
+            $feeInTargetCurrency = $fee; // Fee is already in USDT
+            $feePercentage = ($fee / $amount) * 100;
         }
 
-        // Apply transaction fee (subtract fee from the converted amount)
-        $finalAmount = $convertedAmount * (1 - $fee);
-
+        // Determine if fee was applied (only when selling USDT)
+        $feeApplied = in_array($direction, ['usdt_to_bob', 'usdt_to_usd']);
+        
         // Return array with converted amount and currency information
         return [
             'original_amount' => $amount,
             'original_currency' => $sourceCurrency,
-            'net_total' => round($convertedAmount, 6), // Amount before fees
-            'fee_amount' => round($convertedAmount - $finalAmount, 6), // Fee in target currency
-            'fee_currency' => $targetCurrency, // Currency of the fee
-            'converted_amount' => round($finalAmount, 6), // Final amount after fees
+            'net_total' => round($convertedAmount, $digits), // Amount before fees
+            'fee_amount' => $feeApplied ? round($fee, $digits) : 0, // Fee is only applied when selling USDT
+            'fee_currency' => 'USDT', // Fee is always charged in USDT
+            'converted_amount' => round($finalAmount, $digits), // Final amount after fees
             'target_currency' => $targetCurrency,
             'exchange_rate' => $price,
-            'fee_percentage' => $fee * 100,
-            'formatted_net' => number_format(round($convertedAmount, 6), 6) . ' ' . $targetCurrency,
-            'formatted_final' => number_format(round($finalAmount, 6), 6) . ' ' . $targetCurrency,
+            'fee_percentage' => round($feePercentage, 2),
+            'formatted' => number_format(round($convertedAmount, $digits), $digits) . ' ' . $targetCurrency,
+            'formatted_net' => number_format(round($finalAmount, $digits), $digits) . ' ' . $targetCurrency,
             'summary' => [
                 'direction' => $direction,
-                'price' => $direction === 'usdt_to_bob' ? (1 . " {$sourceCurrency} = " . $price . " {$targetCurrency}") : ($price . " {$sourceCurrency} = 1 {$targetCurrency}"),
-                'conversion' => "{$amount} {$sourceCurrency} = " . number_format(round($convertedAmount, 6), 6) . " {$targetCurrency}",
-                'fee_deducted' => number_format(round($convertedAmount - $finalAmount, 6), 6) . " {$targetCurrency} (" . ($fee * 100) . "% fee)",
-                'final_amount' => number_format(round($finalAmount, 6), 6) . " {$targetCurrency}"
+                'price' => $direction === 'usdt_to_bob' || $direction === 'usdt_to_usd' 
+                    ? ("1 {$sourceCurrency} = " . $price . " {$targetCurrency}") 
+                    : ($price . " {$sourceCurrency} = 1 {$targetCurrency}"),
+                'conversion' => "{$amount} {$sourceCurrency} = " . number_format(round($convertedAmount, $digits), $digits) . " {$targetCurrency}",
+                'fee_deducted_amount' => $feeApplied 
+                    ? number_format(round($feeInTargetCurrency, $digits), $digits) . " {$targetCurrency} (flat fee)"
+                    : "No fee applied (buying USDT)",
+                'fee_deducted' => $feeApplied 
+                    ? number_format(round($fee, $digits), $digits) . " USDT (flat fee)"
+                    : "No fee applied (buying USDT)",
+                'fee_deducted_percentage' => $feeApplied 
+                    ? round($feePercentage, 2) . "%"
+                    : "0%",
+                'final_amount' => number_format(round($finalAmount, $digits), $digits) . " {$targetCurrency}"
             ]
         ];
     }

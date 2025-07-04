@@ -199,7 +199,7 @@ export default function ShowUser({ user, subscription_details }: Props) {
                   <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  <Link href={`/admin/users/${user.id}/edit`}>
+                  <Link href={`/admin/users/${user.encoded_id}/edit`}>
                     <Button className="w-full" variant="outline">
                       Edit User
                     </Button>

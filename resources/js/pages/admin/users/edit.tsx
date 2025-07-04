@@ -369,7 +369,7 @@ export default function EditUser({ user, roles, permissions }: Props) {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex gap-4 justify-end">
-                  <Link href={`/admin/users/${user.id}`}>
+                  <Link href={`/admin/users/${user.encoded_id}`}>
                     <Button type="button" variant="outline">
                       Cancel
                     </Button>
