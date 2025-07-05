@@ -127,6 +127,27 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
     permission: '',
   });
 
+  // Function to get fresh CSRF token
+  const getFreshCsrfToken = async (): Promise<string> => {
+    try {
+      const response = await fetch('/csrf-token', {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin', // Important for cookies
+      });
+      const data = await response.json();
+      return data.csrf_token;
+    } catch (error) {
+      console.error('Failed to get fresh CSRF token:', error);
+      // Fallback to meta tag
+      const fallbackToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      console.log('Using fallback token:', fallbackToken);
+      return fallbackToken;
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     router.get('/admin/users', { 
@@ -147,67 +168,87 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
 
   const toggleUserStatus = async (user: User, status: string) => {
     try {
+      const csrfToken = await getFreshCsrfToken();
       const response = await fetch(`/admin/api/users/${user.encoded_id}/toggle-status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify({ status }),
       });
 
       if (response.ok) {
-        toast.success('User status updated successfully');
-        router.reload();
+        const data = await response.json();
+        toast.success(data.message || 'User status updated successfully');
+        router.reload({ only: ['users', 'userStats'] });
       } else {
-        toast.error('Failed to update user status');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Toggle status error:', response.status, errorData);
+        toast.error(errorData.message || 'Failed to update user status');
       }
     } catch (error) {
-      toast.error('An error occurred');
+      console.error('Toggle status exception:', error);
+      toast.error('An error occurred while updating user status');
     }
   };
 
   const assignRole = async (user: User, roleName: string) => {
     try {
+      const csrfToken = await getFreshCsrfToken();
+      
       const response = await fetch(`/admin/api/users/${user.encoded_id}/assign-role`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify({ role: roleName }),
       });
 
       if (response.ok) {
-        toast.success('Role assigned successfully');
-        router.reload();
+        const data = await response.json();
+        toast.success(data.message || 'Role assigned successfully');
+        router.reload({ only: ['users', 'userStats'] });
       } else {
-        toast.error('Failed to assign role');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Assign role error:', response.status, errorData);
+        toast.error(errorData.message || 'Failed to assign role');
       }
     } catch (error) {
-      toast.error('An error occurred');
+      console.error('Assign role exception:', error);
+      toast.error('An error occurred while assigning role');
     }
   };
 
   const removeRole = async (user: User, roleName: string) => {
     try {
+      const csrfToken = await getFreshCsrfToken();
+      
       const response = await fetch(`/admin/api/users/${user.encoded_id}/remove-role`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify({ role: roleName }),
       });
 
       if (response.ok) {
-        toast.success('Role removed successfully');
-        router.reload();
+        const data = await response.json();
+        toast.success(data.message || 'Role removed successfully');
+        router.reload({ only: ['users', 'userStats'] });
       } else {
-        toast.error('Failed to remove role');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Remove role error:', response.status, errorData);
+        toast.error(errorData.message || 'Failed to remove role');
       }
     } catch (error) {
-      toast.error('An error occurred');
+      console.error('Remove role exception:', error);
+      toast.error('An error occurred while removing role');
     }
   };
 
@@ -218,6 +259,7 @@ export default function AdminUsers({ users, roles = [], permissions = [], filter
   const confirmDelete = () => {
     if (deleteDialog.user) {
       router.delete(`/admin/users/${deleteDialog.user.encoded_id}`, {
+        only: ['users', 'userStats'],
         onSuccess: () => {
           toast.success('User deleted successfully');
           setDeleteDialog({ open: false, user: null });
