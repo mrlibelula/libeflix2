@@ -489,7 +489,7 @@ export default function Dashboard({
                         <div className="py-0.5 px-3 text-sm bg-black/50 rounded-md w-fit">
                           {item.type === 'movie' ? 'movie' : 'TV Show'}
                         </div>
-                        <div className="text-4xl md:text-5xl font-bold text-black dark:text-white">
+                        <div className="text-3xl md:text-4xl xl:text-5xl font-bold text-black dark:text-white">
                           {item.title}
                         </div>
                         <div className="text-black dark:text-white/50 text-lg md:text-xl mb-6">
