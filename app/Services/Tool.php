@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Movie;
-use App\Models\TvShow;
+use App\Models\Tvshow;
 
 class Tool
 {
@@ -248,7 +248,7 @@ class Tool
      */
     public static function getTVShowsGenres(): array
     {
-        $tvShowsGenres = TvShow::select('genres')->get();
+        $tvShowsGenres = Tvshow::select('genres')->get();
         $tvShowsGenres = collect(json_decode($tvShowsGenres, true));
         $tvShowsGenres = $tvShowsGenres->flatten();
         
