@@ -563,8 +563,8 @@ export default function Dashboard({
                     onClick={() => goToSlide(index)}
                     className={`transition-all duration-300 rounded-full border-2 ${
                       index === current - 1 
-                        ? 'w-3 h-3 md:w-4 md:h-4 bg-black dark:bg-white border-black dark:border-white' 
-                        : 'w-2 h-2 md:w-3 md:h-3 bg-black/30 dark:bg-white/30 border-black/50 dark:border-white/50 hover:bg-black/60 dark:hover:bg-white/60 hover:border-black/75 dark:hover:border-white/75'
+                        ? 'w-1 h-1 md:w-2 md:h-2 bg-black dark:bg-white border-black dark:border-white' 
+                        : 'w-0.5 h-0.5 md:w-1.5 md:h-1.5 bg-black/30 dark:bg-white/30 border-black/50 dark:border-white/50 hover:bg-black/60 dark:hover:bg-white/60 hover:border-black/75 dark:hover:border-white/75'
                     } relative before:content-[''] before:absolute before:inset-[-8px] before:rounded-full`}
                     aria-label={`Go to slide ${index + 1}`}
                   />
