@@ -24,10 +24,10 @@ interface TmdbImageUrls {
   mobile: string;
 }
 
-export default function Dashboard({ 
-  carouselItems, 
-  tmdbImageUrls 
-}: { 
+export default function Dashboard({
+  carouselItems,
+  tmdbImageUrls
+}: {
   carouselItems: CarouselItemType[];
   tmdbImageUrls: TmdbImageUrls;
 }) {
@@ -36,30 +36,30 @@ export default function Dashboard({
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
-  
+
   // State to track which images should be loaded/preloaded
   const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
   const [preloadedImages, setPreloadedImages] = useState<Set<number>>(new Set());
-  
+
   // Get page props for authentication and CSRF token
-  const { props } = usePage<{ 
+  const { props } = usePage<{
     csrf_token?: string;
     auth?: {
       user?: any;
     };
   }>();
-  
+
   // Check if user is authenticated
   const isAuthenticated = !!props.auth?.user;
-  
+
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
-  
+
   // Watch later state for each carousel item
-  const [watchLaterStates, setWatchLaterStates] = useState<Record<string, { 
-    isWatchLater: boolean; 
-    isToggling: boolean; 
-    isAnimating: boolean; 
+  const [watchLaterStates, setWatchLaterStates] = useState<Record<string, {
+    isWatchLater: boolean;
+    isToggling: boolean;
+    isAnimating: boolean;
   }>>({});
 
   const breadcrumbs: BreadcrumbItem[] = [
@@ -87,7 +87,7 @@ export default function Dashboard({
 
   // Fix autoplay configuration - make it persistent but functional
   const autoplay = useRef(
-    Autoplay({ 
+    Autoplay({
       delay: 5000,
       stopOnInteraction: false,
       stopOnMouseEnter: false,
@@ -108,7 +108,7 @@ export default function Dashboard({
     };
 
     window.addEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
-    
+
     return () => {
       window.removeEventListener('sidebarStateChange', handleSidebarStateChange as EventListener);
     };
@@ -117,16 +117,16 @@ export default function Dashboard({
   // Function to determine which images should be preloaded
   const getImagesToPreload = useCallback((currentIndex: number, total: number) => {
     const indices = new Set<number>();
-    
+
     // Always include current image
     indices.add(currentIndex);
-    
+
     // Add 3 images ahead (with wraparound for infinite loop)
     for (let i = 1; i <= 3; i++) {
       const nextIndex = (currentIndex + i) % total;
       indices.add(nextIndex);
     }
-    
+
     return indices;
   }, []);
 
@@ -149,10 +149,10 @@ export default function Dashboard({
       console.warn('No backdrop_path found for item:', item);
       return 'https://images7.alphacoders.com/131/1318286.jpeg'; // fallback image
     }
-    
+
     const baseUrl = isMobile ? tmdbImageUrls.mobile : tmdbImageUrls.desktop;
     const imageUrl = `${baseUrl}${item.backdrop_path}`;
-    
+
     return imageUrl;
   }, [isMobile, tmdbImageUrls]);
 
@@ -160,12 +160,12 @@ export default function Dashboard({
   useEffect(() => {
     if (!carouselItems || carouselItems.length === 0) return;
 
-    const initialWatchLaterStates: Record<string, { 
-      isWatchLater: boolean; 
-      isToggling: boolean; 
-      isAnimating: boolean; 
+    const initialWatchLaterStates: Record<string, {
+      isWatchLater: boolean;
+      isToggling: boolean;
+      isAnimating: boolean;
     }> = {};
-    
+
     carouselItems.forEach(item => {
       const itemKey = `${item.type}-${item.id}`;
       initialWatchLaterStates[itemKey] = {
@@ -174,7 +174,7 @@ export default function Dashboard({
         isAnimating: false
       };
     });
-    
+
     setWatchLaterStates(initialWatchLaterStates);
   }, [carouselItems]);
 
@@ -183,7 +183,7 @@ export default function Dashboard({
     if (!carouselItems || carouselItems.length === 0) return;
 
     const initialImagesToLoad = getImagesToPreload(0, carouselItems.length);
-    
+
     initialImagesToLoad.forEach(index => {
       const item = carouselItems[index];
       if (item) {
@@ -204,11 +204,11 @@ export default function Dashboard({
     api.on("select", () => {
       const newCurrent = api.selectedScrollSnap() + 1;
       setCurrent(newCurrent);
-      
+
       // Preload images based on new current position
       const currentIndex = newCurrent - 1; // Convert to 0-based index
       const imagesToPreload = getImagesToPreload(currentIndex, carouselItems.length);
-      
+
       imagesToPreload.forEach(index => {
         if (!preloadedImages.has(index) && !loadedImages.has(index)) {
           const item = carouselItems[index];
@@ -220,7 +220,7 @@ export default function Dashboard({
         }
       });
     });
-    
+
     // Start autoplay after API is ready
     const autoplayInstance = autoplay.current;
     if (autoplayInstance) {
@@ -314,7 +314,7 @@ export default function Dashboard({
   const handleWatchLaterToggle = async (item: CarouselItemType, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Check if user is authenticated
     if (!isAuthenticated) {
       // Redirect to login page with current page as redirect parameter
@@ -322,11 +322,11 @@ export default function Dashboard({
       router.visit('/login' + '?redirect=' + encodeURIComponent(currentUrl));
       return;
     }
-    
+
     const itemKey = `${item.type}-${item.id}`;
     const currentState = watchLaterStates[itemKey];
     if (currentState?.isToggling) return;
-    
+
     setWatchLaterStates(prev => ({
       ...prev,
       [itemKey]: {
@@ -335,11 +335,11 @@ export default function Dashboard({
         isAnimating: true,
       }
     }));
-    
+
     try {
       // Get CSRF token from Inertia shared data or meta tag
       const csrfToken = props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
+
       if (!csrfToken) {
         console.error('CSRF token not found');
         setWatchLaterStates(prev => ({
@@ -348,11 +348,11 @@ export default function Dashboard({
         }));
         return;
       }
-      
-      const endpoint = item.type === 'movie' 
-        ? `/api/movies/${item.slug}/toggle-watch-later` 
+
+      const endpoint = item.type === 'movie'
+        ? `/api/movies/${item.slug}/toggle-watch-later`
         : `/api/tvshows/${item.slug}/toggle-watch-later`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -362,10 +362,10 @@ export default function Dashboard({
         },
         credentials: 'same-origin',
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        
+
         // Change status at the midpoint of animation
         setTimeout(() => {
           setWatchLaterStates(prev => ({
@@ -376,7 +376,7 @@ export default function Dashboard({
             }
           }));
         }, 150);
-        
+
         // Complete animation cycle
         setTimeout(() => {
           setWatchLaterStates(prev => ({
@@ -420,14 +420,14 @@ export default function Dashboard({
   const handleShare = async (item: CarouselItemType, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const shareUrl = `${window.location.origin}${getContentLink(item)}`;
     const shareData = {
       title: `${item.title} - ${item.type === 'movie' ? 'Movie' : 'TV Show'}`,
       text: item.tagline || ``,
       url: shareUrl,
     };
-    
+
     await share(shareData);
   };
 
@@ -441,9 +441,9 @@ export default function Dashboard({
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Trends" />
-      
+
       {carouselItems && carouselItems.length > 0 ? (
-        <div 
+        <div
           ref={carouselRef}
           className="relative w-full focus:outline-none select-none"
           tabIndex={0}
@@ -464,11 +464,11 @@ export default function Dashboard({
               {carouselItems.map((item, index) => {
                 const shouldLoadImage = loadedImages.has(index) || preloadedImages.has(index);
                 const backdropUrl = shouldLoadImage ? getBackdropUrl(item) : '';
-                
+
                 return (
                   <CarouselItem key={`${item.type}-${item.id}`} className="pl-0 basis-full select-none">
-                    <div 
-                      id="hero" 
+                    <div
+                      id="hero"
                       className="relative w-full h-[calc(100vh-5rem)] dark:bg-black/10 bg-white/10 z-10 select-none"
                       style={{
                         backgroundImage: backdropUrl ? `url(${backdropUrl})` : 'none',
@@ -485,7 +485,7 @@ export default function Dashboard({
                       }}
                     >
                       <div className="absolute top-0 left-0 w-full h-full light-gradient-hero dark:dark-gradient-hero z-20" />
-                                             <div className="absolute top-[80%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-y-3 w-full text-white z-30 px-8 md:px-16 py-10 select-none">
+                      <div className="absolute top-[77%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-y-3 w-full text-white z-30 px-8 md:px-16 py-10 select-none">
                         <div className="py-0.5 px-3 text-sm bg-black/50 rounded-md w-fit">
                           {item.type === 'movie' ? 'movie' : 'TV Show'}
                         </div>
@@ -497,22 +497,21 @@ export default function Dashboard({
                         </div>
                         {/* action buttons */}
                         <div className="flex items-center gap-x-2 mb-4">
-                          <Button 
+                          <Button
                             variant="default"
                             onClick={() => handlePlayClick(item)}
                           >
                             Play
                           </Button>
-                          
+
                           {/* Add to Watch Later Button */}
                           {isAuthenticated && (
                             <div
-                              className={`transition-all duration-300 ease-in-out ${
-                                watchLaterStates[`${item.type}-${item.id}`]?.isAnimating ? 'rotate-180' : 'rotate-0'
-                              }`}
+                              className={`transition-all duration-300 ease-in-out ${watchLaterStates[`${item.type}-${item.id}`]?.isAnimating ? 'rotate-180' : 'rotate-0'
+                                }`}
                               style={{
-                                transform: watchLaterStates[`${item.type}-${item.id}`]?.isAnimating 
-                                  ? 'rotate(180deg)' 
+                                transform: watchLaterStates[`${item.type}-${item.id}`]?.isAnimating
+                                  ? 'rotate(180deg)'
                                   : 'rotate(0deg)',
                               }}
                             >
@@ -521,9 +520,8 @@ export default function Dashboard({
                                 size="icon"
                                 onClick={(e) => handleWatchLaterToggle(item, e)}
                                 disabled={watchLaterStates[`${item.type}-${item.id}`]?.isToggling}
-                                className={`border-white/70 text-black dark:text-white hover:bg-white hover:text-black backdrop-blur-sm bg-black/20 transition-all duration-300 ${
-                                  watchLaterStates[`${item.type}-${item.id}`]?.isToggling ? 'opacity-50 cursor-not-allowed' : ''
-                                } ${watchLaterStates[`${item.type}-${item.id}`]?.isWatchLater ? 'bg-green-600/30 border-green-400/70 text-green-800 dark:text-green-100' : ''}`}
+                                className={`border-white/70 text-black dark:text-white hover:bg-white hover:text-black backdrop-blur-sm bg-black/20 transition-all duration-300 ${watchLaterStates[`${item.type}-${item.id}`]?.isToggling ? 'opacity-50 cursor-not-allowed' : ''
+                                  } ${watchLaterStates[`${item.type}-${item.id}`]?.isWatchLater ? 'bg-green-600/30 border-green-400/70 text-green-800 dark:text-green-100' : ''}`}
                               >
                                 {watchLaterStates[`${item.type}-${item.id}`]?.isWatchLater ? (
                                   <Check className="h-4 w-4" />
@@ -533,7 +531,7 @@ export default function Dashboard({
                               </Button>
                             </div>
                           )}
-                          
+
                           {/* Share Button */}
                           <Button
                             variant="outline"
@@ -552,7 +550,7 @@ export default function Dashboard({
               })}
             </CarouselContent>
           </Carousel>
-          
+
           {/* Progress indicators - Dots */}
           {count > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 select-none">
@@ -561,11 +559,10 @@ export default function Dashboard({
                   <button
                     key={index}
                     onClick={() => goToSlide(index)}
-                    className={`transition-all duration-300 rounded-full border-2 ${
-                      index === current - 1 
-                        ? 'w-1 h-1 md:w-2 md:h-2 bg-black dark:bg-white border-black dark:border-white' 
+                    className={`transition-all duration-300 rounded-full border-2 ${index === current - 1
+                        ? 'w-1 h-1 md:w-2 md:h-2 bg-black dark:bg-white border-black dark:border-white'
                         : 'w-0.5 h-0.5 md:w-1.5 md:h-1.5 bg-black/30 dark:bg-white/30 border-black/50 dark:border-white/50 hover:bg-black/60 dark:hover:bg-white/60 hover:border-black/75 dark:hover:border-white/75'
-                    } relative before:content-[''] before:absolute before:inset-[-8px] before:rounded-full`}
+                      } relative before:content-[''] before:absolute before:inset-[-8px] before:rounded-full`}
                     aria-label={`Go to slide ${index + 1}`}
                   />
                 ))}
