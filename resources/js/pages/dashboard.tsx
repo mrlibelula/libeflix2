@@ -485,7 +485,7 @@ export default function Dashboard({
                       }}
                     >
                       <div className="absolute top-0 left-0 w-full h-full light-gradient-hero dark:dark-gradient-hero z-20" />
-                      <div className="absolute top-[75%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-y-3 w-full text-white z-30 px-8 md:px-16 py-10 select-none">
+                      <div className="absolute top-[70%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-y-3 w-full text-white z-30 px-8 md:px-16 py-10 select-none">
                         <div className="py-0.5 px-3 text-sm bg-black/50 rounded-md w-fit">
                           {item.type === 'movie' ? 'movie' : 'TV Show'}
                         </div>
