@@ -10,8 +10,14 @@ use App\Http\Controllers\PopularTopController;
 use App\Http\Controllers\SeasonController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TvshowController;
+use App\Http\Controllers\LoginController;
+use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+// oauth2
+Route::get('/login/google', [LoginController::class, 'redirectToGoogle'])->name('login.google');
+Route::get('/login/google/redirect', [LoginController::class, 'handleGoogleCallback'])->name('login.google.callback');
 
 // PUBLIC COMMENT ROUTES - MUST BE FIRST TO AVOID CONFLICTS
 Route::get('api/comments/public', [CommentController::class, 'publicIndex'])->name('api.comments.public.index');
@@ -134,8 +140,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/movies/{movie}/recommendations/status', [MovieController::class, 'pollRecommendationsStatus'])->name('api.movies.recommendations.status');
 });
 
-// Subscription routes
-use App\Http\Controllers\SubscriptionController;
 // use App\Http\Controllers\WebhookController; // Commented out for local development
 
 # Public subscription plans (accessible without auth for unauthenticated users who want to see plans)
