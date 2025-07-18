@@ -77,14 +77,14 @@ const footerNavItems: NavItem[] = [
         href: 'https://libe.dev',
         icon: Code2,
     },
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
+    // {
+    //     title: 'Repository',
+    //     href: 'https://github.com/laravel/react-starter-kit',
+    //     icon: Folder,
+    // },
     {
         title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits',
+        href: 'https://libe.dev/blog/how-i-built-a-netflix-clone-a-deep-dive-into-libeflix',
         icon: BookOpen,
     },
 ];
