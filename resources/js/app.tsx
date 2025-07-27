@@ -5,12 +5,42 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
 import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+// Set up CSRF token for all requests
+window.axios = axios;
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+
+// Get CSRF token from meta tag and set it up for axios
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+if (csrfToken) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+} else {
+    console.error('CSRF token not found: https://laravel.com/docs/csrf#csrf-x-csrf-token');
+}
+
+// Configure Inertia.js to include CSRF token in form requests
+import { router } from '@inertiajs/react';
+
+// Set up Inertia to automatically include CSRF token
+router.on('before', (event) => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  if (token && event.detail.visit.method !== 'get') {
+    // Ensure CSRF token is included in form data
+    if (event.detail.visit.data instanceof FormData) {
+      event.detail.visit.data.append('_token', token);
+    } else if (typeof event.detail.visit.data === 'object' && event.detail.visit.data !== null) {
+      event.detail.visit.data._token = token;
+    }
+  }
+});
 
 
-// Extend Window interface to include _scrollPositions
+// Extend Window interface to include _scrollPositions and axios
 declare global {
   interface Window {
     _scrollPositions: Array<[string, number]>;
+    axios: typeof axios;
   }
 }
 
