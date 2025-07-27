@@ -4,14 +4,6 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        
-        {{-- Additional meta tags for Brave browser compatibility --}}
-        <meta name="referrer" content="same-origin">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        
-        {{-- Brave browser specific headers --}}
-        <meta name="format-detection" content="telephone=no">
-        <meta name="msapplication-tap-highlight" content="no">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
@@ -25,22 +17,6 @@
                         document.documentElement.classList.add('dark');
                     }
                 }
-                
-                // Debug CSRF token for Brave browser
-                window.addEventListener('DOMContentLoaded', function() {
-                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                    const isBrave = navigator.brave?.isBrave || navigator.userAgent.includes('Brave');
-                    
-                    if (isBrave && !token) {
-                        console.warn('Brave browser detected but CSRF token missing');
-                    }
-                    
-                    // Make CSRF token globally available for debugging
-                    if (token) {
-                        window.Laravel = window.Laravel || {};
-                        window.Laravel.csrfToken = token;
-                    }
-                });
             })();
         </script>
 
