@@ -20,6 +20,10 @@ Route::middleware('guest')->group(function () {
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
+    
+    // Special Brave browser login route with manual CSRF validation
+    Route::post('login-brave', [AuthenticatedSessionController::class, 'storeBrave'])
+        ->name('login.brave');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
@@ -50,6 +54,9 @@ Route::middleware('auth')->group(function () {
         ->name('password.confirm');
 
     Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
+
+    Route::put('password', [ConfirmablePasswordController::class, 'update'])
+        ->name('password.update');
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');

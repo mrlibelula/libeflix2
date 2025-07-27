@@ -1,6 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler, useEffect } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
+import axios from 'axios';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -19,17 +20,36 @@ type LoginForm = {
 interface LoginProps {
     status?: string;
     canResetPassword: boolean;
+    isBrave?: boolean;
+    session_debug?: any;
 }
 
-export default function Login({ status, canResetPassword }: LoginProps) {
+export default function Login({ status, canResetPassword, isBrave, session_debug }: LoginProps) {
     const { data, setData, post, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: '',
         password: '',
         remember: false,
     });
 
+    const [isUsingBraveLogin, setIsUsingBraveLogin] = useState(false);
+    const [braveLoginError, setBraveLoginError] = useState<string | null>(null);
+
     // Get redirect parameter from URL
     const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+
+    // Detect Brave browser
+    const detectBrave = async () => {
+        try {
+            // Multiple methods to detect Brave
+            const isBraveNavigator = (navigator as any).brave?.isBrave;
+            const userAgentContainsBrave = navigator.userAgent.includes('Brave');
+            const userAgentTest = /Brave/.test(navigator.userAgent);
+            
+            return isBraveNavigator || userAgentContainsBrave || userAgentTest || isBrave;
+        } catch {
+            return false;
+        }
+    };
 
     // Clear browser storage when login page loads to prevent cross-user data leakage
     useEffect(() => {
@@ -46,28 +66,86 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         }
     }, []);
 
-    // Debug CSRF token availability
+    // Debug CSRF token availability and Brave detection
     useEffect(() => {
-        const debugCSRFToken = () => {
+        const debugLoginPage = async () => {
             const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const userAgent = navigator.userAgent;
-            const isBrave = (navigator as any).brave?.isBrave || userAgent.includes('Brave');
+            const detectedBrave = await detectBrave();
             
-            console.log('Login page CSRF debug:', {
+            console.log('Login page debug:', {
                 metaToken: metaToken ? 'present' : 'missing',
-                isBrave,
+                detectedBrave,
+                propIsBrave: isBrave,
                 userAgent: userAgent.substring(0, 50) + '...',
-                cookies: document.cookie ? 'present' : 'none'
+                cookies: document.cookie ? 'present' : 'none',
+                sessionDebug: session_debug
             });
         };
         
-        debugCSRFToken();
-    }, []);
+        debugLoginPage();
+    }, [isBrave, session_debug]);
 
-    const submit: FormEventHandler = (e) => {
+    // Brave-specific login function
+    const loginWithBrave = async (formData: LoginForm) => {
+        setIsUsingBraveLogin(true);
+        setBraveLoginError(null);
+
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            
+            const response = await axios.post('/login-brave', {
+                email: formData.email,
+                password: formData.password,
+                remember: formData.remember,
+                redirect: redirectParam,
+                _token: token
+            }, {
+                headers: {
+                    'X-CSRF-TOKEN': token,
+                    'X-XSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                withCredentials: true
+            });
+
+            if (response.data.success) {
+                console.log('Brave login successful, redirecting to:', response.data.redirect);
+                window.location.href = response.data.redirect;
+            } else {
+                throw new Error(response.data.error || 'Login failed');
+            }
+        } catch (error: any) {
+            console.error('Brave login error:', error);
+            
+            if (error.response?.status === 422) {
+                setBraveLoginError(error.response.data.error || 'Invalid credentials');
+            } else if (error.response?.status === 419) {
+                setBraveLoginError('Session expired. Please refresh the page and try again.');
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                setBraveLoginError(error.response?.data?.error || error.message || 'Login failed');
+            }
+        } finally {
+            setIsUsingBraveLogin(false);
+        }
+    };
+
+    const submit: FormEventHandler = async (e) => {
         e.preventDefault();
         
-        // Additional CSRF token check before submission
+        // Check if this is Brave browser
+        const isBraveDetected = await detectBrave();
+        
+        if (isBraveDetected) {
+            console.log('Brave browser detected, using special login endpoint');
+            await loginWithBrave(data);
+            return;
+        }
+        
+        // Additional CSRF token check before submission for non-Brave browsers
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (!token) {
             console.error('No CSRF token found before form submission');
@@ -95,14 +173,14 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         error.includes('expired')
                     )
                 )) {
-                    console.warn('CSRF error detected, refreshing page in 2 seconds...');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
+                    console.warn('CSRF error detected, trying Brave login method...');
+                    loginWithBrave(data);
                 }
             }
         });
     };
+
+    const currentProcessing = processing || isUsingBraveLogin;
 
     return (
         <AuthLayout title="Log in to your account" description="Enter your email and password below to log in">
@@ -146,6 +224,9 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                             placeholder="Password"
                         />
                         <InputError message={errors.password} />
+                        {braveLoginError && (
+                            <div className="text-red-600 text-sm font-medium">{braveLoginError}</div>
+                        )}
                     </div>
 
                     <div className="flex items-center space-x-3">
@@ -159,9 +240,9 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         <Label htmlFor="remember">Remember me</Label>
                     </div>
 
-                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
-                        {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                        Log in
+                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={currentProcessing}>
+                        {currentProcessing && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                        {isUsingBraveLogin ? 'Logging in (Brave)...' : 'Log in'}
                     </Button>
                 </div>
 
@@ -181,6 +262,14 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             </a>
 
             {status && <div className="mb-4 text-center text-sm font-medium text-green-600">{status}</div>}
+            
+            {/* Debug info for development */}
+            {process.env.NODE_ENV === 'development' && session_debug && (
+                <div className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
+                    <strong>Debug Info:</strong>
+                    <pre>{JSON.stringify(session_debug, null, 2)}</pre>
+                </div>
+            )}
         </AuthLayout>
     );
 }

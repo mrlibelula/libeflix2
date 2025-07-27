@@ -48,6 +48,14 @@ class HandleInertiaRequests extends Middleware
             $subscription = $user->getSubscriptionPlanDetails();
         }
 
+        // Generate a fresh CSRF token for each request to handle Brave browser issues
+        $csrfToken = csrf_token();
+        
+        // Check if this is Brave browser
+        $userAgent = $request->userAgent();
+        $isBrave = str_contains(strtolower($userAgent), 'brave') || 
+                   str_contains(strtolower($userAgent), 'chrome') && str_contains(strtolower($userAgent), 'brave');
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -61,7 +69,15 @@ class HandleInertiaRequests extends Middleware
             ],
             'genres' => Tool::getMoviesAndTVShowsGenresWithSlugs(),
             'isProduction' => app()->environment('production'),
-            'csrf_token' => csrf_token(),
+            'csrf_token' => $csrfToken,
+            'isBrave' => $isBrave, // Add Brave detection to props
+            'session_debug' => [
+                'has_session' => $request->hasSession(),
+                'session_started' => $request->session()->isStarted(),
+                'csrf_from_session' => $request->session()->token(),
+                'csrf_fresh' => $csrfToken,
+                'user_agent_snippet' => substr($userAgent, 0, 50)
+            ],
             'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
