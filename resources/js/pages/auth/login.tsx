@@ -46,14 +46,61 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         }
     }, []);
 
+    // Debug CSRF token availability
+    useEffect(() => {
+        const debugCSRFToken = () => {
+            const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const userAgent = navigator.userAgent;
+            const isBrave = (navigator as any).brave?.isBrave || userAgent.includes('Brave');
+            
+            console.log('Login page CSRF debug:', {
+                metaToken: metaToken ? 'present' : 'missing',
+                isBrave,
+                userAgent: userAgent.substring(0, 50) + '...',
+                cookies: document.cookie ? 'present' : 'none'
+            });
+        };
+        
+        debugCSRFToken();
+    }, []);
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        
+        // Additional CSRF token check before submission
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!token) {
+            console.error('No CSRF token found before form submission');
+            // Try to refresh the token
+            window.location.reload();
+            return;
+        }
+        
         const loginUrl = redirectParam 
             ? route('login') + '?redirect=' + encodeURIComponent(redirectParam)
             : route('login');
         
+        console.log('Submitting login form with CSRF token:', token.substring(0, 10) + '...');
+        
         post(loginUrl, {
             onFinish: () => reset('password'),
+            onError: (errors) => {
+                console.error('Login form errors:', errors);
+                // Check if it's a CSRF error
+                if (typeof errors === 'object' && Object.values(errors).some(error => 
+                    typeof error === 'string' && (
+                        error.includes('419') || 
+                        error.includes('CSRF') || 
+                        error.includes('token') ||
+                        error.includes('expired')
+                    )
+                )) {
+                    console.warn('CSRF error detected, refreshing page in 2 seconds...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            }
         });
     };
 

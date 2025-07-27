@@ -14,6 +14,7 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Illuminate\Http\Request;
 
 // oauth2
 Route::get('/login/google', [LoginController::class, 'redirectToGoogle'])->name('login.google');
@@ -35,10 +36,36 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
 
 Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-// CSRF token refresh endpoint
+// Enhanced CSRF token refresh endpoint for Brave browser compatibility
 Route::get('csrf-token', function () {
-    return response()->json(['csrf_token' => csrf_token()]);
+    $token = csrf_token();
+    
+    return response()->json([
+        'csrf_token' => $token,
+        'success' => true,
+        'timestamp' => now()->toISOString()
+    ])->withHeaders([
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        'Pragma' => 'no-cache',
+        'Expires' => '0',
+        'X-CSRF-TOKEN' => $token,
+        'Access-Control-Allow-Credentials' => 'true',
+        'Access-Control-Allow-Headers' => 'X-CSRF-TOKEN, X-Requested-With, Content-Type, Accept, Authorization',
+        'Vary' => 'Accept'
+    ]);
 });
+
+// CSRF debug endpoint for Brave browser troubleshooting
+Route::post('csrf-test', function (Request $request) {
+    return response()->json([
+        'success' => true,
+        'message' => 'CSRF token is working correctly',
+        'received_token' => $request->header('X-CSRF-TOKEN') ?: $request->input('_token'),
+        'current_token' => csrf_token(),
+        'user_agent' => $request->userAgent(),
+        'timestamp' => now()->toISOString()
+    ]);
+})->name('csrf.test');
 
 // Public routes (accessible without authentication)
 // TV Shows routes
