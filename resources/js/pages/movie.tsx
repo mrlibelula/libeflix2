@@ -688,8 +688,8 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
             </div>
             
             <div className="p-3 md:p-5 lg:p-7 w-full">
-              <div className="flex items-start justify-between gap-7 w-full">
-                <div className="flex flex-col gap-y-7 w-full">
+              <div className="flex items-start justify-between_ justify-center gap-7 w-full">
+                <div className="flex flex-col gap-y-7 w-full md:w-[80%]">
                   <div className="flex lg:flex-row flex-col w-full items-start justify-between gap-y-6 gap-x-7">
                     <div className="flex flex-col gap-y-4 w-full">
                       {/* genres */}
@@ -892,13 +892,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                     </div>
 
                     {/* Cast and Crew Tabs */}
-                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2.5rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]" 
+                    <div className="flex justify-center gap-x-7 w-[calc(100vw-2.5rem)] md:w-[calc(83.7vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(83.7vw-var(--dynamic-sidebar-width)-6rem)]" 
                       style={{
                         '--dynamic-sidebar-width': sidebarWidth
                       } as React.CSSProperties}>
                       <Tabs 
                         defaultValue="cast" 
-                        className="w-full lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]"
+                        className="w-full lg:w-[calc(83.7vw-var(--dynamic-sidebar-width)-6rem)]"
                         style={{
                           '--dynamic-sidebar-width': sidebarWidth
                         } as React.CSSProperties}
@@ -972,7 +972,7 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                       </Tabs>
                     </div>
                     <div 
-                      className="flex flex-col gap-y-10 w-[calc(100vw-2.5rem)] md:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(100vw-var(--dynamic-sidebar-width)-6rem)]"
+                      className="flex flex-col gap-y-10 w-[calc(100vw-2.5rem)] md:w-[calc(83.7vw-var(--dynamic-sidebar-width)-6rem)] lg:w-[calc(83.7vw-var(--dynamic-sidebar-width)-6rem)]"
                       style={{
                         '--dynamic-sidebar-width': sidebarWidth
                       } as React.CSSProperties}
