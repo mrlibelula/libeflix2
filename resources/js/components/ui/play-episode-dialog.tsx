@@ -24,11 +24,12 @@ type GestureFeedbackState = {
 };
 
 const SEEK_INTERVAL_SECONDS = 5;
-const DOUBLE_TAP_THRESHOLD_MS = 300;
+const DOUBLE_TAP_THRESHOLD_MS = 320;
 const CONSECUTIVE_GESTURE_WINDOW_MS = 800;
 const GESTURE_FEEDBACK_DURATION_MS = 600;
-const TAP_MOVEMENT_THRESHOLD_PX = 12;
-const EDGE_GESTURE_RATIO = 0.35;
+const TAP_MOVEMENT_THRESHOLD_PX = 18;
+const EDGE_GESTURE_RATIO = 0.3;
+const CONTROLS_AUTOHIDE_TIMEOUT_MS = 5000;
 
 /**
  * Enhanced PlayEpisodeDialog Component
@@ -172,6 +173,7 @@ export function PlayEpisodeDialog({
     count: 0,
     timestamp: 0
   });
+  const tapControlsVisibleRef = useRef<boolean>(false);
   
   // Subtitle tracks state with default "Off" option
   const [subtitleTracks, setSubtitleTracks] = useState<Array<{id: string, label: string, selected: boolean, src?: string}>>([
@@ -853,7 +855,7 @@ export function PlayEpisodeDialog({
   }, [dialogOpen, handleStepBack, handleStepForward, togglePlay, handleNextEpisode, handlePreviousEpisode]);
 
   // Implement YouTube-like behavior for controls visibility
-  const handleUserActivity = useCallback((forceShow: boolean = false) => {
+  const handleUserActivity = useCallback((forceShow: boolean = false, duration: number = CONTROLS_AUTOHIDE_TIMEOUT_MS) => {
 
     if (forceShow || isFullscreen || isHoveringVideo) {
       setUserActive(true);
@@ -867,7 +869,7 @@ export function PlayEpisodeDialog({
     userActivityTimeout.current = setTimeout(() => {
       setUserActive(false);
       setControlsVisible(false);
-    }, 3000);
+    }, duration);
   }, [isFullscreen, isHoveringVideo]);
 
   // Add an effect for dialog entry/exit
@@ -935,6 +937,7 @@ export function PlayEpisodeDialog({
     }
 
     triggerGestureFeedback(direction);
+    tapControlsVisibleRef.current = false;
     handleUserActivity(true);
   };
 
@@ -948,6 +951,7 @@ export function PlayEpisodeDialog({
     const touch = e.touches[0];
     if (!touch) return;
 
+    tapControlsVisibleRef.current = controlsVisible;
     touchStartPositionRef.current = {
       x: touch.clientX,
       y: touch.clientY
@@ -999,16 +1003,17 @@ export function PlayEpisodeDialog({
     const timeSinceLastTap = now - lastTapTimeRef.current;
 
     const executeSingleTap = () => {
-      if (!controlsVisible) {
-        handleUserActivity(true);
-      } else {
+      if (tapControlsVisibleRef.current) {
         if (userActivityTimeout.current) {
           clearTimeout(userActivityTimeout.current);
           userActivityTimeout.current = null;
         }
         setControlsVisible(false);
         setUserActive(false);
+      } else {
+        handleUserActivity(true);
       }
+      tapControlsVisibleRef.current = false;
     };
 
     if (timeSinceLastTap && timeSinceLastTap <= DOUBLE_TAP_THRESHOLD_MS) {
@@ -1028,6 +1033,8 @@ export function PlayEpisodeDialog({
       } else if (normalizedX >= 1 - EDGE_GESTURE_RATIO) {
         handleSeekGesture('forward');
       } else {
+        tapControlsVisibleRef.current = false;
+        handleUserActivity(true);
         togglePlay();
       }
 
@@ -1056,6 +1063,7 @@ export function PlayEpisodeDialog({
       singleTapTimeoutRef.current = null;
     }
     lastTapTimeRef.current = 0;
+    tapControlsVisibleRef.current = false;
   };
 
   useEffect(() => {
