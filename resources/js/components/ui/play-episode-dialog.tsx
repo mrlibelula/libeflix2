@@ -24,12 +24,12 @@ type GestureFeedbackState = {
 };
 
 const SEEK_INTERVAL_SECONDS = 5;
-const DOUBLE_TAP_THRESHOLD_MS = 320;
+const DOUBLE_TAP_THRESHOLD_MS = 400;
 const CONSECUTIVE_GESTURE_WINDOW_MS = 800;
 const GESTURE_FEEDBACK_DURATION_MS = 600;
 const TAP_MOVEMENT_THRESHOLD_PX = 18;
-const EDGE_GESTURE_RATIO = 0.3;
-const CONTROLS_AUTOHIDE_TIMEOUT_MS = 5000;
+const EDGE_GESTURE_RATIO = 0.38;
+const CONTROLS_AUTOHIDE_TIMEOUT_MS = 3800;
 
 /**
  * Enhanced PlayEpisodeDialog Component
@@ -938,7 +938,7 @@ export function PlayEpisodeDialog({
 
     triggerGestureFeedback(direction);
     tapControlsVisibleRef.current = false;
-    handleUserActivity(true);
+    handleUserActivity(true, 1500);
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -956,8 +956,6 @@ export function PlayEpisodeDialog({
       x: touch.clientX,
       y: touch.clientY
     };
-
-    handleUserActivity(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -966,8 +964,6 @@ export function PlayEpisodeDialog({
     if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
       return;
     }
-
-    handleUserActivity(true);
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -990,7 +986,7 @@ export function PlayEpisodeDialog({
     const isTap = deltaX < TAP_MOVEMENT_THRESHOLD_PX && deltaY < TAP_MOVEMENT_THRESHOLD_PX;
 
     if (!isTap) {
-      handleUserActivity(true);
+      handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
       lastTapTimeRef.current = 0;
       if (singleTapTimeoutRef.current) {
         clearTimeout(singleTapTimeoutRef.current);
@@ -1011,7 +1007,7 @@ export function PlayEpisodeDialog({
         setControlsVisible(false);
         setUserActive(false);
       } else {
-        handleUserActivity(true);
+        handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
       }
       tapControlsVisibleRef.current = false;
     };
@@ -1034,7 +1030,7 @@ export function PlayEpisodeDialog({
         handleSeekGesture('forward');
       } else {
         tapControlsVisibleRef.current = false;
-        handleUserActivity(true);
+        handleUserActivity(true, 1500);
         togglePlay();
       }
 
@@ -2228,7 +2224,8 @@ export function PlayEpisodeDialog({
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain'
-              })
+              }),
+              touchAction: 'manipulation'
             }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
