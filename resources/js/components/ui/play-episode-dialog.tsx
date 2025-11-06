@@ -853,20 +853,17 @@ export function PlayEpisodeDialog({
   }, [dialogOpen, handleStepBack, handleStepForward, togglePlay, handleNextEpisode, handlePreviousEpisode]);
 
   // Implement YouTube-like behavior for controls visibility
-  const handleUserActivity = useCallback(() => {
-    
-    // Only show controls when in fullscreen OR when hovering the video
-    if (isFullscreen || isHoveringVideo) {
+  const handleUserActivity = useCallback((forceShow: boolean = false) => {
+
+    if (forceShow || isFullscreen || isHoveringVideo) {
       setUserActive(true);
       setControlsVisible(true);
     }
-    
-    // Clear any existing timeout
+
     if (userActivityTimeout.current) {
       clearTimeout(userActivityTimeout.current);
     }
-    
-    // Always set timeout to hide controls after inactivity
+
     userActivityTimeout.current = setTimeout(() => {
       setUserActive(false);
       setControlsVisible(false);
@@ -938,7 +935,7 @@ export function PlayEpisodeDialog({
     }
 
     triggerGestureFeedback(direction);
-    handleUserActivity();
+    handleUserActivity(true);
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -956,7 +953,7 @@ export function PlayEpisodeDialog({
       y: touch.clientY
     };
 
-    handleUserActivity();
+    handleUserActivity(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -966,7 +963,7 @@ export function PlayEpisodeDialog({
       return;
     }
 
-    handleUserActivity();
+    handleUserActivity(true);
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -989,7 +986,7 @@ export function PlayEpisodeDialog({
     const isTap = deltaX < TAP_MOVEMENT_THRESHOLD_PX && deltaY < TAP_MOVEMENT_THRESHOLD_PX;
 
     if (!isTap) {
-      handleUserActivity();
+      handleUserActivity(true);
       lastTapTimeRef.current = 0;
       if (singleTapTimeoutRef.current) {
         clearTimeout(singleTapTimeoutRef.current);
@@ -1003,9 +1000,14 @@ export function PlayEpisodeDialog({
 
     const executeSingleTap = () => {
       if (!controlsVisible) {
-        handleUserActivity();
+        handleUserActivity(true);
       } else {
-        togglePlay();
+        if (userActivityTimeout.current) {
+          clearTimeout(userActivityTimeout.current);
+          userActivityTimeout.current = null;
+        }
+        setControlsVisible(false);
+        setUserActive(false);
       }
     };
 
@@ -2237,7 +2239,7 @@ export function PlayEpisodeDialog({
                 togglePlay();
               }
             }}
-            onMouseMove={handleUserActivity}
+            onMouseMove={() => handleUserActivity()}
             onMouseEnter={() => {
               setIsHoveringVideo(true);
               handleUserActivity();
