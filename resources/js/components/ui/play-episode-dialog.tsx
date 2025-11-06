@@ -944,10 +944,6 @@ export function PlayEpisodeDialog({
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessEpisode) return;
 
-    if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
-      return;
-    }
-
     const touch = e.touches[0];
     if (!touch) return;
 
@@ -960,7 +956,6 @@ export function PlayEpisodeDialog({
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessEpisode) return;
-
     if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
       return;
     }
@@ -970,9 +965,6 @@ export function PlayEpisodeDialog({
     if (!canAccessEpisode) return;
 
     const targetNode = e.target as Node | null;
-    if (controlsRef.current && targetNode && controlsRef.current.contains(targetNode)) {
-      return;
-    }
 
     const touch = e.changedTouches[0];
     if (!touch) return;
@@ -1024,11 +1016,16 @@ export function PlayEpisodeDialog({
       const relativeX = touch.clientX - rect.left;
       const normalizedX = relativeX / rect.width;
 
-      if (normalizedX <= EDGE_GESTURE_RATIO) {
+      const interactiveAncestor = targetNode instanceof Element
+        ? targetNode.closest('button, a, input, select, textarea, [data-prevent-gesture]')
+        : null;
+      const shouldBlockGesture = !!interactiveAncestor;
+
+      if (!shouldBlockGesture && normalizedX <= EDGE_GESTURE_RATIO) {
         handleSeekGesture('backward');
-      } else if (normalizedX >= 1 - EDGE_GESTURE_RATIO) {
+      } else if (!shouldBlockGesture && normalizedX >= 1 - EDGE_GESTURE_RATIO) {
         handleSeekGesture('forward');
-      } else {
+      } else if (!shouldBlockGesture) {
         tapControlsVisibleRef.current = false;
         handleUserActivity(true, 1500);
         togglePlay();
