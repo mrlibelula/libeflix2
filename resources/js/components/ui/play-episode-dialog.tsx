@@ -17,6 +17,19 @@ import { Link, usePage } from "@inertiajs/react";
 import { useWebShare } from "@/hooks/use-web-share";
 import { EpisodesApi } from "@/services/episodes-api";
 
+type GestureDirection = 'forward' | 'backward';
+type GestureFeedbackState = {
+  direction: GestureDirection;
+  amount: number;
+};
+
+const SEEK_INTERVAL_SECONDS = 5;
+const DOUBLE_TAP_THRESHOLD_MS = 300;
+const CONSECUTIVE_GESTURE_WINDOW_MS = 800;
+const GESTURE_FEEDBACK_DURATION_MS = 600;
+const TAP_MOVEMENT_THRESHOLD_PX = 12;
+const EDGE_GESTURE_RATIO = 0.35;
+
 /**
  * Enhanced PlayEpisodeDialog Component
  * 
@@ -147,6 +160,18 @@ export function PlayEpisodeDialog({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Mobile gesture state & refs
+  const [gestureFeedback, setGestureFeedback] = useState<GestureFeedbackState | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+  const singleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const gestureFeedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const consecutiveGestureRef = useRef<{ direction: GestureDirection | null; count: number; timestamp: number }>({
+    direction: null,
+    count: 0,
+    timestamp: 0
+  });
   
   // Subtitle tracks state with default "Off" option
   const [subtitleTracks, setSubtitleTracks] = useState<Array<{id: string, label: string, selected: boolean, src?: string}>>([
@@ -535,21 +560,21 @@ export function PlayEpisodeDialog({
     setIsMuted(!isMuted);
   };
 
-  // Step backward 5 seconds
+  // Step backward fixed interval
   const handleStepBack = () => {
     if (!videoRef.current) return;
     
-    const newTime = Math.max(0, videoRef.current.currentTime - 5);
+    const newTime = Math.max(0, videoRef.current.currentTime - SEEK_INTERVAL_SECONDS);
     videoRef.current.currentTime = newTime;
   };
 
-  // Step forward 5 seconds
+  // Step forward fixed interval
   const handleStepForward = () => {
     if (!videoRef.current) return;
     
     const newTime = Math.min(
       videoRef.current.duration || 0, 
-      videoRef.current.currentTime + 5
+      videoRef.current.currentTime + SEEK_INTERVAL_SECONDS
     );
     videoRef.current.currentTime = newTime;
   };
@@ -873,6 +898,176 @@ export function PlayEpisodeDialog({
       }
     };
   }, [dialogOpen]);
+
+  const triggerGestureFeedback = (direction: GestureDirection) => {
+    const now = Date.now();
+    const isSameDirection = consecutiveGestureRef.current.direction === direction &&
+      now - consecutiveGestureRef.current.timestamp < CONSECUTIVE_GESTURE_WINDOW_MS;
+
+    const nextCount = isSameDirection ? consecutiveGestureRef.current.count + 1 : 1;
+
+    consecutiveGestureRef.current = {
+      direction,
+      count: nextCount,
+      timestamp: now
+    };
+
+    setGestureFeedback({
+      direction,
+      amount: nextCount * SEEK_INTERVAL_SECONDS
+    });
+
+    if (gestureFeedbackTimeoutRef.current) {
+      clearTimeout(gestureFeedbackTimeoutRef.current);
+    }
+
+    gestureFeedbackTimeoutRef.current = setTimeout(() => {
+      setGestureFeedback(null);
+      consecutiveGestureRef.current = { direction: null, count: 0, timestamp: 0 };
+      gestureFeedbackTimeoutRef.current = null;
+    }, GESTURE_FEEDBACK_DURATION_MS);
+  };
+
+  const handleSeekGesture = (direction: GestureDirection) => {
+    if (!canAccessEpisode) return;
+
+    if (direction === 'forward') {
+      handleStepForward();
+    } else {
+      handleStepBack();
+    }
+
+    triggerGestureFeedback(direction);
+    handleUserActivity();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!canAccessEpisode) return;
+
+    if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
+      return;
+    }
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    touchStartPositionRef.current = {
+      x: touch.clientX,
+      y: touch.clientY
+    };
+
+    handleUserActivity();
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!canAccessEpisode) return;
+
+    if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
+      return;
+    }
+
+    handleUserActivity();
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!canAccessEpisode) return;
+
+    const targetNode = e.target as Node | null;
+    if (controlsRef.current && targetNode && controlsRef.current.contains(targetNode)) {
+      return;
+    }
+
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startPos = touchStartPositionRef.current;
+    const deltaX = Math.abs(touch.clientX - startPos.x);
+    const deltaY = Math.abs(touch.clientY - startPos.y);
+    const isTap = deltaX < TAP_MOVEMENT_THRESHOLD_PX && deltaY < TAP_MOVEMENT_THRESHOLD_PX;
+
+    if (!isTap) {
+      handleUserActivity();
+      lastTapTimeRef.current = 0;
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+
+    const executeSingleTap = () => {
+      if (!controlsVisible) {
+        handleUserActivity();
+      } else {
+        togglePlay();
+      }
+    };
+
+    if (timeSinceLastTap && timeSinceLastTap <= DOUBLE_TAP_THRESHOLD_MS) {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const relativeX = touch.clientX - rect.left;
+      const normalizedX = relativeX / rect.width;
+
+      if (normalizedX <= EDGE_GESTURE_RATIO) {
+        handleSeekGesture('backward');
+      } else if (normalizedX >= 1 - EDGE_GESTURE_RATIO) {
+        handleSeekGesture('forward');
+      } else {
+        togglePlay();
+      }
+
+      lastTapTimeRef.current = 0;
+      return;
+    }
+
+    if (singleTapTimeoutRef.current) {
+      clearTimeout(singleTapTimeoutRef.current);
+    }
+
+    lastTapTimeRef.current = now;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    singleTapTimeoutRef.current = setTimeout(() => {
+      executeSingleTap();
+      singleTapTimeoutRef.current = null;
+    }, DOUBLE_TAP_THRESHOLD_MS);
+  };
+
+  const handleTouchCancel = () => {
+    if (singleTapTimeoutRef.current) {
+      clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = null;
+    }
+    lastTapTimeRef.current = 0;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+      if (gestureFeedbackTimeoutRef.current) {
+        clearTimeout(gestureFeedbackTimeoutRef.current);
+        gestureFeedbackTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Check for Picture-in-Picture support
   useEffect(() => {
@@ -2025,6 +2220,10 @@ export function PlayEpisodeDialog({
                 objectFit: 'contain'
               })
             }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
             onClick={(e) => {
               // Check if click is on controls
               if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
@@ -2149,6 +2348,27 @@ export function PlayEpisodeDialog({
                           );
                         })}
                       </video>
+
+                      {canAccessEpisode && gestureFeedback && (
+                        <div
+                          className={`absolute inset-y-0 left-0 right-0 flex items-center pointer-events-none ${
+                            gestureFeedback.direction === 'forward' ? 'justify-end pr-6' : 'justify-start pl-6'
+                          }`}
+                        >
+                          <div className="flex flex-col items-center gap-1 rounded-2xl bg-black/60 px-4 py-3 text-white shadow-lg">
+                            {gestureFeedback.direction === 'forward' ? (
+                              <SkipForward className="h-9 w-9 text-rose-500" />
+                            ) : (
+                              <SkipBack className="h-9 w-9 text-rose-500" />
+                            )}
+                            <span className="text-sm font-semibold tracking-wide">
+                              {gestureFeedback.direction === 'forward'
+                                ? `+${gestureFeedback.amount}s`
+                                : `-${gestureFeedback.amount}s`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Premium Content Overlay */}
                       {!canAccessEpisode && (
