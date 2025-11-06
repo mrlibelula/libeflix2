@@ -20,6 +20,7 @@ import { CertificationSkeleton } from "@/components/ui/certification-skeleton";
 import { ReviewsListSkeleton } from "@/components/ui/review-skeleton";
 import { ReviewItem } from "@/components/ui/review-item";
 import { TopCertificationSkeleton } from "@/components/ui/top-certification-skeleton";
+import { PlayMoviePlayer } from "@/components/ui/play-movie-player";
 
 // console.log('movie.tsx loaded, CommentsSection imported:', CommentsSection);
 
@@ -597,30 +598,13 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
           <div className="flex flex-col w-full">
             <div className="bg-black text-white focus:outline-none sticky top-0 z-30 lg:relative">
               {!isProduction ? (
-                <video 
-                  ref={videoRef}
-                  className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none"  
-                  controls={canAccessMovie ? true : false}
-                  controlsList="nodownload" 
-                  onContextMenu={(e) => e.preventDefault()}
-                  poster={`${imgBaseUrl1280}${movie.backdrop_path}`}
-                  onPlay={() => setHasUserInitiatedPlayback(true)}
-                >
-                  <source src={`/movie/stream/${encFilePath}`} type="video/mp4" />
-                  
-                  {subtitles.map((subtitle: any, index: number) => (
-                    <track 
-                      key={index}
-                      kind="subtitles"
-                      src={`/movie/subtitles/${subtitle.encPath}`}
-                      srcLang={subtitle.languageCode.toLowerCase()}
-                      label={subtitle.languageName}
-                      default={index === 0} // Set first subtitle as default
-                    />
-                  ))}
-                  
-                  Your browser does not support the video tag.
-                </video>
+                <PlayMoviePlayer 
+                  movie={movie}
+                  encFilePath={encFilePath}
+                  autoPlay={false}
+                  className="w-full lg:aspect-auto lg:h-[73vh]"
+                  imgBaseUrl={imgBaseUrl1280}
+                />
               ) : canAccessMovie ? (
                 <iframe 
                   allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
@@ -629,58 +613,57 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                   src={`https://drive.google.com/file/d/${movie.google_drive_file_id}/preview`} 
                   width="100%" 
                   className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center focus:outline-none" 
-                  // style={{ aspectRatio: '16 / 9' }} 
                 ></iframe>
               ) : (
-                <div 
-                  className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center bg-center bg-cover"
-                  style={{
-                    backgroundImage: `url(${imgBaseUrl1280}${movie.backdrop_path})`
-                  }}
-                ></div>
-              )}
-
-              {/* Premium Content Overlay */}
-              {!canAccessMovie && (
-                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10 p-3 sm:p-4">
-                  <div className="text-center text-white p-3 sm:p-4 md:p-6 lg:p-8 max-w-[280px] sm:max-w-sm md:max-w-md lg:max-w-lg w-full">
-                    <div className="mb-3 sm:mb-4 md:mb-6">
-                      <LockIcon className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 mx-auto mb-2 sm:mb-3 md:mb-4 text-yellow-500" />
-                      <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-1 sm:mb-2">Premium Content</h3>
-                      <p className="text-gray-300 text-xs sm:text-sm md:text-base leading-tight sm:leading-normal">
-                        {!isAuthenticated 
-                          ? "Please register and log in to watch this movie."
-                          : "This movie requires a premium subscription to watch."
-                        }
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-2 sm:space-y-2 md:space-y-3">
-                      {!isAuthenticated ? (
-                        <>
-                          <Link 
-                            href={route('register') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
-                            className="block w-full bg-rose-600 hover:bg-rose-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
+                <div className="relative">
+                  <div 
+                    className="w-full aspect-video lg:aspect-auto xl:h-[73vh] object-cover object-center bg-center bg-cover"
+                    style={{
+                      backgroundImage: `url(${imgBaseUrl1280}${movie.backdrop_path})`
+                    }}
+                  ></div>
+                  
+                  {/* Premium Content Overlay */}
+                  <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10 p-3 sm:p-4">
+                    <div className="text-center text-white p-3 sm:p-4 md:p-6 lg:p-8 max-w-[280px] sm:max-w-sm md:max-w-md lg:max-w-lg w-full">
+                      <div className="mb-3 sm:mb-4 md:mb-6">
+                        <LockIcon className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 mx-auto mb-2 sm:mb-3 md:mb-4 text-yellow-500" />
+                        <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-1 sm:mb-2">Premium Content</h3>
+                        <p className="text-gray-300 text-xs sm:text-sm md:text-base leading-tight sm:leading-normal">
+                          {!isAuthenticated 
+                            ? "Please register and log in to watch this movie."
+                            : "This movie requires a premium subscription to watch."
+                          }
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2 sm:space-y-2 md:space-y-3">
+                        {!isAuthenticated ? (
+                          <>
+                            <Link 
+                              href={route('register') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
+                              className="block w-full bg-rose-600 hover:bg-rose-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
+                            >
+                              <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
+                              Create Account
+                            </Link>
+                            <Link 
+                              href={route('login') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
+                              className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
+                            >
+                              Already have an account? Log In
+                            </Link>
+                          </>
+                        ) : (
+                          <a 
+                            href="/subscription/plans" 
+                            className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
                           >
-                            <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
-                            Create Account
-                          </Link>
-                          <Link 
-                            href={route('login') + '?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)} 
-                            className="block w-full bg-gray-600 hover:bg-gray-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
-                          >
-                            Already have an account? Log In
-                          </Link>
-                        </>
-                      ) : (
-                        <a 
-                          href="/subscription/plans" 
-                          className="block w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium sm:font-semibold py-2 sm:py-2.5 md:py-3 px-3 sm:px-4 md:px-6 rounded-md sm:rounded-lg transition-colors duration-200 text-xs sm:text-sm md:text-base"
-                        >
-                          <CreditCardIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
-                          Get Premium Access
-                        </a>
-                      )}
+                            <CreditCardIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 inline mr-1 sm:mr-2" />
+                            Get Premium Access
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

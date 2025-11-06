@@ -2229,17 +2229,34 @@ export function PlayEpisodeDialog({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
             onClick={(e) => {
-              // Check if click is on controls
-              if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
+              if (!canAccessEpisode) return;
+              
+              const target = e.target as HTMLElement;
+              
+              // Don't trigger if clicking on interactive elements (buttons, links, inputs, menus, etc.)
+              const isInteractiveElement = target.tagName === 'BUTTON' || 
+                                            target.tagName === 'A' || 
+                                            target.tagName === 'INPUT' ||
+                                            target.tagName === 'SELECT' ||
+                                            target.closest('button') ||
+                                            target.closest('a') ||
+                                            target.closest('input') ||
+                                            target.closest('[role="slider"]') ||
+                                            target.closest('[role="menu"]') ||
+                                            target.closest('[role="menuitem"]') ||
+                                            target.closest('[role="dialog"]') ||
+                                            target.closest('[data-radix-popper-content-wrapper]') ||
+                                            target.hasAttribute('data-radix-popper-content-wrapper');
+              
+              if (isInteractiveElement) {
                 return;
               }
               
-              // If controls aren't visible, show them first
-              if (!controlsVisible) {
-                handleUserActivity();
-              } else {
-                togglePlay();
-              }
+              // Toggle play/pause
+              e.preventDefault();
+              e.stopPropagation();
+              togglePlay();
+              handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
             }}
             onMouseMove={() => handleUserActivity()}
             onMouseEnter={() => {
@@ -2279,7 +2296,7 @@ export function PlayEpisodeDialog({
                         ref={videoRef}
                         key={episode.encFilePath}
                         src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}` : undefined}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover cursor-pointer"
                         style={isFullscreen ? { objectFit: 'contain' } : {}}
                         controls={false}
                         autoPlay={canAccessEpisode ? isPlaying : false}
@@ -2323,15 +2340,6 @@ export function PlayEpisodeDialog({
                         onError={(e) => {
                           if (canAccessEpisode) {
                             handleError(new Error('Video playback error'));
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!canAccessEpisode) return; // Prevent interaction if no access
-                          if (!controlsVisible) {
-                            handleUserActivity();
-                          } else {
-                            togglePlay();
                           }
                         }}
                       >
@@ -2647,6 +2655,7 @@ export function PlayEpisodeDialog({
                             ref={contextMenuRef}
                             className="absolute right-10 bottom-14 z-50 bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
                             style={{ width: '240px' }}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {/* Main menu items */}
                             <div className="py-1">
@@ -2691,12 +2700,19 @@ export function PlayEpisodeDialog({
                             
                             {/* Subtitles submenu */}
                             {activeSection === 'subtitles' && (
-                              <div className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" style={{ width: '180px' }}>
+                              <div 
+                                className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                                style={{ width: '180px' }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {subtitleTracks.map((track) => (
                                   <div 
                                     key={track.id}
                                     className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                                    onClick={() => handleSelectSubtitle(track.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectSubtitle(track.id);
+                                    }}
                                   >
                                     <span className="flex-1 text-sm">{track.label}</span>
                                     {track.selected && <Check className="w-4 h-4 text-rose-500" />}
@@ -2707,12 +2723,19 @@ export function PlayEpisodeDialog({
                             
                             {/* Audio submenu */}
                             {activeSection === 'audio' && (
-                              <div className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" style={{ width: '180px' }}>
+                              <div 
+                                className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                                style={{ width: '180px' }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {audioTracks.map((track) => (
                                   <div 
                                     key={track.id}
                                     className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                                    onClick={() => handleSelectAudio(track.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectAudio(track.id);
+                                    }}
                                   >
                                     <span className="flex-1 text-sm">{track.label}</span>
                                     {track.selected && <Check className="w-4 h-4 text-rose-500" />}
