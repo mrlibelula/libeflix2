@@ -195,6 +195,17 @@ export function PlayEpisodeDialog({
   // Add userPreferredSubtitleId state to remember user's subtitle preference
   const [userPreferredSubtitleId, setUserPreferredSubtitleId] = useState<string>('off');
 
+  // Progress bar tooltip state
+  const [progressTooltipVisible, setProgressTooltipVisible] = useState(false);
+  const [progressTooltipTime, setProgressTooltipTime] = useState(0);
+  const [progressTooltipPosition, setProgressTooltipPosition] = useState(0);
+  const [tooltipLeftOffset, setTooltipLeftOffset] = useState(0);
+  const [previewThumbnail, setPreviewThumbnail] = useState<string | null>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const thumbnailGenerationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Web Share API hook
   const { share, isSharing, isSupported: isShareSupported } = useWebShare();
 
@@ -695,6 +706,126 @@ export function PlayEpisodeDialog({
     return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const generateThumbnailPreview = (timeInSeconds: number) => {
+    if (!previewVideoRef.current || !previewCanvasRef.current || !canAccessEpisode) return;
+    
+    const video = previewVideoRef.current;
+    const canvas = previewCanvasRef.current;
+    
+    // Check if video is ready
+    if (!video.videoWidth || !video.videoHeight) {
+      return;
+    }
+    
+    const ctx = canvas.getContext('2d', { 
+      alpha: false, // Disable alpha channel for better performance
+      willReadFrequently: false 
+    });
+    
+    if (!ctx) return;
+    
+    // Set video time to the desired position
+    video.currentTime = timeInSeconds;
+    
+    // Wait for the video to seek to the correct position
+    const handleSeeked = () => {
+      try {
+        // Set canvas dimensions to match video aspect ratio (smaller for preview)
+        const previewWidth = 160;
+        const previewHeight = Math.round((video.videoHeight / video.videoWidth) * previewWidth);
+        
+        // Only resize canvas if dimensions changed (performance optimization)
+        if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
+          canvas.width = previewWidth;
+          canvas.height = previewHeight;
+        }
+        
+        // Draw the video frame to canvas
+        ctx.drawImage(video, 0, 0, previewWidth, previewHeight);
+        
+        // Convert canvas to data URL with lower quality for faster generation
+        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.6);
+        setPreviewThumbnail(thumbnailUrl);
+      } catch (error) {
+        console.error('Error generating thumbnail:', error);
+      }
+      
+      video.removeEventListener('seeked', handleSeeked);
+    };
+    
+    video.addEventListener('seeked', handleSeeked, { once: true });
+  };
+
+  const handleProgressBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return;
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(100, (relativeX / rect.width) * 100));
+    const timeAtPosition = (percentage / 100) * duration;
+    
+    // Calculate tooltip position with boundary constraints
+    const tooltipWidth = 160; // Width of the thumbnail
+    const halfTooltipWidth = tooltipWidth / 2;
+    
+    // Calculate the ideal left position (centered on cursor)
+    let leftPosition = relativeX;
+    
+    // Constrain to boundaries
+    if (leftPosition - halfTooltipWidth < 0) {
+      // Too close to left edge
+      leftPosition = halfTooltipWidth;
+    } else if (leftPosition + halfTooltipWidth > rect.width) {
+      // Too close to right edge
+      leftPosition = rect.width - halfTooltipWidth;
+    }
+    
+    setProgressTooltipPosition(percentage);
+    setTooltipLeftOffset(leftPosition);
+    setProgressTooltipTime(timeAtPosition);
+    setProgressTooltipVisible(true);
+    
+    // Keep controls visible while hovering progress bar
+    setControlsVisible(true);
+    setUserActive(true);
+    
+    // Minimal debounce for thumbnail generation (30ms for fastest response while avoiding excessive calls)
+    if (thumbnailGenerationTimeoutRef.current) {
+      clearTimeout(thumbnailGenerationTimeoutRef.current);
+    }
+    
+    thumbnailGenerationTimeoutRef.current = setTimeout(() => {
+      generateThumbnailPreview(timeAtPosition);
+    }, 30);
+  };
+
+  const handleProgressBarMouseEnter = () => {
+    if (duration) {
+      setProgressTooltipVisible(true);
+    }
+    
+    // Keep controls visible and cancel any hide timeout
+    setControlsVisible(true);
+    setUserActive(true);
+    if (userActivityTimeout.current) {
+      clearTimeout(userActivityTimeout.current);
+      userActivityTimeout.current = null;
+    }
+  };
+
+  const handleProgressBarMouseLeave = () => {
+    setProgressTooltipVisible(false);
+    setPreviewThumbnail(null);
+    
+    if (thumbnailGenerationTimeoutRef.current) {
+      clearTimeout(thumbnailGenerationTimeoutRef.current);
+      thumbnailGenerationTimeoutRef.current = null;
+    }
+    
+    // Resume auto-hide behavior after leaving progress bar
+    handleUserActivity();
+  };
+
   // Handle visibility change to fix audio/video sync
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1068,6 +1199,10 @@ export function PlayEpisodeDialog({
       if (gestureFeedbackTimeoutRef.current) {
         clearTimeout(gestureFeedbackTimeoutRef.current);
         gestureFeedbackTimeoutRef.current = null;
+      }
+      if (thumbnailGenerationTimeoutRef.current) {
+        clearTimeout(thumbnailGenerationTimeoutRef.current);
+        thumbnailGenerationTimeoutRef.current = null;
       }
     };
   }, []);
@@ -2361,6 +2496,25 @@ export function PlayEpisodeDialog({
                         })}
                       </video>
 
+                      {/* Hidden preview video for generating thumbnails */}
+                      {canAccessEpisode && episode.encFilePath && (
+                        <>
+                          <video 
+                            ref={previewVideoRef}
+                            src={route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}
+                            className="hidden"
+                            preload="auto"
+                            muted
+                            playsInline
+                            crossOrigin="anonymous"
+                          />
+                          <canvas 
+                            ref={previewCanvasRef}
+                            className="hidden"
+                          />
+                        </>
+                      )}
+
                       {canAccessEpisode && gestureFeedback && (
                         <div
                           className={`absolute inset-y-0 left-0 right-0 flex items-center pointer-events-none ${
@@ -2514,7 +2668,13 @@ export function PlayEpisodeDialog({
                   <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30">
                     <div className="mb-3 relative">
                       {/* Progress bar with track and indicator */}
-                      <div className="w-full h-2 bg-neutral-600 rounded-full relative">
+                      <div 
+                        ref={progressBarRef}
+                        className="w-full h-2 bg-neutral-600 rounded-full relative"
+                        onMouseMove={handleProgressBarMouseMove}
+                        onMouseEnter={handleProgressBarMouseEnter}
+                        onMouseLeave={handleProgressBarMouseLeave}
+                      >
                         {/* Progress indicator */}
                         <div 
                           className="absolute top-0 left-0 h-2 bg-rose-500 rounded-full pointer-events-none" 
@@ -2548,6 +2708,31 @@ export function PlayEpisodeDialog({
                             }
                           }}
                         />
+
+                        {/* Progress bar tooltip */}
+                        {progressTooltipVisible && (
+                          <div 
+                            className="absolute bottom-6 flex flex-col items-center pointer-events-none z-50"
+                            style={{ 
+                              left: `${tooltipLeftOffset}px`,
+                              transform: 'translateX(-50%)'
+                            }}
+                          >
+                            {previewThumbnail && (
+                              <div className="mb-2 rounded overflow-hidden shadow-lg border-2 border-white/20" style={{ width: '160px', flexShrink: 0 }}>
+                                <img 
+                                  src={previewThumbnail} 
+                                  alt="Preview" 
+                                  className="block"
+                                  style={{ width: '160px', height: 'auto', display: 'block' }}
+                                />
+                              </div>
+                            )}
+                            <div className="bg-black/90 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                              {formatTime(progressTooltipTime)}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
