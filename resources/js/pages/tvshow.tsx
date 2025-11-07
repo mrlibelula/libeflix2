@@ -1697,6 +1697,46 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                       }
                     }}
                     initialRepeatMode="tvshow"
+                    tvshowSlug={tvshow.slug}
+                    totalSeasons={tvshow.seasons?.length || 0}
+                    onEpisodeSelect={(seasonNumber, episodeNumber) => {
+                      // Find the season
+                      const targetSeason = tvshow.seasons.find((s: any) => s.season_number === seasonNumber);
+                      if (!targetSeason) return;
+                      
+                      // Switch to the season if different from current
+                      if (selectedSeason.season_number !== seasonNumber) {
+                        handleSeasonSelect(targetSeason);
+                      }
+                      
+                      // Load episodes for the target season
+                      const loadAndSelectEpisode = async () => {
+                        let targetSeasonEpisodes = seasonEpisodes[seasonNumber];
+                        
+                        if (!targetSeasonEpisodes) {
+                          try {
+                            targetSeasonEpisodes = await loadSeasonEpisodes(seasonNumber);
+                          } catch (error) {
+                            console.error('Error loading season episodes:', error);
+                            return;
+                          }
+                        }
+                        
+                        // Find the episode
+                        const targetEpisode = targetSeasonEpisodes?.find((e: any) => 
+                          e.episode_number === episodeNumber
+                        );
+                        
+                        if (targetEpisode && isEpisodePlayable(targetEpisode)) {
+                          setTimeout(() => {
+                            setSelectedEpisode(targetEpisode);
+                            setIsDialogOpen(true);
+                          }, 100);
+                        }
+                      };
+                      
+                      loadAndSelectEpisode();
+                    }}
                   />
                 )}
                 

@@ -55,6 +55,8 @@ type PlayEpisodeDialogProps = {
   episode: any;
   tvshowName: string;
   tvshowId?: number;
+  tvshowSlug?: string;
+  totalSeasons?: number;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   onError?: (error: Error) => void;
@@ -86,12 +88,15 @@ type PlayEpisodeDialogProps = {
     isAnimating: boolean;
   };
   onExternalWatchLaterToggle?: (episodeId: number) => void;
+  onEpisodeSelect?: (season: number, episode: number) => void;
 };
 
 export function PlayEpisodeDialog({
   episode,
   tvshowName,
   tvshowId,
+  tvshowSlug,
+  totalSeasons,
   isOpen,
   onOpenChange,
   onError,
@@ -118,7 +123,8 @@ export function PlayEpisodeDialog({
   isLastEpisodeOfTVShow = false,
   // External watch later state management
   externalWatchLaterState,
-  onExternalWatchLaterToggle
+  onExternalWatchLaterToggle,
+  onEpisodeSelect
 }: PlayEpisodeDialogProps) {
   const { props } = usePage<{
     auth: {
@@ -174,6 +180,13 @@ export function PlayEpisodeDialog({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Seasons & Episodes menu state
+  const [showEpisodesMenu, setShowEpisodesMenu] = useState(false);
+  const [seasonsData, setSeasonsData] = useState<Array<{season_number: number; episodes: any[]}>>([]);
+  const [loadingSeasonsData, setLoadingSeasonsData] = useState(false);
+  const [activeSeasonNumber, setActiveSeasonNumber] = useState<number | null>(null);
+  const episodesMenuRef = useRef<HTMLDivElement>(null);
 
   // Mobile gesture state & refs
   const [gestureFeedback, setGestureFeedback] = useState<GestureFeedbackState | null>(null);
@@ -763,6 +776,32 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Toggle Picture-in-Picture mode
+  const togglePip = async () => {
+    if (!videoRef.current || !isPipSupported) return;
+    
+    try {
+      if (document.pictureInPictureElement) {
+        // Exit PiP
+        await document.exitPictureInPicture();
+        setIsPipActive(false);
+      } else {
+        // Enter PiP
+        await videoRef.current.requestPictureInPicture();
+        setIsPipActive(true);
+        
+        // Re-apply subtitles after entering PiP
+        if (currentSubtitleId && currentSubtitleId !== 'off') {
+          setTimeout(() => {
+            applySubtitleToVideo(currentSubtitleId);
+          }, 100);
+        }
+      }
+    } catch (err) {
+      console.error('PiP toggle error:', err);
+    }
+  };
+
   // Listen for fullscreen changes to update our state
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1131,11 +1170,19 @@ export function PlayEpisodeDialog({
       clearTimeout(userActivityTimeout.current);
     }
 
+    // Don't hide controls if any context menu is open
+    if (showContextMenu || showEpisodesMenu) {
+      return;
+    }
+
     userActivityTimeout.current = setTimeout(() => {
-      setUserActive(false);
-      setControlsVisible(false);
+      // Double-check menus aren't open before hiding
+      if (!showContextMenu && !showEpisodesMenu) {
+        setUserActive(false);
+        setControlsVisible(false);
+      }
     }, duration);
-  }, [isFullscreen, isHoveringVideo]);
+  }, [isFullscreen, isHoveringVideo, showContextMenu, showEpisodesMenu]);
 
   // Add an effect for dialog entry/exit
   useEffect(() => {
@@ -2329,6 +2376,21 @@ export function PlayEpisodeDialog({
     };
   }, [showContextMenu]);
 
+  // Keep controls visible when context menu is open
+  useEffect(() => {
+    if (showContextMenu) {
+      // Clear any existing timeout and keep controls visible
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+      }
+      setUserActive(true);
+      setControlsVisible(true);
+    } else if (!showEpisodesMenu) {
+      // When menu closes (and episodes menu isn't open), restart auto-hide timer
+      handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
+    }
+  }, [showContextMenu, showEpisodesMenu, handleUserActivity]);
+
   // Toggle context menu
   const handleToggleContextMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2339,6 +2401,126 @@ export function PlayEpisodeDialog({
     // Reset active section when closing
     if (showContextMenu) {
       setActiveSection('none');
+    }
+  };
+
+  // Fetch seasons and episodes data when menu is opened
+  useEffect(() => {
+    const fetchSeasonsData = async () => {
+      if (!showEpisodesMenu || !tvshowSlug || seasonsData.length > 0) {
+        return;
+      }
+
+      setLoadingSeasonsData(true);
+      try {
+        const validSeasons: Array<{season_number: number; episodes: any[]}> = [];
+        let seasonNum = 1;
+        const maxSeasons = totalSeasons || 25; // Use provided total or default to 25
+        let foundAnySeason = false;
+        
+        // Fetch seasons one by one, stop when we hit first 404 after finding at least one season
+        // If totalSeasons is provided, we know exactly how many to fetch (NO 404s!)
+        while (seasonNum <= maxSeasons) {
+          try {
+            const response = await fetch(`/api/tvshows/${tvshowSlug}/seasons/${seasonNum}/episodes`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.episodes && data.episodes.length > 0) {
+                validSeasons.push({ season_number: seasonNum, episodes: data.episodes });
+                foundAnySeason = true;
+              } else {
+                // Empty response but OK status - might be an edge case, continue
+                if (foundAnySeason) break;
+              }
+            } else {
+              // 404 or error - if totalSeasons is provided and we're beyond it, stop
+              if (totalSeasons && seasonNum > totalSeasons) break;
+              // If we've found seasons already, we're done
+              if (foundAnySeason) break;
+              // Otherwise keep trying (might be missing Season 1)
+            }
+          } catch (error) {
+            // Network error - if totalSeasons is provided and we're beyond it, stop
+            if (totalSeasons && seasonNum > totalSeasons) break;
+            // If we've found seasons already, we're done
+            if (foundAnySeason) break;
+          }
+          
+          seasonNum++;
+        }
+
+        setSeasonsData(validSeasons);
+      } catch (error) {
+        console.error('Failed to fetch seasons data:', error);
+      } finally {
+        setLoadingSeasonsData(false);
+      }
+    };
+
+    fetchSeasonsData();
+  }, [showEpisodesMenu, tvshowSlug, seasonsData.length, totalSeasons]);
+
+  // Handle click outside episodes menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (episodesMenuRef.current && !episodesMenuRef.current.contains(target)) {
+        setShowEpisodesMenu(false);
+      }
+    };
+
+    if (showEpisodesMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showEpisodesMenu]);
+
+  // Keep controls visible when episodes menu is open
+  useEffect(() => {
+    if (showEpisodesMenu) {
+      // Clear any existing timeout and keep controls visible
+      if (userActivityTimeout.current) {
+        clearTimeout(userActivityTimeout.current);
+      }
+      setUserActive(true);
+      setControlsVisible(true);
+    } else if (!showContextMenu) {
+      // When menu closes (and context menu isn't open), restart auto-hide timer
+      handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
+    }
+  }, [showEpisodesMenu, showContextMenu, handleUserActivity]);
+
+  // Toggle episodes menu
+  const handleToggleEpisodesMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowEpisodesMenu(!showEpisodesMenu);
+    
+    // Reset active season when closing
+    if (showEpisodesMenu) {
+      setActiveSeasonNumber(null);
+    }
+  };
+
+  // Handle episode selection
+  const handleEpisodeClick = (seasonNumber: number, episodeNumber: number) => {
+    setShowEpisodesMenu(false);
+    setActiveSeasonNumber(null);
+    if (onEpisodeSelect) {
+      onEpisodeSelect(seasonNumber, episodeNumber);
     }
   };
 
@@ -3046,7 +3228,14 @@ export function PlayEpisodeDialog({
 
                         {/* Seasons and episodes list button */}
                         <Tooltip text="Seasons & Episodes" position="bottom">
-                          <SquareStack className="w-5 h-5 hover:text-rose-500 transition-colors duration-150 cursor-pointer" />
+                          <button 
+                            onClick={handleToggleEpisodesMenu}
+                            className={`focus:outline-none relative cursor-pointer ${!tvshowSlug ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-label="Seasons and Episodes"
+                            disabled={!tvshowSlug}
+                          >
+                            <SquareStack className={`w-5 h-5 ${showEpisodesMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
+                          </button>
                         </Tooltip>
 
                         {/* Subtitles and audio button */}
@@ -3065,7 +3254,7 @@ export function PlayEpisodeDialog({
                         {showContextMenu && (
                           <div 
                             ref={contextMenuRef}
-                            className="absolute right-10 bottom-14 z-50 bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
+                            className="absolute right-10 bottom-14 z-50 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
                             style={{ width: '240px' }}
                             onClick={(e) => e.stopPropagation()}
                             onTouchStart={(e) => e.stopPropagation()}
@@ -3135,7 +3324,7 @@ export function PlayEpisodeDialog({
                             {/* Subtitles submenu */}
                             {activeSection === 'subtitles' && (
                               <div 
-                                className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
                                 style={{ width: '180px' }}
                                 onClick={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
@@ -3164,7 +3353,7 @@ export function PlayEpisodeDialog({
                             {/* Audio submenu */}
                             {activeSection === 'audio' && (
                               <div 
-                                className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
                                 style={{ width: '180px' }}
                                 onClick={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
@@ -3192,7 +3381,143 @@ export function PlayEpisodeDialog({
                           </div>
                         )}
                         
+                        {/* Episodes Menu */}
+                        {showEpisodesMenu && (
+                          <div 
+                            ref={episodesMenuRef}
+                            className="absolute right-10 bottom-14 z-50 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
+                            style={{ width: '240px', maxHeight: 'min(350px, 50vh)' }}
+                            onClick={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
+                          >
+                            {loadingSeasonsData ? (
+                              <div className="flex items-center justify-center py-8">
+                                <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
+                              </div>
+                            ) : seasonsData.length > 0 ? (
+                              <>
+                                {/* Main menu items */}
+                                <div className="py-1 overflow-y-auto" style={{ maxHeight: 'min(350px, 50vh)' }}>
+                                  {seasonsData.map((season) => {
+                                    const currentSeasonEpisodeCount = season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length;
+                                    const isCurrentSeason = season.episodes.some((ep: any) => ep.id === episode?.id);
+                                    
+                                    return (
+                                      <div
+                                        key={season.season_number}
+                                        className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 relative ${
+                                          activeSeasonNumber === season.season_number 
+                                            ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                            : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                        }`}
+                                        onMouseEnter={() => setActiveSeasonNumber(season.season_number)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
+                                        }}
+                                        onTouchEnd={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
+                                        }}
+                                      >
+                                        <span className="text-sm font-medium">Season {season.season_number}</span>
+                                        <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                                          {isCurrentSeason && <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>}
+                                          {currentSeasonEpisodeCount} eps
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                          </svg>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                
+                                {/* Episodes submenu - positioned relative to the menu container */}
+                                {activeSeasonNumber !== null && seasonsData.find(s => s.season_number === activeSeasonNumber) && (
+                                  <div 
+                                    className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                                    style={{ width: '260px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto' }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                  >
+                                    {seasonsData.find(s => s.season_number === activeSeasonNumber)?.episodes.map((ep: any) => {
+                                      const isCurrentEpisode = episode?.id === ep.id;
+                                      const isAvailable = ep.is_in_storage && ep.encFilePath;
+                                      
+                                      return (
+                                        <div
+                                          key={`${activeSeasonNumber}-${ep.episode_number}-${ep.id}`}
+                                          className={`flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
+                                            isCurrentEpisode 
+                                              ? 'bg-rose-50 dark:bg-rose-900/20' 
+                                              : isAvailable
+                                                ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                : 'opacity-40 cursor-not-allowed'
+                                          }`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
+                                          }}
+                                        >
+                                          <div className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${
+                                            isCurrentEpisode 
+                                              ? 'bg-rose-500 text-white' 
+                                              : isAvailable
+                                                ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
+                                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+                                          }`}>
+                                            {ep.episode_number}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className={`text-xs font-medium truncate ${
+                                              isCurrentEpisode ? 'text-rose-600 dark:text-rose-400' : ''
+                                            }`}>
+                                              {ep.name || `Episode ${ep.episode_number}`}
+                                            </div>
+                                            {ep.runtime && (
+                                              <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                                {ep.runtime} min
+                                              </div>
+                                            )}
+                                          </div>
+                                          {isCurrentEpisode && <Check className="w-4 h-4 text-rose-500 flex-shrink-0" />}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="px-4 py-8 text-center">
+                                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                                  No episodes available
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
                         {/* PiP button */}
+                        {isPipSupported && (
+                          <Tooltip text={isPipActive ? "Exit Picture-in-Picture" : "Picture-in-Picture"} position="bottom">
+                            <button 
+                              onClick={togglePip}
+                              className={`${isPipActive ? 'text-rose-500' : ''}`}
+                            >
+                              <PictureInPicture2 className="w-5 h-5 hover:text-rose-500 transition-colors duration-150 cursor-pointer" />
+                            </button>
+                          </Tooltip>
+                        )}
+
+                        {/* Fullscreen button */}
                         <Tooltip text={isFullscreen ? "Exit Fullscreen (f)" : "Enter Fullscreen (f)"} position="bottom">
                           <button onClick={toggleFullscreen}>
                             {isFullscreen ? (
