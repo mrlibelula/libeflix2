@@ -281,6 +281,26 @@ export function PlayEpisodeDialog({
     fetchAudioPreference();
   }, [episode, tvshowId, isAuthenticated]);
 
+  // Fetch user's subtitle preference when episode or tvshow changes
+  useEffect(() => {
+    const fetchSubtitlePreference = async () => {
+      if (!isAuthenticated || !tvshowId) {
+        return;
+      }
+
+      try {
+        const response = await axios.get(route('api.user.preferences.tvshow-subtitle.get', { tvshowId }));
+        if (response.data.subtitle_language_code) {
+          setUserPreferredSubtitleId(response.data.subtitle_language_code);
+        }
+      } catch (error) {
+        console.error('Failed to fetch subtitle preference:', error);
+      }
+    };
+
+    fetchSubtitlePreference();
+  }, [episode, tvshowId, isAuthenticated]);
+
   // Initialize audio tracks when episode changes (for language-specific video files)
   useEffect(() => {
     if (episode) {
@@ -2199,6 +2219,9 @@ export function PlayEpisodeDialog({
     // Store user preference for future episode changes
     setUserPreferredSubtitleId(normalizedId);
     
+    // Save the user's subtitle preference to the backend
+    saveSubtitlePreference(normalizedId);
+    
     // Store the active subtitle ID for PiP mode
     sessionStorage.setItem('activePipSubtitleId', normalizedId);
     
@@ -2227,6 +2250,23 @@ export function PlayEpisodeDialog({
       setUserPreferredAudio(audioLanguageCode);
     } catch (error) {
       console.error('Failed to save audio preference:', error);
+    }
+  };
+
+  // Function to save user's subtitle preference
+  const saveSubtitlePreference = async (subtitleLanguageCode: string) => {
+    if (!isAuthenticated || !tvshowId) {
+      return;
+    }
+
+    try {
+      await axios.post(route('api.user.preferences.tvshow-subtitle.save'), {
+        tvshow_id: tvshowId,
+        subtitle_language_code: subtitleLanguageCode,
+      });
+      // The state is already set in handleSelectSubtitle via setUserPreferredSubtitleId
+    } catch (error) {
+      console.error('Failed to save subtitle preference:', error);
     }
   };
 

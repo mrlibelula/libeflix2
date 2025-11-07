@@ -412,4 +412,56 @@ class User extends Authenticatable
         
         return $this->update(['tvshow_audio_preferences' => $preferences]);
     }
+
+    /**
+     * Get the user's subtitle preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @return string|null
+     */
+    public function getTvshowSubtitlePreference(int $tvshowId): ?string
+    {
+        if (!$this->tvshow_audio_preferences) {
+            return null;
+        }
+        
+        // Subtitles are stored in the same preferences array with a 'subtitle_' prefix
+        $key = 'subtitle_' . $tvshowId;
+        return $this->tvshow_audio_preferences[$key] ?? null;
+    }
+
+    /**
+     * Set the user's subtitle preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @param string $subtitleLanguageCode
+     * @return bool
+     */
+    public function setTvshowSubtitlePreference(int $tvshowId, string $subtitleLanguageCode): bool
+    {
+        $preferences = $this->tvshow_audio_preferences ?? [];
+        $key = 'subtitle_' . $tvshowId;
+        $preferences[$key] = strtoupper($subtitleLanguageCode);
+        
+        return $this->update(['tvshow_audio_preferences' => $preferences]);
+    }
+
+    /**
+     * Remove the user's subtitle preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @return bool
+     */
+    public function removeTvshowSubtitlePreference(int $tvshowId): bool
+    {
+        if (!$this->tvshow_audio_preferences) {
+            return false;
+        }
+        
+        $preferences = $this->tvshow_audio_preferences;
+        $key = 'subtitle_' . $tvshowId;
+        unset($preferences[$key]);
+        
+        return $this->update(['tvshow_audio_preferences' => $preferences]);
+    }
 }

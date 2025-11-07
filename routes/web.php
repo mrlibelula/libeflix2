@@ -141,6 +141,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/user/preferences/tvshow-audio/{tvshowId}', [UserPreferenceController::class, 'getTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.get');
     Route::delete('api/user/preferences/tvshow-audio/{tvshowId}', [UserPreferenceController::class, 'removeTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.remove');
     
+    Route::post('api/user/preferences/tvshow-subtitle', [UserPreferenceController::class, 'saveTvshowSubtitlePreference'])->name('api.user.preferences.tvshow-subtitle.save');
+    Route::get('api/user/preferences/tvshow-subtitle/{tvshowId}', [UserPreferenceController::class, 'getTvshowSubtitlePreference'])->name('api.user.preferences.tvshow-subtitle.get');
+    Route::delete('api/user/preferences/tvshow-subtitle/{tvshowId}', [UserPreferenceController::class, 'removeTvshowSubtitlePreference'])->name('api.user.preferences.tvshow-subtitle.remove');
+    
     // Alternative Job Queue Routes
     Route::post('api/movies/{movie}/recommendations/initiate', [MovieController::class, 'initiateRecommendationsFetch'])->name('api.movies.recommendations.initiate');
     Route::get('api/movies/{movie}/recommendations/status', [MovieController::class, 'pollRecommendationsStatus'])->name('api.movies.recommendations.status');
