@@ -2269,8 +2269,9 @@ export function PlayEpisodeDialog({
 
   // Close context menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (contextMenuRef.current && !contextMenuRef.current.contains(target)) {
         setShowContextMenu(false);
         setActiveSection('none');
       }
@@ -2278,10 +2279,12 @@ export function PlayEpisodeDialog({
 
     if (showContextMenu) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
     }
     
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [showContextMenu]);
 
@@ -3024,18 +3027,29 @@ export function PlayEpisodeDialog({
                             className="absolute right-10 bottom-14 z-50 bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
                             style={{ width: '240px' }}
                             onClick={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
                           >
                             {/* Main menu items */}
                             <div className="py-1">
                               {/* Subtitles option - only show if subtitles are available */}
                               {hasSubtitles && (
                                 <div 
-                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
                                     activeSection === 'subtitles' 
                                       ? 'bg-neutral-100 dark:bg-neutral-800' 
                                       : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
                                   }`}
                                   onMouseEnter={() => setActiveSection('subtitles')}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
+                                  }}
+                                  onTouchEnd={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
+                                  }}
                                 >
                                   <span className="text-sm font-medium">Subtitles</span>
                                   <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
@@ -3050,12 +3064,21 @@ export function PlayEpisodeDialog({
                               {/* Audio option - only show if multiple audio tracks available */}
                               {audioTracks.length > 1 && (
                                 <div 
-                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
                                     activeSection === 'audio' 
                                       ? 'bg-neutral-100 dark:bg-neutral-800' 
                                       : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
                                   }`}
                                   onMouseEnter={() => setActiveSection('audio')}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
+                                  }}
+                                  onTouchEnd={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
+                                  }}
                                 >
                                   <span className="text-sm font-medium">Audio</span>
                                   <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
@@ -3074,13 +3097,19 @@ export function PlayEpisodeDialog({
                                 className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
                                 style={{ width: '180px' }}
                                 onClick={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
                               >
                                 {subtitleTracks.map((track) => (
                                   <div 
                                     key={track.id}
-                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      handleSelectSubtitle(track.id);
+                                    }}
+                                    onTouchEnd={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
                                       handleSelectSubtitle(track.id);
                                     }}
                                   >
@@ -3097,13 +3126,19 @@ export function PlayEpisodeDialog({
                                 className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
                                 style={{ width: '180px' }}
                                 onClick={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
                               >
                                 {audioTracks.map((track) => (
                                   <div 
                                     key={track.id}
-                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      handleSelectAudio(track.id);
+                                    }}
+                                    onTouchEnd={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
                                       handleSelectAudio(track.id);
                                     }}
                                   >
