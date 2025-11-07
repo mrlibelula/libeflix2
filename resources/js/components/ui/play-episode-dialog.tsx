@@ -16,11 +16,19 @@ import { InlinePremiumNotice } from "@/components/premium-content-notice";
 import { Link, usePage } from "@inertiajs/react";
 import { useWebShare } from "@/hooks/use-web-share";
 import { EpisodesApi } from "@/services/episodes-api";
+import axios from 'axios';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
   direction: GestureDirection;
   amount: number;
+};
+
+type AudioTrack = {
+  id: string;
+  label: string;
+  selected: boolean;
+  encFilePath?: string;
 };
 
 const SEEK_INTERVAL_SECONDS = 5;
@@ -46,6 +54,7 @@ const CONTROLS_AUTOHIDE_TIMEOUT_MS = 3800;
 type PlayEpisodeDialogProps = {
   episode: any;
   tvshowName: string;
+  tvshowId?: number;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   onError?: (error: Error) => void;
@@ -82,6 +91,7 @@ type PlayEpisodeDialogProps = {
 export function PlayEpisodeDialog({
   episode,
   tvshowName,
+  tvshowId,
   isOpen,
   onOpenChange,
   onError,
@@ -183,11 +193,12 @@ export function PlayEpisodeDialog({
   // Track the currently selected subtitle ID
   const [currentSubtitleId, setCurrentSubtitleId] = useState<string>('off');
 
-  const [audioTracks, setAudioTracks] = useState([
-    { id: 'default', label: 'Default', selected: true },
-    { id: 'EN-5.1', label: 'English (5.1)', selected: false },
-    { id: 'EN-2.0', label: 'English (2.0)', selected: false },
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([
+    { id: 'default', label: 'Original', selected: true, encFilePath: episode?.encFilePath },
   ]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
+  const [currentEncFilePath, setCurrentEncFilePath] = useState(episode?.encFilePath || '');
+  const [userPreferredAudio, setUserPreferredAudio] = useState<string | null>(null);
 
   // Check if subtitles exist
   const [hasSubtitles, setHasSubtitles] = useState(false);
@@ -233,6 +244,88 @@ export function PlayEpisodeDialog({
     setRepeatSeason(initialRepeatMode === 'season');
     setRepeatTvshow(initialRepeatMode === 'tvshow');
   }, [initialRepeatMode]);
+  
+  // Fetch user's audio preference when episode or tvshow changes
+  useEffect(() => {
+    const fetchAudioPreference = async () => {
+      if (!isAuthenticated || !tvshowId) {
+        return;
+      }
+
+      try {
+        const response = await axios.get(route('api.user.preferences.tvshow-audio.get', { tvshowId }));
+        if (response.data.audio_language_code) {
+          setUserPreferredAudio(response.data.audio_language_code);
+        }
+      } catch (error) {
+        console.error('Failed to fetch audio preference:', error);
+      }
+    };
+
+    fetchAudioPreference();
+  }, [episode, tvshowId, isAuthenticated]);
+
+  // Initialize audio tracks when episode changes (for language-specific video files)
+  useEffect(() => {
+    if (episode) {
+      // Update currentEncFilePath when episode changes
+      setCurrentEncFilePath(episode.encFilePath || '');
+      
+      if (episode.encodedLanguageVideoFiles && Array.isArray(episode.encodedLanguageVideoFiles)) {
+        try {
+          const audioOptions = [
+            { 
+              id: 'default', 
+              label: 'Original', 
+              selected: true,
+              encFilePath: episode.encFilePath
+            },
+            ...episode.encodedLanguageVideoFiles
+              .filter((langFile: any) => 
+                langFile && 
+                langFile.language_code && 
+                langFile.encFilePath &&
+                typeof langFile.encFilePath === 'string'
+              )
+              .map((langFile: any) => ({
+                id: langFile.language_code.toUpperCase(),
+                label: langFile.language_name || langFile.language_code.toUpperCase(),
+                selected: false,
+                encFilePath: langFile.encFilePath
+              }))
+          ];
+          
+          // Check if user has a preferred audio language
+          if (userPreferredAudio) {
+            const preferredTrack = audioOptions.find(track => track.id === userPreferredAudio.toUpperCase());
+            if (preferredTrack) {
+              // Apply user's preference
+              const updatedOptions = audioOptions.map(track => ({
+                ...track,
+                selected: track.id === userPreferredAudio.toUpperCase()
+              }));
+              setAudioTracks(updatedOptions);
+              setCurrentAudioTrack(userPreferredAudio.toUpperCase());
+              setCurrentEncFilePath(preferredTrack.encFilePath || episode.encFilePath);
+            } else {
+              // Preferred language not available for this episode, use default
+              setAudioTracks(audioOptions);
+              setCurrentAudioTrack('default');
+            }
+          } else {
+            // No preference, use default
+            setAudioTracks(audioOptions);
+            setCurrentAudioTrack('default');
+          }
+        } catch (err) {
+          console.error('Error processing audio tracks:', err);
+          setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: episode.encFilePath }]);
+        }
+      } else {
+        setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: episode.encFilePath }]);
+      }
+    }
+  }, [episode, userPreferredAudio]);
   
   // Initialize episode states when episode changes
   useEffect(() => {
@@ -1740,33 +1833,42 @@ export function PlayEpisodeDialog({
       video.play().catch(() => {});
       setShowLoopNotification(true);
       setTimeout(() => setShowLoopNotification(false), 2000);
-    } else if (repeatSeason || repeatTvshow) {
-      // For repeat modes, we need to be smarter about finding next episodes
+    } else if (repeatSeason) {
+      // Repeat Season Mode: Stay within current season only
       if (hasNextEpisode) {
-        // There is a direct next episode available
+        // There is a direct next episode available in current season
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
           onNextEpisode();
         }, 1500);
-      } else if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
-        // Try to find next available episode (skipping missing ones)
-        setShowSkippingEpisodesNotification(true);
+      } else {
+        // No more episodes in current season - loop back to first episode of current season
+        setShowLoopNotification(true);
         setTimeout(() => {
-          setShowSkippingEpisodesNotification(false);
-          onFindNextAvailableEpisode();
+          setShowLoopNotification(false);
+          onFirstEpisodeOfSeason();
+        }, 2000);
+      }
+    } else if (repeatTvshow) {
+      // Repeat TV Show Mode: Continue across all seasons, loop back to start when at the end
+      if (hasNextEpisode) {
+        // There is a direct next episode available in current season
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
         }, 1500);
       } else {
-        // No next episode found at all, handle according to repeat mode
-        if (repeatSeason) {
-          // Loop back to first episode of current season
-          setShowLoopNotification(true);
+        // No more episodes in current season - try to find next available episode in next seasons
+        if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
+          setShowSkippingEpisodesNotification(true);
           setTimeout(() => {
-            setShowLoopNotification(false);
-            onFirstEpisodeOfSeason();
-          }, 2000);
-        } else if (repeatTvshow) {
-          // Loop back to first episode of entire TV show
+            setShowSkippingEpisodesNotification(false);
+            onFindNextAvailableEpisode();
+          }, 1500);
+        } else {
+          // No next seasons or episodes found - loop back to first episode of entire TV show
           setShowNextEpisodeNotification(true);
           setTimeout(() => {
             setShowNextEpisodeNotification(false);
@@ -1777,22 +1879,25 @@ export function PlayEpisodeDialog({
     } else {
       // No repeat mode active - try next episode if available, otherwise stop
       if (hasNextEpisode) {
+        // There is a direct next episode available in current season
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
           onNextEpisode();
         }, 1500);
-      } else if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
-        // Try to find next available episode even without repeat mode
-        setShowSkippingEpisodesNotification(true);
-        setTimeout(() => {
-          setShowSkippingEpisodesNotification(false);
-          onFindNextAvailableEpisode();
-        }, 1500);
       } else {
-        // No next episode found and no repeat mode - stop playback
-        setIsPlaying(false);
-        onComplete?.();
+        // No more episodes in current season - try to find next available episode in next seasons
+        if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
+          setShowSkippingEpisodesNotification(true);
+          setTimeout(() => {
+            setShowSkippingEpisodesNotification(false);
+            onFindNextAvailableEpisode();
+          }, 1500);
+        } else {
+          // No next episodes found anywhere - stop playback
+          setIsPlaying(false);
+          onComplete?.();
+        }
       }
     }
   };
@@ -2007,7 +2112,44 @@ export function PlayEpisodeDialog({
   };
 
   // Handle audio track selection
+  // Function to save user's audio preference
+  const saveAudioPreference = async (audioLanguageCode: string) => {
+    if (!isAuthenticated || !tvshowId) {
+      return;
+    }
+
+    try {
+      await axios.post(route('api.user.preferences.tvshow-audio.save'), {
+        tvshow_id: tvshowId,
+        audio_language_code: audioLanguageCode,
+      });
+      setUserPreferredAudio(audioLanguageCode);
+    } catch (error) {
+      console.error('Failed to save audio preference:', error);
+    }
+  };
+
   const handleSelectAudio = (id: string) => {
+    // Find the selected audio track
+    const selectedTrack = audioTracks.find(track => track.id === id);
+    
+    if (!selectedTrack || !selectedTrack.encFilePath) {
+      console.error('Audio track not found or has no file path');
+      return;
+    }
+    
+    // If it's the same track, do nothing
+    if (id === currentAudioTrack) {
+      setShowContextMenu(false);
+      setActiveSection('none');
+      return;
+    }
+    
+    // Save current playback time
+    const currentTime = videoRef.current?.currentTime || 0;
+    const wasPlaying = isPlaying;
+    
+    // Update audio tracks selection
     const updatedTracks = audioTracks.map(track => ({
       ...track,
       selected: track.id === id
@@ -2015,9 +2157,29 @@ export function PlayEpisodeDialog({
     
     setAudioTracks(updatedTracks);
     
+    // Update current audio track and file path
+    setCurrentAudioTrack(id);
+    setCurrentEncFilePath(selectedTrack.encFilePath);
+    
+    // Save the user's audio preference
+    saveAudioPreference(id);
+    
+    // Wait for video to load new source, then restore time and play state
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = currentTime;
+        
+        if (wasPlaying) {
+          videoRef.current.play().catch(err => {
+            console.error('Error resuming playback after language switch:', err);
+          });
+        }
+      }
+    }, 100);
+    
     // Apply audio track to video element
     if (videoRef.current) {
-      // In a real implementation, you would select the appropriate audio track
+      // Video source is updated via currentEncFilePath state
       // This depends on how your video is served and what audio tracks are available
     }
     
@@ -2429,8 +2591,8 @@ export function PlayEpisodeDialog({
                     <>
                       <video 
                         ref={videoRef}
-                        key={episode.encFilePath}
-                        src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: episode.encFilePath, disk: 'tvshows' })}` : undefined}
+                        key={currentEncFilePath}
+                        src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: currentEncFilePath, disk: 'tvshows' })}` : undefined}
                         className="w-full h-full object-cover cursor-pointer"
                         style={isFullscreen ? { objectFit: 'contain' } : {}}
                         controls={false}
@@ -2438,6 +2600,13 @@ export function PlayEpisodeDialog({
                         muted={isMuted}
                         playsInline
                         preload={canAccessEpisode ? "metadata" : "none"}
+                        onClick={(e) => {
+                          if (!canAccessEpisode) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          togglePlay();
+                          handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
+                        }}
                         onLoadedData={() => {
                           if (canAccessEpisode) {
                             setIsLoading(false);
@@ -2632,8 +2801,8 @@ export function PlayEpisodeDialog({
                 {/* Video controls overlay */}
                 <div 
                   ref={controlsRef}
-                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
-                    (controlsVisible && canAccessEpisode) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end pointer-events-none ${
+                    (controlsVisible && canAccessEpisode) ? 'opacity-100' : 'opacity-0'
                   }`}
                   onMouseEnter={() => {
                     // Always show controls when hovering over them
@@ -2663,9 +2832,9 @@ export function PlayEpisodeDialog({
                   }}
                 >
                   
-                  <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10" />
+                  <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10 pointer-events-none" />
 
-                  <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30">
+                  <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
                     <div className="mb-3 relative">
                       {/* Progress bar with track and indicator */}
                       <div 
@@ -2827,8 +2996,9 @@ export function PlayEpisodeDialog({
                         <Tooltip text="Subtitles & Audio" position="bottom">
                           <button 
                             onClick={handleToggleContextMenu}
-                            className="focus:outline-none relative cursor-pointer"
+                            className={`focus:outline-none relative cursor-pointer ${(!hasSubtitles && audioTracks.length <= 1) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             aria-label="Subtitles and Audio Options"
+                            disabled={!hasSubtitles && audioTracks.length <= 1}
                           >
                             <MessageSquareText className={`w-5 h-5 ${showContextMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
                           </button>
@@ -2864,23 +3034,25 @@ export function PlayEpisodeDialog({
                                 </div>
                               )}
                               
-                              {/* Audio option */}
-                              <div 
-                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                                  activeSection === 'audio' 
-                                    ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                }`}
-                                onMouseEnter={() => setActiveSection('audio')}
-                              >
-                                <span className="text-sm font-medium">Audio</span>
-                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                                  {audioTracks.find(track => track.selected)?.label || 'Default'}
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                </span>
-                              </div>
+                              {/* Audio option - only show if multiple audio tracks available */}
+                              {audioTracks.length > 1 && (
+                                <div 
+                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                    activeSection === 'audio' 
+                                      ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                  }`}
+                                  onMouseEnter={() => setActiveSection('audio')}
+                                >
+                                  <span className="text-sm font-medium">Audio</span>
+                                  <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                                    {audioTracks.find(track => track.selected)?.label || 'Original'}
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             
                             {/* Subtitles submenu */}

@@ -11,6 +11,13 @@ type GestureFeedbackState = {
   amount: number;
 };
 
+type AudioTrack = {
+  id: string;
+  label: string;
+  selected: boolean;
+  encFilePath?: string;
+};
+
 const SEEK_INTERVAL_SECONDS = 10;
 const DOUBLE_TAP_THRESHOLD_MS = 400;
 const CONSECUTIVE_GESTURE_WINDOW_MS = 800;
@@ -97,9 +104,11 @@ export function PlayMoviePlayer({
   const [hasSubtitles, setHasSubtitles] = useState(false);
   const [userPreferredSubtitleId, setUserPreferredSubtitleId] = useState<string>('off');
 
-  const [audioTracks, setAudioTracks] = useState([
-    { id: 'default', label: 'Default', selected: true },
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([
+    { id: 'default', label: 'Default', selected: true, encFilePath: encFilePath },
   ]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
+  const [currentEncFilePath, setCurrentEncFilePath] = useState(encFilePath);
 
   // Progress bar tooltip state
   const [progressTooltipVisible, setProgressTooltipVisible] = useState(false);
@@ -204,6 +213,47 @@ export function PlayMoviePlayer({
       setHasSubtitles(false);
     }
   }, [movie, userPreferredSubtitleId, currentSubtitleId]);
+
+  // Initialize audio tracks when movie changes (for language-specific video files)
+  useEffect(() => {
+    if (movie && movie.encodedLanguageVideoFiles && Array.isArray(movie.encodedLanguageVideoFiles)) {
+      try {
+        // Get original language name from movie data or default to 'Original'
+        const originalLanguageName = movie.original_language_name || 'Original';
+        
+        const audioOptions = [
+          { 
+            id: 'default', 
+            label: originalLanguageName, 
+            selected: true,
+            encFilePath: encFilePath // Store the original encoded file path
+          },
+          ...movie.encodedLanguageVideoFiles
+            .filter((langFile: any) => 
+              langFile && 
+              langFile.language_code && 
+              langFile.encFilePath &&
+              typeof langFile.encFilePath === 'string'
+            )
+            .map((langFile: any) => ({
+              id: langFile.language_code.toUpperCase(),
+              label: langFile.language_name || langFile.language_code.toUpperCase(),
+              selected: false,
+              encFilePath: langFile.encFilePath
+            }))
+        ];
+        
+        setAudioTracks(audioOptions);
+        setCurrentAudioTrack('default');
+      } catch (err) {
+        console.error('Error processing audio tracks:', err);
+        setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: encFilePath }]);
+      }
+    } else {
+      // No additional language files, just show default
+      setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: encFilePath }]);
+    }
+  }, [movie, encFilePath]);
 
   const handleError = (err: Error) => {
     setError(err);
@@ -969,12 +1019,49 @@ export function PlayMoviePlayer({
   };
 
   const handleSelectAudio = (audioId: string) => {
+    // Find the selected audio track
+    const selectedTrack = audioTracks.find(track => track.id === audioId);
+    
+    if (!selectedTrack || !selectedTrack.encFilePath) {
+      console.error('Audio track not found or has no file path');
+      return;
+    }
+    
+    // If it's the same track, do nothing
+    if (audioId === currentAudioTrack) {
+      setShowContextMenu(false);
+      setActiveSection('none');
+      return;
+    }
+    
+    // Save current playback time
+    const currentTime = videoRef.current?.currentTime || 0;
+    const wasPlaying = isPlaying;
+    
+    // Update audio tracks selection
     setAudioTracks(prevTracks => 
       prevTracks.map(track => ({
         ...track,
         selected: track.id === audioId
       }))
     );
+    
+    // Update current audio track and file path
+    setCurrentAudioTrack(audioId);
+    setCurrentEncFilePath(selectedTrack.encFilePath);
+    
+    // Wait for video to load new source, then restore time and play state
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = currentTime;
+        
+        if (wasPlaying) {
+          videoRef.current.play().catch(err => {
+            console.error('Error resuming playback after language switch:', err);
+          });
+        }
+      }
+    }, 100);
     
     setTimeout(() => {
       setShowContextMenu(false);
@@ -1115,8 +1202,8 @@ export function PlayMoviePlayer({
               <>
                 <video 
                   ref={videoRef}
-                  key={encFilePath}
-                  src={canAccessMovie ? `${route('movie.serve', { encFilePath: encFilePath, disk: 'movies' })}` : undefined}
+                  key={currentEncFilePath}
+                  src={canAccessMovie ? `${route('movie.serve', { encFilePath: currentEncFilePath, disk: 'movies' })}` : undefined}
                   poster={movie.backdrop_path ? `${imgBaseUrl}${movie.backdrop_path}` : undefined}
                   className="w-full h-full object-cover cursor-pointer"
                   style={isFullscreen ? { objectFit: 'contain' } : {}}
@@ -1126,6 +1213,13 @@ export function PlayMoviePlayer({
                   muted={isMuted}
                   playsInline
                   preload={canAccessMovie ? "metadata" : "none"}
+                  onClick={(e) => {
+                    if (!canAccessMovie) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    togglePlay();
+                    handleUserActivity(true, CONTROLS_AUTOHIDE_TIMEOUT_MS);
+                  }}
                   onLoadedData={() => {
                     if (canAccessMovie) {
                       setIsLoading(false);
@@ -1178,11 +1272,11 @@ export function PlayMoviePlayer({
                 </video>
 
                 {/* Hidden preview video for generating thumbnails */}
-                {canAccessMovie && encFilePath && (
+                {canAccessMovie && currentEncFilePath && (
                   <>
                     <video 
                       ref={previewVideoRef}
-                      src={route('movie.serve', { encFilePath: encFilePath, disk: 'movies' })}
+                      src={route('movie.serve', { encFilePath: currentEncFilePath, disk: 'movies' })}
                       className="hidden"
                       preload="auto"
                       muted
@@ -1274,8 +1368,8 @@ export function PlayMoviePlayer({
           {/* Video controls overlay */}
           <div 
             ref={controlsRef}
-            className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end ${
-              (controlsVisible && canAccessMovie) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end pointer-events-none ${
+              (controlsVisible && canAccessMovie) ? 'opacity-100' : 'opacity-0'
             }`}
             onMouseEnter={() => {
               setControlsVisible(true);
@@ -1303,9 +1397,9 @@ export function PlayMoviePlayer({
             }}
           >
             
-            <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10" />
+            <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10 pointer-events-none" />
 
-            <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30">
+            <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
               <div className="mb-3 relative">
                 {/* Progress bar */}
                 <div 
@@ -1432,19 +1526,19 @@ export function PlayMoviePlayer({
                     />
                   </div>
 
-                  {/* Subtitles button */}
+                  {/* Subtitles & Audio button */}
                   <Tooltip text="Subtitles & Audio" position="bottom">
                     <button 
                       onClick={handleToggleContextMenu}
-                      className={`focus:outline-none relative cursor-pointer ${!hasSubtitles ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`focus:outline-none relative cursor-pointer ${(!hasSubtitles && audioTracks.length <= 1) ? 'opacity-50 cursor-not-allowed' : ''}`}
                       aria-label="Subtitles and Audio Options"
-                      disabled={!hasSubtitles}
+                      disabled={!hasSubtitles && audioTracks.length <= 1}
                     >
                       <MessageSquareText className={`w-5 h-5 ${showContextMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
                     </button>
                   </Tooltip>
                   
-                  {/* Context Menu for Subtitles */}
+                  {/* Context Menu for Subtitles and Audio */}
                   {showContextMenu && (
                     <div 
                       ref={contextMenuRef}
@@ -1453,6 +1547,26 @@ export function PlayMoviePlayer({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="py-1">
+                        {/* Audio Language Selection */}
+                        {audioTracks.length > 1 && (
+                          <div 
+                            className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                              activeSection === 'audio' 
+                                ? 'bg-neutral-100 dark:bg-neutral-800' 
+                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                            }`}
+                            onMouseEnter={() => setActiveSection('audio')}
+                          >
+                            <span className="text-sm font-medium">Audio</span>
+                            <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                              {audioTracks.find(track => track.selected)?.label || 'Default'}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </span>
+                          </div>
+                        )}
+                        
                         {hasSubtitles && (
                           <div 
                             className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
@@ -1473,6 +1587,30 @@ export function PlayMoviePlayer({
                         )}
                       </div>
                       
+                      {/* Audio Tracks Submenu */}
+                      {activeSection === 'audio' && (
+                        <div 
+                          className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
+                          style={{ width: '180px' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {audioTracks.map((track) => (
+                            <div 
+                              key={track.id}
+                              className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAudio(track.id);
+                              }}
+                            >
+                              <span className="flex-1 text-sm">{track.label}</span>
+                              {track.selected && <Check className="w-4 h-4 text-rose-500" />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Subtitles Submenu */}
                       {activeSection === 'subtitles' && (
                         <div 
                           className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 

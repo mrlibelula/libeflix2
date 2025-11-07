@@ -193,6 +193,28 @@ class TvshowController extends Controller
                 $diskSubtitles = $this->findSubtitlesForEpisode($episode->is_in_storage);
                 $episode->subtitles = $diskSubtitles;
             }
+            
+            // Encode language video files paths for secure transmission
+            if (!empty($episode->language_video_files) && is_array($episode->language_video_files)) {
+                $episode->encodedLanguageVideoFiles = array_map(function ($langFile) {
+                    // Support both old and new field name formats
+                    $langCode = $langFile['language_code'] ?? $langFile['langCode'] ?? '';
+                    $langName = $langFile['language_name'] ?? $langFile['langName'] ?? '';
+                    $filePath = $langFile['file_path'] ?? '';
+                    $encFilePath = $langFile['encFilePath'] ?? '';
+                    
+                    // If we don't have encFilePath but have file_path, encode it
+                    if (empty($encFilePath) && !empty($filePath)) {
+                        $encFilePath = Tool::encode($filePath);
+                    }
+                    
+                    return [
+                        'language_code' => $langCode,
+                        'language_name' => $langName ?: $this->getLanguageName($langCode),
+                        'encFilePath' => $encFilePath
+                    ];
+                }, $episode->language_video_files);
+            }
         });
 
         return response()->json([
@@ -2035,5 +2057,40 @@ class TvshowController extends Controller
                 'message' => 'Failed to cleanup search record'
             ], 500);
         }
+    }
+    
+    /**
+     * Get language name from language code
+     * 
+     * @param string $code
+     * @return string
+     */
+    private function getLanguageName(string $code): string
+    {
+        $languages = [
+            'EN' => 'English',
+            'ES' => 'Spanish',
+            'PT' => 'Portuguese',
+            'FR' => 'French',
+            'DE' => 'German',
+            'IT' => 'Italian',
+            'JA' => 'Japanese',
+            'KO' => 'Korean',
+            'ZH' => 'Chinese',
+            'CN' => 'Chinese',
+            'RU' => 'Russian',
+            'AR' => 'Arabic',
+            'HI' => 'Hindi',
+            'NL' => 'Dutch',
+            'PL' => 'Polish',
+            'TR' => 'Turkish',
+            'SV' => 'Swedish',
+            'DA' => 'Danish',
+            'NO' => 'Norwegian',
+            'FI' => 'Finnish',
+        ];
+        
+        $normalizedCode = strtoupper($code);
+        return $languages[$normalizedCode] ?? $normalizedCode;
     }
 }

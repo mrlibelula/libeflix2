@@ -12,6 +12,7 @@ use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TvshowController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\UserPreferenceController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -134,6 +135,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Season likes API routes
     Route::post('api/seasons/{season}/like', [SeasonController::class, 'like'])->name('api.seasons.like');
     Route::delete('api/seasons/{season}/like', [SeasonController::class, 'unlike'])->name('api.seasons.unlike');
+    
+    // User preferences API routes
+    Route::post('api/user/preferences/tvshow-audio', [UserPreferenceController::class, 'saveTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.save');
+    Route::get('api/user/preferences/tvshow-audio/{tvshowId}', [UserPreferenceController::class, 'getTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.get');
+    Route::delete('api/user/preferences/tvshow-audio/{tvshowId}', [UserPreferenceController::class, 'removeTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.remove');
     
     // Alternative Job Queue Routes
     Route::post('api/movies/{movie}/recommendations/initiate', [MovieController::class, 'initiateRecommendationsFetch'])->name('api.movies.recommendations.initiate');

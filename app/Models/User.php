@@ -27,6 +27,7 @@ class User extends Authenticatable
         'is_active',
         'is_banned',
         'is_pending',
+        'tvshow_audio_preferences',
     ];
 
     /**
@@ -168,6 +169,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
             'is_pending' => 'boolean',
+            'tvshow_audio_preferences' => 'array',
         ];
     }
 
@@ -361,5 +363,53 @@ class User extends Authenticatable
     public function canAccessAdminDashboard(): bool
     {
         return $this->hasPermissionTo('view admin dashboard');
+    }
+
+    /**
+     * Get the user's audio preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @return string|null
+     */
+    public function getTvshowAudioPreference(int $tvshowId): ?string
+    {
+        if (!$this->tvshow_audio_preferences) {
+            return null;
+        }
+        
+        return $this->tvshow_audio_preferences[$tvshowId] ?? null;
+    }
+
+    /**
+     * Set the user's audio preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @param string $audioLanguageCode
+     * @return bool
+     */
+    public function setTvshowAudioPreference(int $tvshowId, string $audioLanguageCode): bool
+    {
+        $preferences = $this->tvshow_audio_preferences ?? [];
+        $preferences[$tvshowId] = strtoupper($audioLanguageCode);
+        
+        return $this->update(['tvshow_audio_preferences' => $preferences]);
+    }
+
+    /**
+     * Remove the user's audio preference for a specific TV show.
+     *
+     * @param int $tvshowId
+     * @return bool
+     */
+    public function removeTvshowAudioPreference(int $tvshowId): bool
+    {
+        if (!$this->tvshow_audio_preferences) {
+            return false;
+        }
+        
+        $preferences = $this->tvshow_audio_preferences;
+        unset($preferences[$tvshowId]);
+        
+        return $this->update(['tvshow_audio_preferences' => $preferences]);
     }
 }
