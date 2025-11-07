@@ -1213,6 +1213,24 @@ export function PlayEpisodeDialog({
 
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTimeRef.current;
+    
+    // Check if tap is on an interactive element FIRST
+    const interactiveAncestor = targetNode instanceof Element
+      ? targetNode.closest('button, a, input, select, textarea, [role="slider"], [role="menu"], [role="menuitem"], [data-prevent-gesture]')
+      : null;
+    const isOnInteractiveElement = !!interactiveAncestor;
+    
+    // If tapping on interactive element (like control buttons), let the event through
+    if (isOnInteractiveElement) {
+      // Clear any pending tap gestures
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+      lastTapTimeRef.current = 0;
+      // Don't prevent default - let the button handle the tap
+      return;
+    }
 
     const executeSingleTap = () => {
       if (tapControlsVisibleRef.current) {
@@ -1240,16 +1258,11 @@ export function PlayEpisodeDialog({
       const relativeX = touch.clientX - rect.left;
       const normalizedX = relativeX / rect.width;
 
-      const interactiveAncestor = targetNode instanceof Element
-        ? targetNode.closest('button, a, input, select, textarea, [data-prevent-gesture]')
-        : null;
-      const shouldBlockGesture = !!interactiveAncestor;
-
-      if (!shouldBlockGesture && normalizedX <= EDGE_GESTURE_RATIO) {
+      if (normalizedX <= EDGE_GESTURE_RATIO) {
         handleSeekGesture('backward');
-      } else if (!shouldBlockGesture && normalizedX >= 1 - EDGE_GESTURE_RATIO) {
+      } else if (normalizedX >= 1 - EDGE_GESTURE_RATIO) {
         handleSeekGesture('forward');
-      } else if (!shouldBlockGesture) {
+      } else {
         tapControlsVisibleRef.current = false;
         handleUserActivity(true, 1500);
         togglePlay();
