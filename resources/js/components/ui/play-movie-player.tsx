@@ -77,6 +77,9 @@ export function PlayMoviePlayer({
   const [isAccessChecked, setIsAccessChecked] = useState(false);
   const pipTriggeredByScroll = useRef(false); // Track if PiP was auto-triggered by scroll
   
+  // Wake Lock state for keeping screen awake during playback
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
@@ -286,6 +289,44 @@ export function PlayMoviePlayer({
       return true;
     }
   };
+
+  // Wake Lock API - Keep screen awake during video playback
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active');
+      }
+    } catch (err) {
+      console.error('Failed to request wake lock:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Wake Lock released');
+      } catch (err) {
+        console.error('Failed to release wake lock:', err);
+      }
+    }
+  };
+
+  // Manage wake lock based on playback state
+  useEffect(() => {
+    if (isPlaying && canAccessMovie) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      releaseWakeLock();
+    };
+  }, [isPlaying, canAccessMovie]);
 
   const togglePlay = () => {
     setIsPlaying(!isPlaying);

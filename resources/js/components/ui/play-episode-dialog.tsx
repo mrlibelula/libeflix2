@@ -167,6 +167,9 @@ export function PlayEpisodeDialog({
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAccessChecked, setIsAccessChecked] = useState(false);
   
+  // Wake Lock state for keeping screen awake during playback
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
@@ -348,6 +351,44 @@ export function PlayEpisodeDialog({
       setIsLoading(true); // Reset loading state when access is granted
     }
   }, [canAccessEpisode]);
+
+  // Wake Lock API - Keep screen awake during video playback
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active');
+      }
+    } catch (err) {
+      console.error('Failed to request wake lock:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Wake Lock released');
+      } catch (err) {
+        console.error('Failed to release wake lock:', err);
+      }
+    }
+  };
+
+  // Manage wake lock based on playback state
+  useEffect(() => {
+    if (isPlaying && dialogOpen && canAccessEpisode) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      releaseWakeLock();
+    };
+  }, [isPlaying, dialogOpen, canAccessEpisode]);
 
   // Initialize subtitle tracks when episode changes
   useEffect(() => {
