@@ -295,7 +295,7 @@ export function PlayMoviePlayer({
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
-        console.log('Wake Lock is active');
+        // console.log('Wake Lock is active');
       }
     } catch (err) {
       console.error('Failed to request wake lock:', err);
@@ -307,7 +307,7 @@ export function PlayMoviePlayer({
       try {
         await wakeLockRef.current.release();
         wakeLockRef.current = null;
-        console.log('Wake Lock released');
+        // console.log('Wake Lock released');
       } catch (err) {
         console.error('Failed to release wake lock:', err);
       }
