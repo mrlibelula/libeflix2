@@ -2792,7 +2792,7 @@ export function PlayEpisodeDialog({
             className="relative w-full aspect-video bg-black outline-none"
             tabIndex={0}
             style={{
-              cursor: userActive || !isFullscreen ? 'default' : 'none', // Hide cursor when inactive in fullscreen
+              cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
               ...(isFullscreen && {
                 width: '100%',
                 height: '100%',
@@ -2872,8 +2872,11 @@ export function PlayEpisodeDialog({
                         ref={videoRef}
                         key={currentEncFilePath}
                         src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: currentEncFilePath, disk: 'tvshows' })}` : undefined}
-                        className="w-full h-full object-cover cursor-pointer"
-                        style={isFullscreen ? { objectFit: 'contain' } : {}}
+                        className="w-full h-full object-cover"
+                        style={{
+                          ...(isFullscreen ? { objectFit: 'contain' } : {}),
+                          cursor: (userActive || !isFullscreen || !isPlaying) ? 'pointer' : 'none'
+                        }}
                         controls={false}
                         autoPlay={canAccessEpisode ? isPlaying : false}
                         muted={isMuted}

@@ -1179,7 +1179,7 @@ export function PlayMoviePlayer({
       className={`relative w-full aspect-video bg-black outline-none ${className}`}
       tabIndex={0}
       style={{
-        cursor: userActive || !isFullscreen ? 'default' : 'none',
+        cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none',
         ...(isFullscreen && {
           width: '100%',
           height: '100%',
@@ -1246,8 +1246,11 @@ export function PlayMoviePlayer({
                   key={currentEncFilePath}
                   src={canAccessMovie ? `${route('movie.serve', { encFilePath: currentEncFilePath, disk: 'movies' })}` : undefined}
                   poster={movie.backdrop_path ? `${imgBaseUrl}${movie.backdrop_path}` : undefined}
-                  className="w-full h-full object-cover cursor-pointer"
-                  style={isFullscreen ? { objectFit: 'contain' } : {}}
+                  className="w-full h-full object-cover"
+                  style={{
+                    ...(isFullscreen ? { objectFit: 'contain' } : {}),
+                    cursor: (userActive || !isFullscreen || !isPlaying) ? 'pointer' : 'none'
+                  }}
                   data-controls-visible={controlsVisible ? 'true' : 'false'}
                   controls={false}
                   autoPlay={canAccessMovie ? isPlaying : false}
