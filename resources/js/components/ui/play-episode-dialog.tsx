@@ -378,10 +378,9 @@ export function PlayEpisodeDialog({
   // Handle loading state when access changes
   useEffect(() => {
     if (!canAccessEpisode) {
-      setIsLoading(false); // Don't show loading for restricted content
+      // Don't show loading for restricted content
+      setIsLoading(false);
       setError(null); // Clear any previous errors
-    } else {
-      setIsLoading(true); // Reset loading state when access is granted
     }
   }, [canAccessEpisode]);
 
@@ -560,20 +559,23 @@ export function PlayEpisodeDialog({
     setDialogOpen(isOpen);
   }, [isOpen]);
 
-  // Simulate loading completion after 2 seconds
+  // Show loader when dialog opens or when switching to a different episode,
+  // and hide it after a short fallback timeout in case the video events don't fire.
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && episode?.encFilePath && canAccessEpisode) {
       // Reset timer states when opening a new episode
+      setIsLoading(true);
       setProgress(0);
       setCurrentTime(0);
       setDuration(0);
-      
+
       const timer = setTimeout(() => {
         setIsLoading(false);
       }, 2000);
+
       return () => clearTimeout(timer);
     }
-  }, [isOpen, episode?.encFilePath]); // Add encFilePath to dependencies to reset when episode changes
+  }, [isOpen, episode?.encFilePath, canAccessEpisode]); // Reset when dialog opens, access changes, or episode source changes
 
   useEffect(() => {
     if (videoRef.current) {
