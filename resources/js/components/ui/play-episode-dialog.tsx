@@ -672,28 +672,70 @@ export function PlayEpisodeDialog({
 
   // Track watch progress and send to API periodically
   useEffect(() => {
-    if (!episode?.id || !isAuthenticated || !videoRef.current) {
+    console.log('🔍 VIEWS TRACKER: Effect running', {
+      episodeId: episode?.id,
+      isAuthenticated,
+      dialogOpen,
+      hasVideoRef: !!videoRef.current,
+      isLoading
+    });
+
+    if (!episode?.id) {
+      console.log('❌ VIEWS TRACKER: No episode ID');
       return;
     }
+
+    if (!isAuthenticated) {
+      console.log('❌ VIEWS TRACKER: Not authenticated');
+      return;
+    }
+
+    if (!dialogOpen) {
+      console.log('❌ VIEWS TRACKER: Dialog not open');
+      return;
+    }
+
+    // Wait for video element to be ready (not loading)
+    if (isLoading) {
+      console.log('⏳ VIEWS TRACKER: Video is still loading, waiting...');
+      return;
+    }
+
+    if (!videoRef.current) {
+      console.log('❌ VIEWS TRACKER: No video ref yet');
+      return;
+    }
+
+    console.log('✅ VIEWS TRACKER: All conditions met, setting up tracking');
 
     const video = videoRef.current;
     let progressUpdateInterval: NodeJS.Timeout | null = null;
 
     // Function to send progress update to API
     const updateWatchProgress = async () => {
+      console.log('📡 VIEWS TRACKER: updateWatchProgress called', {
+        paused: video.paused,
+        currentTime: video.currentTime,
+        duration: video.duration
+      });
+
       if (!video || video.paused || !video.duration || video.duration <= 0) {
+        console.log('⏸️ VIEWS TRACKER: Skipping update (paused or no duration)');
         return;
       }
 
+      console.log('🚀 VIEWS TRACKER: Sending API request...');
+
       try {
-        await axios.post(route('api.views.progress.update'), {
+        const response = await axios.post(route('api.views.progress.update'), {
           type: 'episode',
           id: episode.id,
           current_time: Math.floor(video.currentTime),
           duration: Math.floor(video.duration),
         });
+        console.log('✅ VIEWS TRACKER: API response:', response.data);
       } catch (error) {
-        console.error('Error updating watch progress:', error);
+        console.error('❌ VIEWS TRACKER: Error updating watch progress:', error);
       }
     };
 
@@ -714,36 +756,44 @@ export function PlayEpisodeDialog({
 
     // Listen for play/pause events
     const handlePlay = () => {
+      console.log('▶️ VIEWS TRACKER: Play event fired');
       startProgressTracking();
       updateWatchProgress(); // Send immediate update on play
     };
 
     const handlePause = () => {
+      console.log('⏸️ VIEWS TRACKER: Pause event fired');
       stopProgressTracking();
       updateWatchProgress(); // Send update on pause
     };
 
     const handleEnded = () => {
+      console.log('⏹️ VIEWS TRACKER: Ended event fired');
       stopProgressTracking();
       updateWatchProgress(); // Send final update on end
     };
 
+    console.log('🎧 VIEWS TRACKER: Attaching event listeners');
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
 
     // Start tracking if already playing
     if (!video.paused) {
+      console.log('▶️ VIEWS TRACKER: Video already playing, starting tracking');
       startProgressTracking();
+    } else {
+      console.log('⏸️ VIEWS TRACKER: Video is paused, waiting for play event');
     }
 
     return () => {
+      console.log('🧹 VIEWS TRACKER: Cleaning up');
       stopProgressTracking();
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [episode?.id, isAuthenticated]);
+  }, [episode?.id, isAuthenticated, dialogOpen, isLoading]);
 
   // Fix the progress bar handler to be more reliable
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
