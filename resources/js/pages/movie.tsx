@@ -49,6 +49,7 @@ interface MovieData {
   subtitle_languages?: string[];
   is_liked?: boolean;
   likes_count?: number;
+  views_count?: number;
 }
 
 // Interface for certification data
@@ -146,6 +147,9 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   const [isLikeToggling, setIsLikeToggling] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   const [likedUsers, setLikedUsers] = useState<Array<{id: number, name: string}>>([]);
+  
+  // State for views
+  const [viewsCount, setViewsCount] = useState(movie.views_count || 0);
   const [loadingLikedUsers, setLoadingLikedUsers] = useState(false);
 
   // State for certification functionality
@@ -264,7 +268,8 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
   useEffect(() => {
     setIsLiked(movie.is_liked || false);
     setLikesCount(movie.likes_count || 0);
-  }, [movie.is_liked, movie.likes_count]);
+    setViewsCount(movie.views_count || 0);
+  }, [movie.is_liked, movie.likes_count, movie.views_count]);
 
   // Fetch recommendations and similar movies when component mounts
   useEffect(() => {
@@ -712,6 +717,12 @@ export default function Movie({ movie, encFilePath, imgBaseUrl300, imgBaseUrl500
                         )}
                       </div>
                       <div className="flex items-center justify-end gap-x-2 text-gray-500 text-base lg:text-lg w-full lg:text-right whitespace-nowrap">
+                        {/* Views count */}
+                        {viewsCount > 0 && (
+                          <div className="flex items-center gap-x-1">
+                            <span className="text-xs lg:text-base">{viewsCount} {viewsCount === 1 ? 'view' : 'views'}</span>
+                          </div>
+                        )}
                         {/* Likes with tooltip - Only show for authenticated users */}
                         {isAuthenticated && (
                           <Tooltip

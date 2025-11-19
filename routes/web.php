@@ -13,6 +13,7 @@ use App\Http\Controllers\TvshowController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserPreferenceController;
+use App\Http\Controllers\ViewsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -34,7 +35,9 @@ Route::get('api/test-public', function () {
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 
-Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::get('dashboard', [DashboardController::class, 'index'])
+    ->middleware('auth')
+    ->name('dashboard');
 
 // CSRF token refresh endpoint
 Route::get('csrf-token', function () {
@@ -135,6 +138,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Season likes API routes
     Route::post('api/seasons/{season}/like', [SeasonController::class, 'like'])->name('api.seasons.like');
     Route::delete('api/seasons/{season}/like', [SeasonController::class, 'unlike'])->name('api.seasons.unlike');
+    
+    // Views and watch progress API routes
+    Route::post('api/views/progress', [ViewsController::class, 'updateProgress'])->name('api.views.progress.update');
+    Route::get('api/views/progress', [ViewsController::class, 'getProgress'])->name('api.views.progress.get');
+    Route::delete('api/views/progress', [ViewsController::class, 'resetProgress'])->name('api.views.progress.reset');
+    Route::get('api/views/count', [ViewsController::class, 'getViewsCount'])->name('api.views.count');
     
     // User preferences API routes
     Route::post('api/user/preferences/tvshow-audio', [UserPreferenceController::class, 'saveTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.save');

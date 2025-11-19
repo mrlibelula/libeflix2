@@ -414,6 +414,81 @@ export function PlayMoviePlayer({
     };
   }, []);
 
+  // Track watch progress and send to API periodically
+  useEffect(() => {
+    if (!movie?.id || !isAuthenticated || !videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    let progressUpdateInterval: NodeJS.Timeout | null = null;
+
+    // Function to send progress update to API
+    const updateWatchProgress = async () => {
+      if (!video || video.paused || !video.duration || video.duration <= 0) {
+        return;
+      }
+
+      try {
+        await axios.post(route('api.views.progress.update'), {
+          type: 'movie',
+          id: movie.id,
+          current_time: Math.floor(video.currentTime),
+          duration: Math.floor(video.duration),
+        });
+      } catch (error) {
+        console.error('Error updating watch progress:', error);
+      }
+    };
+
+    // Update progress every 15 seconds while playing
+    const startProgressTracking = () => {
+      if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+      }
+      progressUpdateInterval = setInterval(updateWatchProgress, 15000);
+    };
+
+    const stopProgressTracking = () => {
+      if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+        progressUpdateInterval = null;
+      }
+    };
+
+    // Listen for play/pause events
+    const handlePlay = () => {
+      startProgressTracking();
+      updateWatchProgress(); // Send immediate update on play
+    };
+
+    const handlePause = () => {
+      stopProgressTracking();
+      updateWatchProgress(); // Send update on pause
+    };
+
+    const handleEnded = () => {
+      stopProgressTracking();
+      updateWatchProgress(); // Send final update on end
+    };
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+
+    // Start tracking if already playing
+    if (!video.paused) {
+      startProgressTracking();
+    }
+
+    return () => {
+      stopProgressTracking();
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [movie?.id, isAuthenticated]);
+
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newProgress = parseFloat(e.target.value);
     setProgress(newProgress);

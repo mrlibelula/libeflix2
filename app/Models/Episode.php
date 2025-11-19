@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\Tool;
 use App\Traits\Likeable;
+use App\Traits\Viewable;
 use App\Traits\Watchable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 
 class Episode extends Model
 {
-    use Likeable, Watchable;
+    use Likeable, Watchable, Viewable;
     
     protected $guarded = [];
     protected $appends = ['stillUrl'];

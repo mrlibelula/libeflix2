@@ -93,6 +93,7 @@ class MovieController extends Controller
             $movie->is_watch_later = in_array($movie->id, $watchLaterMovieIds);
             $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
             $movie->likes_count = $movie->likesCount();
+            $movie->views_count = $movie->viewsCount();
             $movie->subtitles = json_decode($movie->subtitles, true) ?: [];
             if (isset($movie->subtitles['path'])) unset($movie->subtitles['path']);
             if (isset($movie->subtitles['encPath'])) unset($movie->subtitles['encPath']);
@@ -217,6 +218,9 @@ class MovieController extends Controller
         // Add like data
         $movie->is_liked = $user ? $movie->isLikedBy($user) : false;
         $movie->likes_count = $movie->likesCount();
+
+        // Add views count
+        $movie->views_count = $movie->viewsCount();
 
         // Add comments count
         $movie->comments_count = $movie->commentsCount();

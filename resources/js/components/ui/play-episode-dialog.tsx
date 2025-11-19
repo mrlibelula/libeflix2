@@ -242,6 +242,9 @@ export function PlayEpisodeDialog({
   const [isLikeToggling, setIsLikeToggling] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   
+  // Add views-related state
+  const [viewsCount, setViewsCount] = useState(0);
+  
   // Add watch later state (only used when external state is not provided)
   const [isWatchLater, setIsWatchLater] = useState(false);
   const [isWatchLaterToggling, setIsWatchLaterToggling] = useState(false);
@@ -368,6 +371,7 @@ export function PlayEpisodeDialog({
     if (episode) {
       setIsLiked(episode.is_liked || false);
       setLikesCount(episode.likes_count || 0);
+      setViewsCount(episode.views_count || 0);
       // Only set internal watch later state if external state is not provided
       if (!externalWatchLaterState) {
         setIsWatchLater(episode.is_watch_later || false);
@@ -665,6 +669,81 @@ export function PlayEpisodeDialog({
       }
     }
   }, [isLoading]);
+
+  // Track watch progress and send to API periodically
+  useEffect(() => {
+    if (!episode?.id || !isAuthenticated || !videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    let progressUpdateInterval: NodeJS.Timeout | null = null;
+
+    // Function to send progress update to API
+    const updateWatchProgress = async () => {
+      if (!video || video.paused || !video.duration || video.duration <= 0) {
+        return;
+      }
+
+      try {
+        await axios.post(route('api.views.progress.update'), {
+          type: 'episode',
+          id: episode.id,
+          current_time: Math.floor(video.currentTime),
+          duration: Math.floor(video.duration),
+        });
+      } catch (error) {
+        console.error('Error updating watch progress:', error);
+      }
+    };
+
+    // Update progress every 15 seconds while playing
+    const startProgressTracking = () => {
+      if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+      }
+      progressUpdateInterval = setInterval(updateWatchProgress, 15000);
+    };
+
+    const stopProgressTracking = () => {
+      if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+        progressUpdateInterval = null;
+      }
+    };
+
+    // Listen for play/pause events
+    const handlePlay = () => {
+      startProgressTracking();
+      updateWatchProgress(); // Send immediate update on play
+    };
+
+    const handlePause = () => {
+      stopProgressTracking();
+      updateWatchProgress(); // Send update on pause
+    };
+
+    const handleEnded = () => {
+      stopProgressTracking();
+      updateWatchProgress(); // Send final update on end
+    };
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+
+    // Start tracking if already playing
+    if (!video.paused) {
+      startProgressTracking();
+    }
+
+    return () => {
+      stopProgressTracking();
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [episode?.id, isAuthenticated]);
 
   // Fix the progress bar handler to be more reliable
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3747,9 +3826,19 @@ export function PlayEpisodeDialog({
               <DialogDescription>
                 <span className="sm:flex justify-start items-center gap-x-2 w-full">
                     <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
-                    {/* Add likes count */}
+                    {/* Views count - always show, even when 0 */}
+                    <>
+                      <span> · </span>
+                      <span>
+                        {viewsCount || 0} {(viewsCount || 0) === 1 ? 'view' : 'views'}
+                      </span>
+                    </>
+                    {/* Likes count - only show when there is at least 1 like */}
                     {likesCount > 0 && (
-                      <><span> · </span><span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span></>
+                      <>
+                        <span> · </span>
+                        <span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span>
+                      </>
                     )}
                 </span>
               </DialogDescription>

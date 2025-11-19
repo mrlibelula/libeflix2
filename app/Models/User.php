@@ -115,6 +115,26 @@ class User extends Authenticatable
     }
 
     /**
+     * Get all the views that the user has made.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function views(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(View::class);
+    }
+
+    /**
+     * Get all the watch progress entries for the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function watchProgresses(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(WatchProgress::class);
+    }
+
+    /**
      * Check if the user has liked a specific model.
      *
      * @param Model $model
