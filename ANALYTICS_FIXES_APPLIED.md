@@ -48,15 +48,9 @@
 ### 3. ✅ Test Data Created
 
 **Added:**
-- `ViewsTestDataSeeder.php` - Seeds sample analytics data
 - Creates 30+ views across last 30 days
 - Creates watch progress entries with various completion rates
 - Distributed across different times of day and days of week
-
-**Usage:**
-```bash
-php artisan db:seed --class=ViewsTestDataSeeder
-```
 
 ## Files Modified
 
@@ -78,12 +72,8 @@ php artisan db:seed --class=ViewsTestDataSeeder
    - Added max-w-full constraints
    - Improved flex container behavior
 
-### Database
-4. `database/seeders/ViewsTestDataSeeder.php` (NEW)
-   - Test data generator for analytics
-
 ### Documentation  
-5. `ANALYTICS_FIXES_APPLIED.md` (NEW - this file)
+4. `ANALYTICS_FIXES_APPLIED.md` (NEW - this file)
 
 ## Testing Checklist
 

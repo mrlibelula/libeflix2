@@ -178,8 +178,9 @@ class TvshowController extends Controller
             // Add watch later status to episode
             $episode->is_watch_later = $user ? WatchLaterService::isWatchLater($episode, $user) : false;
             
-            // Add views count
+            // Add views and plays counts
             $episode->views_count = $episode->viewsCount();
+            $episode->plays_count = $episode->playsCount();
             
             // Include parent TV show's free status - episodes inherit TV show's free status
             $episode->tvshow_is_free = $tvshow->is_free;

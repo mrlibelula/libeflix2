@@ -467,9 +467,23 @@ export function PlayMoviePlayer({
       updateWatchProgress(); // Send update on pause
     };
 
-    const handleEnded = () => {
+    const handleEnded = async () => {
       stopProgressTracking();
       updateWatchProgress(); // Send final update on end
+      
+      // Record play if 80%+ was watched
+      if (video.duration > 0) {
+        try {
+          await axios.post(route('api.plays.record'), {
+            type: 'movie',
+            id: movie.id,
+            watch_duration: Math.floor(video.currentTime),
+            media_duration: Math.floor(video.duration),
+          });
+        } catch (error) {
+          console.error('Error recording play:', error);
+        }
+      }
     };
 
     video.addEventListener('play', handlePlay);

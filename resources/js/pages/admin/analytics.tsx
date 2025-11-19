@@ -12,7 +12,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import AppLayout from '@/layouts/app-layout';
-import SettingsFullWidthLayout from '@/layouts/settings/full-width-layout';
+import AdminFullWidthLayout from '@/layouts/admin/full-width-layout';
 import {
     BarChart3,
     Eye,
@@ -24,12 +24,16 @@ import {
     Clock,
     Calendar,
     Percent,
+    Play,
+    Repeat,
+    Flame,
+    TrendingDown,
 } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Analytics & Reports',
-        href: '/settings/analytics',
+        href: '/admin/analytics',
     },
 ];
 
@@ -43,6 +47,16 @@ interface OverviewData {
     views_today: number;
     views_this_week: number;
     views_this_month: number;
+    // Plays metrics
+    total_plays: number;
+    total_movie_plays: number;
+    total_episode_plays: number;
+    unique_players: number;
+    avg_play_completion_rate: number;
+    plays_today: number;
+    plays_this_week: number;
+    plays_this_month: number;
+    replay_rate: number;
 }
 
 interface ViewOverTimeData {
@@ -111,6 +125,45 @@ interface WeeklyData {
     count: number;
 }
 
+interface PlayData {
+    id: number;
+    title: string;
+    poster_path: string | null;
+    play_count: number;
+}
+
+interface PlayEpisodeData {
+    id: number;
+    name: string;
+    episode_number: number;
+    season_number: number;
+    tvshow_name: string;
+    still_path: string | null;
+    play_count: number;
+}
+
+interface ReplayRateData {
+    id: number;
+    title: string;
+    replay_rate: number;
+    unique_viewers: number;
+    total_plays: number;
+    poster_path: string | null;
+}
+
+interface RecentPlayData {
+    id: number;
+    user_name: string;
+    user_email: string | null;
+    content_type: string;
+    content_name: string;
+    completion_percentage: number;
+    watch_duration: number;
+    media_duration: number;
+    created_at: string;
+    created_at_full: string;
+}
+
 export default function Analytics() {
     const [overview, setOverview] = useState<OverviewData | null>(null);
     const [viewsOverTime, setViewsOverTime] = useState<ViewOverTimeData[]>([]);
@@ -122,14 +175,39 @@ export default function Analytics() {
     const [completionRate, setCompletionRate] = useState<CompletionRateData[]>([]);
     const [hourlyDistribution, setHourlyDistribution] = useState<HourlyData[]>([]);
     const [weeklyDistribution, setWeeklyDistribution] = useState<WeeklyData[]>([]);
+    
+    // Plays state
+    const [playsOverTime, setPlaysOverTime] = useState<ViewOverTimeData[]>([]);
+    const [playsContentTypeData, setPlaysContentTypeData] = useState<ContentTypeData[]>([]);
+    const [mostPlayedMovies, setMostPlayedMovies] = useState<PlayData[]>([]);
+    const [mostPlayedEpisodes, setMostPlayedEpisodes] = useState<PlayEpisodeData[]>([]);
+    const [replayRateData, setReplayRateData] = useState<ReplayRateData[]>([]);
+    const [recentPlays, setRecentPlays] = useState<RecentPlayData[]>([]);
+    const [playsHourlyDistribution, setPlaysHourlyDistribution] = useState<HourlyData[]>([]);
+    const [playsWeeklyDistribution, setPlaysWeeklyDistribution] = useState<WeeklyData[]>([]);
+    
     const [loading, setLoading] = useState(true);
     const [timeRange, setTimeRange] = useState<number>(30);
+    const [mainTab, setMainTab] = useState<string>('views');
+    const [playsLoaded, setPlaysLoaded] = useState(false);
 
     useEffect(() => {
-        fetchAllData();
+        fetchViewsData();
     }, [timeRange]);
 
-    const fetchAllData = async () => {
+    useEffect(() => {
+        if (mainTab === 'plays' && !playsLoaded) {
+            fetchPlaysData();
+        }
+    }, [mainTab]);
+
+    useEffect(() => {
+        if (playsLoaded) {
+            fetchPlaysData();
+        }
+    }, [timeRange]);
+
+    const fetchViewsData = async () => {
         setLoading(true);
         try {
             const [
@@ -147,8 +225,8 @@ export default function Analytics() {
                 axios.get('/api/analytics/overview'),
                 axios.get(`/api/analytics/views-over-time?days=${timeRange}`),
                 axios.get('/api/analytics/views-by-content-type'),
-                axios.get(`/api/analytics/most-viewed-movies?limit=10&days=${timeRange === 30 ? '' : timeRange}`),
-                axios.get(`/api/analytics/most-viewed-episodes?limit=10&days=${timeRange === 30 ? '' : timeRange}`),
+                axios.get(`/api/analytics/most-viewed-movies?limit=10&days=${timeRange}`),
+                axios.get(`/api/analytics/most-viewed-episodes?limit=10&days=${timeRange}`),
                 axios.get('/api/analytics/user-engagement'),
                 axios.get('/api/analytics/recent-views?limit=20'),
                 axios.get('/api/analytics/completion-rate-distribution'),
@@ -167,9 +245,45 @@ export default function Analytics() {
             setHourlyDistribution(hourlyRes.data);
             setWeeklyDistribution(weeklyRes.data);
         } catch (error) {
-            console.error('Error fetching analytics data:', error);
+            console.error('Error fetching views analytics data:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPlaysData = async () => {
+        try {
+            const [
+                playsRes,
+                playsContentRes,
+                playedMoviesRes,
+                playedEpisodesRes,
+                replayRateRes,
+                recentPlaysRes,
+                playsHourlyRes,
+                playsWeeklyRes,
+            ] = await Promise.all([
+                axios.get(`/api/analytics/plays-over-time?days=${timeRange}`),
+                axios.get('/api/analytics/plays-by-content-type'),
+                axios.get(`/api/analytics/most-played-movies?limit=10&days=${timeRange}`),
+                axios.get(`/api/analytics/most-played-episodes?limit=10&days=${timeRange}`),
+                axios.get('/api/analytics/replay-rate-by-content'),
+                axios.get('/api/analytics/recent-plays?limit=20'),
+                axios.get('/api/analytics/plays-hourly-distribution'),
+                axios.get('/api/analytics/plays-weekly-distribution'),
+            ]);
+
+            setPlaysOverTime(playsRes.data);
+            setPlaysContentTypeData(playsContentRes.data);
+            setMostPlayedMovies(playedMoviesRes.data);
+            setMostPlayedEpisodes(playedEpisodesRes.data);
+            setReplayRateData(replayRateRes.data);
+            setRecentPlays(recentPlaysRes.data);
+            setPlaysHourlyDistribution(playsHourlyRes.data);
+            setPlaysWeeklyDistribution(playsWeeklyRes.data);
+            setPlaysLoaded(true);
+        } catch (error) {
+            console.error('Error fetching plays analytics data:', error);
         }
     };
 
@@ -380,7 +494,7 @@ export default function Analytics() {
         return (
             <AppLayout breadcrumbs={breadcrumbs}>
                 <Head title="Analytics & Reports" />
-                <SettingsFullWidthLayout>
+                <AdminFullWidthLayout>
                     <div className="space-y-6">
                         <HeadingSmall title="Analytics & Reports" description="Loading analytics data..." />
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -396,7 +510,7 @@ export default function Analytics() {
                             ))}
                         </div>
                     </div>
-                </SettingsFullWidthLayout>
+                </AdminFullWidthLayout>
             </AppLayout>
         );
     }
@@ -405,12 +519,12 @@ export default function Analytics() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Analytics & Reports" />
 
-            <SettingsFullWidthLayout>
+            <AdminFullWidthLayout>
                 <div className="space-y-6 max-w-full overflow-hidden">
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         <HeadingSmall
                             title="Analytics & Reports"
-                            description="Comprehensive view analytics and insights for your platform"
+                            description="Comprehensive analytics and insights for your platform"
                         />
                         <div className="flex gap-2 flex-shrink-0">
                             <button
@@ -446,8 +560,23 @@ export default function Analytics() {
                         </div>
                     </div>
 
-                    {/* Overview Stats */}
-                    {overview && (
+                    {/* Main Tabs: Views vs Plays */}
+                    <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
+                        <TabsList className="grid w-full max-w-md grid-cols-2">
+                            <TabsTrigger value="views" className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                Views Analytics
+                            </TabsTrigger>
+                            <TabsTrigger value="plays" className="flex items-center gap-2">
+                                <Play className="h-4 w-4" />
+                                Plays & Engagement
+                            </TabsTrigger>
+                        </TabsList>
+
+                        {/* Views Analytics Tab */}
+                        <TabsContent value="views" className="space-y-6 mt-6">
+                            {/* Overview Stats */}
+                            {overview && (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 max-w-full">
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -833,8 +962,468 @@ export default function Analytics() {
                             </Card>
                         </TabsContent>
                     </Tabs>
+                        </TabsContent>
+
+                        {/* Plays & Engagement Tab */}
+                        <TabsContent value="plays" className="space-y-6 mt-6">
+                            {!playsLoaded ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="text-center space-y-4">
+                                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                                        <p className="text-muted-foreground">Loading plays analytics...</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+
+                        {/* Plays Overview Stats */}
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Total Plays</CardTitle>
+                                    <Play className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-8 w-20" />
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-bold">
+                                                {overview?.total_plays?.toLocaleString() || 0}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {overview?.plays_this_week || 0} this week
+                                            </p>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Replay Rate</CardTitle>
+                                    <Repeat className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-8 w-20" />
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-bold">
+                                                {overview?.replay_rate?.toFixed(2) || '0.00'}x
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Avg replays per view
+                                            </p>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Movie Plays</CardTitle>
+                                    <Film className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-8 w-20" />
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-bold">
+                                                {overview?.total_movie_plays?.toLocaleString() || 0}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {((overview?.total_movie_plays || 0) / (overview?.total_plays || 1) * 100).toFixed(1)}% of total
+                                            </p>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Episode Plays</CardTitle>
+                                    <Tv className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-8 w-20" />
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-bold">
+                                                {overview?.total_episode_plays?.toLocaleString() || 0}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {((overview?.total_episode_plays || 0) / (overview?.total_plays || 1) * 100).toFixed(1)}% of total
+                                            </p>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Plays Over Time Chart */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Plays Over Time</CardTitle>
+                                <CardDescription>
+                                    Daily completed playbacks for the last {timeRange} days
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <Skeleton className="h-[350px] w-full" />
+                                ) : (
+                                    <Chart
+                                        options={{
+                                            ...viewsOverTimeOptions,
+                                            xaxis: {
+                                                ...viewsOverTimeOptions.xaxis,
+                                                categories: playsOverTime.map((d) => d.date),
+                                            },
+                                            colors: ['#10b981'],
+                                        }}
+                                        series={[
+                                            {
+                                                name: 'Plays',
+                                                data: playsOverTime.map((d) => d.count),
+                                            },
+                                        ]}
+                                        type="area"
+                                        height={350}
+                                    />
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Plays by Content Type & Top Content */}
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Plays by Content Type</CardTitle>
+                                    <CardDescription>Distribution of plays between movies and episodes</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-[300px] w-full" />
+                                    ) : (
+                                        <Chart
+                                            options={{
+                                                chart: {
+                                                    type: 'donut',
+                                                },
+                                                labels: playsContentTypeData.map((d) => d.type),
+                                                colors: ['#3b82f6', '#8b5cf6'],
+                                                legend: {
+                                                    position: 'bottom',
+                                                },
+                                                dataLabels: {
+                                                    enabled: true,
+                                                },
+                                            }}
+                                            series={playsContentTypeData.map((d) => d.count)}
+                                            type="donut"
+                                            height={300}
+                                        />
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Hourly Play Distribution</CardTitle>
+                                    <CardDescription>When users complete their watching</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <Skeleton className="h-[300px] w-full" />
+                                    ) : (
+                                        <Chart
+                                            options={{
+                                                chart: {
+                                                    type: 'bar',
+                                                },
+                                                xaxis: {
+                                                    categories: playsHourlyDistribution.map((d) => d.hour),
+                                                    title: {
+                                                        text: 'Hour of Day',
+                                                    },
+                                                },
+                                                yaxis: {
+                                                    title: {
+                                                        text: 'Plays',
+                                                    },
+                                                },
+                                                colors: ['#10b981'],
+                                                plotOptions: {
+                                                    bar: {
+                                                        borderRadius: 4,
+                                                    },
+                                                },
+                                            }}
+                                            series={[
+                                                {
+                                                    name: 'Plays',
+                                                    data: playsHourlyDistribution.map((d) => d.count),
+                                                },
+                                            ]}
+                                            type="bar"
+                                            height={300}
+                                        />
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Most Played Content */}
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Flame className="h-5 w-5 text-orange-500" />
+                                        Most Played Movies
+                                    </CardTitle>
+                                    <CardDescription>Top movies by total plays</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <div className="space-y-3">
+                                            {[1, 2, 3, 4, 5].map((i) => (
+                                                <Skeleton key={i} className="h-16 w-full" />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {mostPlayedMovies.slice(0, 5).map((movie, index) => (
+                                                <div
+                                                    key={movie.id}
+                                                    className="flex items-center gap-3 border-b pb-2 last:border-0"
+                                                >
+                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white font-bold text-sm">
+                                                        {index + 1}
+                                                    </div>
+                                                    {movie.poster_path && (
+                                                        <img
+                                                            src={movie.poster_path}
+                                                            alt={movie.title}
+                                                            className="h-12 w-8 object-cover rounded"
+                                                        />
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">
+                                                            {movie.title}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {movie.play_count} plays
+                                                        </p>
+                                                    </div>
+                                                    <Badge variant="secondary">
+                                                        <Play className="h-3 w-3 mr-1" />
+                                                        {movie.play_count}
+                                                    </Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Flame className="h-5 w-5 text-orange-500" />
+                                        Most Played Episodes
+                                    </CardTitle>
+                                    <CardDescription>Top episodes by total plays</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {loading ? (
+                                        <div className="space-y-3">
+                                            {[1, 2, 3, 4, 5].map((i) => (
+                                                <Skeleton key={i} className="h-16 w-full" />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {mostPlayedEpisodes.slice(0, 5).map((episode, index) => (
+                                                <div
+                                                    key={episode.id}
+                                                    className="flex items-center gap-3 border-b pb-2 last:border-0"
+                                                >
+                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white font-bold text-sm">
+                                                        {index + 1}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">
+                                                            {episode.tvshow_name}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            S{episode.season_number}E{episode.episode_number} - {episode.name}
+                                                        </p>
+                                                    </div>
+                                                    <Badge variant="secondary">
+                                                        <Play className="h-3 w-3 mr-1" />
+                                                        {episode.play_count}
+                                                    </Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Replay Rate Leaderboard */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Repeat className="h-5 w-5 text-primary" />
+                                    Most Rewatched Content
+                                </CardTitle>
+                                <CardDescription>
+                                    Movies with the highest replay rate (plays per unique viewer)
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <Skeleton key={i} className="h-20 w-full" />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {replayRateData.slice(0, 5).map((item, index) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex items-center gap-4 border-b pb-3 last:border-0"
+                                            >
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold">
+                                                    {index + 1}
+                                                </div>
+                                                {item.poster_path && (
+                                                    <img
+                                                        src={item.poster_path}
+                                                        alt={item.title}
+                                                        className="h-16 w-11 object-cover rounded"
+                                                    />
+                                                )}
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{item.title}</p>
+                                                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                                                        <span>{item.unique_viewers} viewers</span>
+                                                        <span>•</span>
+                                                        <span>{item.total_plays} plays</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-bold text-primary">
+                                                        {item.replay_rate.toFixed(1)}x
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">replay rate</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Weekly Distribution */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Weekly Play Pattern</CardTitle>
+                                <CardDescription>Plays distribution across days of the week</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <Skeleton className="h-[300px] w-full" />
+                                ) : (
+                                    <Chart
+                                        options={{
+                                            chart: {
+                                                type: 'bar',
+                                            },
+                                            xaxis: {
+                                                categories: playsWeeklyDistribution.map((d) => d.day),
+                                            },
+                                            colors: ['#8b5cf6'],
+                                            plotOptions: {
+                                                bar: {
+                                                    borderRadius: 8,
+                                                    distributed: false,
+                                                },
+                                            },
+                                        }}
+                                        series={[
+                                            {
+                                                name: 'Plays',
+                                                data: playsWeeklyDistribution.map((d) => d.count),
+                                            },
+                                        ]}
+                                        type="bar"
+                                        height={300}
+                                    />
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Recent Plays Activity */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Recent Plays</CardTitle>
+                                <CardDescription>Latest completed playbacks on the platform</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <Skeleton key={i} className="h-16 w-full" />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                                        {recentPlays.map((play) => (
+                                            <div
+                                                key={play.id}
+                                                className="flex items-start gap-3 border-b pb-3 last:border-0"
+                                            >
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900">
+                                                    <Play className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-sm font-medium">{play.user_name}</p>
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {play.content_type}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground truncate">
+                                                        {play.content_name}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {play.completion_percentage.toFixed(1)}% completed
+                                                        </span>
+                                                        <span>•</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {play.created_at}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                                </div>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </div>
-            </SettingsFullWidthLayout>
+            </AdminFullWidthLayout>
         </AppLayout>
     );
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EpisodeController;
@@ -145,6 +146,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/views/progress', [ViewsController::class, 'resetProgress'])->name('api.views.progress.reset');
     Route::get('api/views/count', [ViewsController::class, 'getViewsCount'])->name('api.views.count');
     
+    // Plays tracking API routes
+    Route::post('api/plays/record', [ViewsController::class, 'recordPlay'])->name('api.plays.record');
+    Route::get('api/plays/count', [ViewsController::class, 'getPlaysCount'])->name('api.plays.count');
+    
     // User preferences API routes
     Route::post('api/user/preferences/tvshow-audio', [UserPreferenceController::class, 'saveTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.save');
     Route::get('api/user/preferences/tvshow-audio/{tvshowId}', [UserPreferenceController::class, 'getTvshowAudioPreference'])->name('api.user.preferences.tvshow-audio.get');
@@ -224,6 +229,9 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     
     // User stats API route
     Route::get('api/users/stats', [AdminController::class, 'getUserStats'])->name('api.users.stats');
+    
+    // Analytics page
+    Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics');
 });
 
 // Admin routes - protected by admin role
@@ -284,6 +292,35 @@ Route::get('test-comments/{movieId}', function ($movieId) {
             'trace' => $e->getTraceAsString()
         ]);
     }
+});
+
+// Analytics API routes - Admin only
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    // API endpoints for analytics data
+    Route::prefix('api/analytics')->name('api.analytics.')->group(function () {
+        Route::get('overview', [AnalyticsController::class, 'overview'])->name('overview');
+        
+        // Views analytics
+        Route::get('views-over-time', [AnalyticsController::class, 'viewsOverTime'])->name('views-over-time');
+        Route::get('views-by-content-type', [AnalyticsController::class, 'viewsByContentType'])->name('views-by-content-type');
+        Route::get('most-viewed-movies', [AnalyticsController::class, 'mostViewedMovies'])->name('most-viewed-movies');
+        Route::get('most-viewed-episodes', [AnalyticsController::class, 'mostViewedEpisodes'])->name('most-viewed-episodes');
+        Route::get('user-engagement', [AnalyticsController::class, 'userEngagement'])->name('user-engagement');
+        Route::get('recent-views', [AnalyticsController::class, 'recentViews'])->name('recent-views');
+        Route::get('completion-rate-distribution', [AnalyticsController::class, 'completionRateDistribution'])->name('completion-rate-distribution');
+        Route::get('hourly-distribution', [AnalyticsController::class, 'hourlyDistribution'])->name('hourly-distribution');
+        Route::get('weekly-distribution', [AnalyticsController::class, 'weeklyDistribution'])->name('weekly-distribution');
+        
+        // Plays analytics
+        Route::get('plays-over-time', [AnalyticsController::class, 'playsOverTime'])->name('plays-over-time');
+        Route::get('plays-by-content-type', [AnalyticsController::class, 'playsByContentType'])->name('plays-by-content-type');
+        Route::get('most-played-movies', [AnalyticsController::class, 'mostPlayedMovies'])->name('most-played-movies');
+        Route::get('most-played-episodes', [AnalyticsController::class, 'mostPlayedEpisodes'])->name('most-played-episodes');
+        Route::get('replay-rate-by-content', [AnalyticsController::class, 'replayRateByContent'])->name('replay-rate-by-content');
+        Route::get('recent-plays', [AnalyticsController::class, 'recentPlays'])->name('recent-plays');
+        Route::get('plays-hourly-distribution', [AnalyticsController::class, 'playsHourlyDistribution'])->name('plays-hourly-distribution');
+        Route::get('plays-weekly-distribution', [AnalyticsController::class, 'playsWeeklyDistribution'])->name('plays-weekly-distribution');
+    });
 });
 
 require __DIR__.'/settings.php';

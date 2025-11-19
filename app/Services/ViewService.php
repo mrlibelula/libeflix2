@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Play;
 use App\Models\User;
 use App\Models\View;
 use App\Models\WatchProgress;
@@ -24,6 +25,11 @@ class ViewService
      * Content longer uses percentage-based logic (15 minutes)
      */
     const SHORT_CONTENT_THRESHOLD = 900;
+
+    /**
+     * Minimum watch percentage required to count as a play (80%)
+     */
+    const MIN_PLAY_PERCENTAGE = 80.0;
 
     /**
      * Update watch progress for a user.
@@ -205,6 +211,77 @@ class ViewService
 
         if ($days !== null) {
             $query->where('viewed_at', '>=', now()->subDays($days));
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Record a play for a model when video ends.
+     * 
+     * Unlike views (one per user), plays can be recorded multiple times
+     * by the same user to track total engagement and replays.
+     *
+     * @param Model $playable
+     * @param User|null $user
+     * @param int $watchDuration How long user watched (in seconds)
+     * @param int $mediaDuration Total media duration (in seconds)
+     * @return Play|null
+     */
+    public static function recordPlay(Model $playable, ?User $user, int $watchDuration, int $mediaDuration): ?Play
+    {
+        // Calculate completion percentage
+        $completionPercentage = $mediaDuration > 0 
+            ? min(100, ($watchDuration / $mediaDuration) * 100) 
+            : 0;
+
+        // Only record if at least 80% was watched
+        if ($completionPercentage < self::MIN_PLAY_PERCENTAGE) {
+            return null;
+        }
+
+        // Create new play record (allows duplicates)
+        return Play::create([
+            'user_id' => $user?->id,
+            'playable_id' => $playable->id,
+            'playable_type' => get_class($playable),
+            'watch_duration' => $watchDuration,
+            'media_duration' => $mediaDuration,
+            'completion_percentage' => $completionPercentage,
+        ]);
+    }
+
+    /**
+     * Get total plays count for a model.
+     *
+     * @param Model $playable
+     * @return int
+     */
+    public static function getPlaysCount(Model $playable): int
+    {
+        return Play::where('playable_id', $playable->id)
+            ->where('playable_type', get_class($playable))
+            ->count();
+    }
+
+    /**
+     * Get popular content based on total plays.
+     *
+     * @param string $modelType
+     * @param int $limit
+     * @param int|null $days Number of days to consider (null for all time)
+     * @return \Illuminate\Support\Collection
+     */
+    public static function getPopularByPlays(string $modelType, int $limit = 10, ?int $days = null)
+    {
+        $query = Play::where('playable_type', $modelType)
+            ->selectRaw('playable_id, COUNT(*) as plays_count')
+            ->groupBy('playable_id')
+            ->orderByDesc('plays_count')
+            ->limit($limit);
+
+        if ($days !== null) {
+            $query->where('created_at', '>=', now()->subDays($days));
         }
 
         return $query->get();

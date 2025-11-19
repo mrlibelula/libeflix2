@@ -134,6 +134,11 @@ class User extends Authenticatable
         return $this->hasMany(WatchProgress::class);
     }
 
+    public function plays(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Play::class);
+    }
+
     /**
      * Check if the user has liked a specific model.
      *

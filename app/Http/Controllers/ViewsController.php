@@ -174,5 +174,76 @@ class ViewsController extends Controller
             'views_count' => $viewsCount,
         ]);
     }
+
+    /**
+     * Record a play when video ends (if 80%+ watched).
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function recordPlay(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'type' => 'required|string|in:movie,episode',
+            'id' => 'required|integer',
+            'watch_duration' => 'required|integer|min:0',
+            'media_duration' => 'required|integer|min:1',
+        ]);
+
+        // Get the playable model
+        $playable = $validated['type'] === 'movie' 
+            ? Movie::find($validated['id'])
+            : Episode::find($validated['id']);
+
+        if (!$playable) {
+            return response()->json(['error' => 'Content not found'], 404);
+        }
+
+        // Record the play (only if 80%+ watched)
+        $play = ViewService::recordPlay(
+            $playable,
+            $user,
+            $validated['watch_duration'],
+            $validated['media_duration']
+        );
+
+        return response()->json([
+            'success' => true,
+            'play_recorded' => $play !== null,
+            'plays_count' => $playable->playsCount(),
+        ]);
+    }
+
+    /**
+     * Get plays count for a movie or episode.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getPlaysCount(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => 'required|string|in:movie,episode',
+            'id' => 'required|integer',
+        ]);
+
+        // Get the playable model
+        $playable = $validated['type'] === 'movie' 
+            ? Movie::find($validated['id'])
+            : Episode::find($validated['id']);
+
+        if (!$playable) {
+            return response()->json(['error' => 'Content not found'], 404);
+        }
+
+        $playsCount = ViewService::getPlaysCount($playable);
+
+        return response()->json([
+            'success' => true,
+            'plays_count' => $playsCount,
+        ]);
+    }
 }
 
