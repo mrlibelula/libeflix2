@@ -121,6 +121,7 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.87 0 0);
+    --chart-label: #696b78;
 }
 
 .dark {
@@ -156,6 +157,7 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(0.269 0 0);
     --sidebar-ring: oklch(0.439 0 0);
+    --chart-label: #757575;
 }
 
 @layer base {
@@ -413,4 +415,53 @@ video::cue {
   line-height: 1.4;
   padding: 0.2em 0.5em;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+/* ApexCharts tooltip theming - uses design tokens so it matches light/dark mode */
+.apexcharts-tooltip,
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.apexcharts-tooltip-title {
+  background-color: var(--muted) !important;
+  color: var(--muted-foreground) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.apexcharts-tooltip-series-group {
+  background-color: transparent !important;
+}
+
+/* ApexCharts label text brightness (axes, legend, data labels) */
+.apexcharts-xaxis text,
+.apexcharts-yaxis text,
+.apexcharts-datalabel-label,
+.apexcharts-datalabel-value,
+.apexcharts-legend-text,
+.apexcharts-text {
+  fill: var(--chart-label) !important;  /* SVG text */
+  color: var(--chart-label) !important; /* Fallback for non-SVG text */
+}
+
+/* ApexCharts toolbar/context menu theming */
+.apexcharts-menu {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.apexcharts-menu-item {
+  background-color: transparent !important;
+  color: var(--popover-foreground) !important;
+}
+
+.apexcharts-menu-item:hover {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
 }

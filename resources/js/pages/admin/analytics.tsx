@@ -164,6 +164,42 @@ interface RecentPlayData {
     created_at_full: string;
 }
 
+const StatCardSkeleton = () => (
+    <Card>
+        <CardHeader className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-16" />
+        </CardHeader>
+        <CardContent className="space-y-2">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-4 w-32" />
+        </CardContent>
+    </Card>
+);
+
+const OverviewSkeletonGrid = ({ count = 8 }: { count?: number }) => (
+    <>
+        {Array.from({ length: count }).map((_, index) => (
+            <StatCardSkeleton key={`overview-skeleton-${index}`} />
+        ))}
+    </>
+);
+
+const ChartSkeleton = ({ height = 350 }: { height?: number }) => (
+    <Skeleton className="w-full" style={{ height }} />
+);
+
+const ListSkeleton = ({ rows = 5 }: { rows?: number }) => (
+    <div className="space-y-3">
+        {Array.from({ length: rows }).map((_, index) => (
+            <div key={`list-skeleton-${index}`} className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/3" />
+            </div>
+        ))}
+    </div>
+);
+
 export default function Analytics() {
     const [overview, setOverview] = useState<OverviewData | null>(null);
     const [viewsOverTime, setViewsOverTime] = useState<ViewOverTimeData[]>([]);
@@ -187,9 +223,17 @@ export default function Analytics() {
     const [playsWeeklyDistribution, setPlaysWeeklyDistribution] = useState<WeeklyData[]>([]);
     
     const [loading, setLoading] = useState(true);
+    const [playsLoading, setPlaysLoading] = useState(false);
+    const [subTabTransitioning, setSubTabTransitioning] = useState(false);
+    const [mainTabTransitioning, setMainTabTransitioning] = useState(false);
     const [timeRange, setTimeRange] = useState<number>(30);
     const [mainTab, setMainTab] = useState<string>('views');
+    const [viewsSubTab, setViewsSubTab] = useState<string>('trends');
     const [playsLoaded, setPlaysLoaded] = useState(false);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const isViewsRefreshing = (loading && !isInitialLoad) || mainTabTransitioning;
+    const isPlaysRefreshing = (playsLoading && playsLoaded) || mainTabTransitioning;
+    const isSubTabRefreshing = subTabTransitioning;
 
     useEffect(() => {
         fetchViewsData();
@@ -203,6 +247,7 @@ export default function Analytics() {
 
     useEffect(() => {
         if (playsLoaded) {
+            setPlaysLoading(true);
             fetchPlaysData();
         }
     }, [timeRange]);
@@ -248,10 +293,12 @@ export default function Analytics() {
             console.error('Error fetching views analytics data:', error);
         } finally {
             setLoading(false);
+            setIsInitialLoad(false);
         }
     };
 
     const fetchPlaysData = async () => {
+        setPlaysLoading(true);
         try {
             const [
                 playsRes,
@@ -284,6 +331,8 @@ export default function Analytics() {
             setPlaysLoaded(true);
         } catch (error) {
             console.error('Error fetching plays analytics data:', error);
+        } finally {
+            setPlaysLoading(false);
         }
     };
 
@@ -490,7 +539,7 @@ export default function Analytics() {
         },
     ];
 
-    if (loading) {
+    if (loading && isInitialLoad) {
         return (
             <AppLayout breadcrumbs={breadcrumbs}>
                 <Head title="Analytics & Reports" />
@@ -528,7 +577,10 @@ export default function Analytics() {
                         />
                         <div className="flex gap-2 flex-shrink-0">
                             <button
-                                onClick={() => setTimeRange(7)}
+                                onClick={() => {
+                                    setLoading(true);
+                                    setTimeRange(7);
+                                }}
                                 className={`px-3 py-1 text-sm rounded ${
                                     timeRange === 7
                                         ? 'bg-primary text-primary-foreground'
@@ -538,7 +590,10 @@ export default function Analytics() {
                                 7 Days
                             </button>
                             <button
-                                onClick={() => setTimeRange(30)}
+                                onClick={() => {
+                                    setLoading(true);
+                                    setTimeRange(30);
+                                }}
                                 className={`px-3 py-1 text-sm rounded ${
                                     timeRange === 30
                                         ? 'bg-primary text-primary-foreground'
@@ -548,7 +603,10 @@ export default function Analytics() {
                                 30 Days
                             </button>
                             <button
-                                onClick={() => setTimeRange(90)}
+                                onClick={() => {
+                                    setLoading(true);
+                                    setTimeRange(90);
+                                }}
                                 className={`px-3 py-1 text-sm rounded ${
                                     timeRange === 90
                                         ? 'bg-primary text-primary-foreground'
@@ -561,7 +619,15 @@ export default function Analytics() {
                     </div>
 
                     {/* Main Tabs: Views vs Plays */}
-                    <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
+                    <Tabs value={mainTab} onValueChange={(value) => {
+                        setMainTabTransitioning(true);
+                        if (value === 'plays' && !playsLoaded) {
+                            setPlaysLoading(true);
+                        }
+                        setMainTab(value);
+                        // Brief delay to show skeleton before rendering content
+                        setTimeout(() => setMainTabTransitioning(false), 100);
+                    }} className="space-y-6">
                         <TabsList className="grid w-full max-w-md grid-cols-2">
                             <TabsTrigger value="views" className="flex items-center gap-2">
                                 <Eye className="h-4 w-4" />
@@ -576,121 +642,150 @@ export default function Analytics() {
                         {/* Views Analytics Tab */}
                         <TabsContent value="views" className="space-y-6 mt-6">
                             {/* Overview Stats */}
-                            {overview && (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 max-w-full">
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Total Views</CardTitle>
-                                    <Eye className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.total_views.toLocaleString()}</div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {overview.total_unique_viewers.toLocaleString()} unique viewers
-                                    </p>
-                                </CardContent>
-                            </Card>
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 max-w-full">
+                                {isViewsRefreshing ? (
+                                    <OverviewSkeletonGrid />
+                                ) : overview ? (
+                                    <>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">Total Views</CardTitle>
+                                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.total_views.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {overview.total_unique_viewers.toLocaleString()} unique viewers
+                                                </p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Movie Views</CardTitle>
-                                    <Film className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.total_movie_views.toLocaleString()}</div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {overview.total_views > 0
-                                            ? Math.round((overview.total_movie_views / overview.total_views) * 100)
-                                            : 0}
-                                        % of total
-                                    </p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">Movie Views</CardTitle>
+                                                <Film className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.total_movie_views.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {overview.total_views > 0
+                                                        ? Math.round((overview.total_movie_views / overview.total_views) * 100)
+                                                        : 0}
+                                                    % of total
+                                                </p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Episode Views</CardTitle>
-                                    <Tv className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {overview.total_episode_views.toLocaleString()}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {overview.total_views > 0
-                                            ? Math.round((overview.total_episode_views / overview.total_views) * 100)
-                                            : 0}
-                                        % of total
-                                    </p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">Episode Views</CardTitle>
+                                                <Tv className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.total_episode_views.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {overview.total_views > 0
+                                                        ? Math.round((overview.total_episode_views / overview.total_views) * 100)
+                                                        : 0}
+                                                    % of total
+                                                </p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
-                                    <Percent className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.avg_completion_rate}%</div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {overview.total_watch_progress.toLocaleString()} in progress
-                                    </p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
+                                                <Percent className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">{overview.avg_completion_rate}%</div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {overview.total_watch_progress.toLocaleString()} in progress
+                                                </p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Today</CardTitle>
-                                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.views_today.toLocaleString()}</div>
-                                    <p className="text-xs text-muted-foreground">Views today</p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">Today</CardTitle>
+                                                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.views_today.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Views today</p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">This Week</CardTitle>
-                                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.views_this_week.toLocaleString()}</div>
-                                    <p className="text-xs text-muted-foreground">Views this week</p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">This Week</CardTitle>
+                                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.views_this_week.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Views this week</p>
+                                            </CardContent>
+                                        </Card>
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">This Month</CardTitle>
-                                    <Activity className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{overview.views_this_month.toLocaleString()}</div>
-                                    <p className="text-xs text-muted-foreground">Views this month</p>
-                                </CardContent>
-                            </Card>
+                                        <Card>
+                                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                                                <Activity className="h-4 w-4 text-muted-foreground" />
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="text-2xl font-bold">
+                                                    {overview.views_this_month.toLocaleString()}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Views this month</p>
+                                            </CardContent>
+                                        </Card>
 
-                            {userEngagement && (
-                                <Card>
-                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                        <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold">{userEngagement.engagement_rate}%</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            {userEngagement.active_users.toLocaleString()} /{' '}
-                                            {userEngagement.total_users.toLocaleString()} users
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </div>
-                    )}
+                                        {userEngagement && (
+                                            <Card>
+                                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                                    <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
+                                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="text-2xl font-bold">
+                                                        {userEngagement.engagement_rate}%
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {userEngagement.active_users.toLocaleString()} /{' '}
+                                                        {userEngagement.total_users.toLocaleString()} users
+                                                    </p>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+                                    </>
+                                ) : (
+                                    <Card className="col-span-full">
+                                        <CardContent>
+                                            <p className="text-sm text-muted-foreground">
+                                                Overview data is unavailable right now.
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
 
                     {/* Charts Tabs */}
-                    <Tabs defaultValue="trends" className="space-y-4 max-w-full overflow-hidden">
+                    <Tabs value={viewsSubTab} onValueChange={(value) => {
+                        setSubTabTransitioning(true);
+                        setViewsSubTab(value);
+                        // Brief delay to show skeleton before rendering new content
+                        setTimeout(() => setSubTabTransitioning(false), 100);
+                    }} className="space-y-4 max-w-full overflow-hidden">
                         <TabsList>
                             <TabsTrigger value="trends">Trends</TabsTrigger>
                             <TabsTrigger value="content">Content</TabsTrigger>
@@ -706,15 +801,19 @@ export default function Analytics() {
                                     <CardDescription>Daily views for the selected period</CardDescription>
                                 </CardHeader>
                                 <CardContent className="overflow-hidden max-w-full">
-                                    <div className="w-full overflow-hidden">
-                                        <Chart
-                                            options={viewsOverTimeOptions}
-                                            series={viewsOverTimeSeries}
-                                            type="area"
-                                            height={350}
-                                            width="100%"
-                                        />
-                                    </div>
+                                    {isViewsRefreshing || isSubTabRefreshing ? (
+                                        <ChartSkeleton />
+                                    ) : (
+                                        <div className="w-full overflow-hidden">
+                                            <Chart
+                                                options={viewsOverTimeOptions}
+                                                series={viewsOverTimeSeries}
+                                                type="area"
+                                                height={350}
+                                                width="100%"
+                                            />
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -725,15 +824,19 @@ export default function Analytics() {
                                         <CardDescription>Views by hour of day (last 30 days)</CardDescription>
                                     </CardHeader>
                                     <CardContent className="overflow-hidden max-w-full">
-                                        <div className="w-full overflow-hidden">
-                                            <Chart
-                                                options={hourlyDistributionOptions}
-                                                series={hourlyDistributionSeries}
-                                                type="line"
-                                                height={350}
-                                                width="100%"
-                                            />
-                                        </div>
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ChartSkeleton />
+                                        ) : (
+                                            <div className="w-full overflow-hidden">
+                                                <Chart
+                                                    options={hourlyDistributionOptions}
+                                                    series={hourlyDistributionSeries}
+                                                    type="line"
+                                                    height={350}
+                                                    width="100%"
+                                                />
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
 
@@ -743,15 +846,19 @@ export default function Analytics() {
                                         <CardDescription>Views by day of week (last 30 days)</CardDescription>
                                     </CardHeader>
                                     <CardContent className="overflow-hidden max-w-full">
-                                        <div className="w-full overflow-hidden">
-                                            <Chart
-                                                options={weeklyDistributionOptions}
-                                                series={weeklyDistributionSeries}
-                                                type="bar"
-                                                height={350}
-                                                width="100%"
-                                            />
-                                        </div>
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ChartSkeleton />
+                                        ) : (
+                                            <div className="w-full overflow-hidden">
+                                                <Chart
+                                                    options={weeklyDistributionOptions}
+                                                    series={weeklyDistributionSeries}
+                                                    type="bar"
+                                                    height={350}
+                                                    width="100%"
+                                                />
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             </div>
@@ -766,12 +873,16 @@ export default function Analytics() {
                                         <CardDescription>Distribution of movie vs episode views</CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <Chart
-                                            options={contentTypeOptions}
-                                            series={contentTypeSeries}
-                                            type="donut"
-                                            height={350}
-                                        />
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ChartSkeleton />
+                                        ) : (
+                                            <Chart
+                                                options={contentTypeOptions}
+                                                series={contentTypeSeries}
+                                                type="donut"
+                                                height={350}
+                                            />
+                                        )}
                                     </CardContent>
                                 </Card>
 
@@ -781,12 +892,16 @@ export default function Analytics() {
                                         <CardDescription>Watch progress distribution</CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <Chart
-                                            options={completionRateOptions}
-                                            series={completionRateSeries}
-                                            type="bar"
-                                            height={350}
-                                        />
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ChartSkeleton />
+                                        ) : (
+                                            <Chart
+                                                options={completionRateOptions}
+                                                series={completionRateSeries}
+                                                type="bar"
+                                                height={350}
+                                            />
+                                        )}
                                     </CardContent>
                                 </Card>
                             </div>
@@ -798,23 +913,27 @@ export default function Analytics() {
                                         <CardDescription>Top 10 movies by views</CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="space-y-3">
-                                            {mostViewedMovies.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">No data available</p>
-                                            ) : (
-                                                mostViewedMovies.map((movie) => (
-                                                    <div
-                                                        key={movie.id}
-                                                        className="flex items-center justify-between border-b pb-2 last:border-0"
-                                                    >
-                                                        <div className="flex-1">
-                                                            <p className="text-sm font-medium">{movie.title}</p>
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ListSkeleton rows={5} />
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {mostViewedMovies.length === 0 ? (
+                                                    <p className="text-sm text-muted-foreground">No data available</p>
+                                                ) : (
+                                                    mostViewedMovies.map((movie) => (
+                                                        <div
+                                                            key={movie.id}
+                                                            className="flex items-center justify-between border-b pb-2 last:border-0"
+                                                        >
+                                                            <div className="flex-1">
+                                                                <p className="text-sm font-medium">{movie.title}</p>
+                                                            </div>
+                                                            <Badge variant="secondary">{movie.views_count} views</Badge>
                                                         </div>
-                                                        <Badge variant="secondary">{movie.views_count} views</Badge>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
 
@@ -824,27 +943,31 @@ export default function Analytics() {
                                         <CardDescription>Top 10 episodes by views</CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="space-y-3">
-                                            {mostViewedEpisodes.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">No data available</p>
-                                            ) : (
-                                                mostViewedEpisodes.map((episode) => (
-                                                    <div
-                                                        key={episode.id}
-                                                        className="flex items-center justify-between border-b pb-2 last:border-0"
-                                                    >
-                                                        <div className="flex-1">
-                                                            <p className="text-sm font-medium">{episode.tvshow_name}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                S{episode.season_number}E{episode.episode_number} -{' '}
-                                                                {episode.title}
-                                                            </p>
+                                        {isViewsRefreshing || isSubTabRefreshing ? (
+                                            <ListSkeleton rows={5} />
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {mostViewedEpisodes.length === 0 ? (
+                                                    <p className="text-sm text-muted-foreground">No data available</p>
+                                                ) : (
+                                                    mostViewedEpisodes.map((episode) => (
+                                                        <div
+                                                            key={episode.id}
+                                                            className="flex items-center justify-between border-b pb-2 last:border-0"
+                                                        >
+                                                            <div className="flex-1">
+                                                                <p className="text-sm font-medium">{episode.tvshow_name}</p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    S{episode.season_number}E{episode.episode_number} -{' '}
+                                                                    {episode.title}
+                                                                </p>
+                                                            </div>
+                                                            <Badge variant="secondary">{episode.views_count} views</Badge>
                                                         </div>
-                                                        <Badge variant="secondary">{episode.views_count} views</Badge>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             </div>
@@ -852,7 +975,24 @@ export default function Analytics() {
 
                         {/* Engagement Tab */}
                         <TabsContent value="engagement" className="space-y-4">
-                            {userEngagement && (
+                            {isViewsRefreshing || isSubTabRefreshing ? (
+                                <>
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                        {Array.from({ length: 3 }).map((_, idx) => (
+                                            <StatCardSkeleton key={`engagement-skeleton-${idx}`} />
+                                        ))}
+                                    </div>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>Most Active Users</CardTitle>
+                                            <CardDescription>Top 5 users by view count</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ListSkeleton rows={5} />
+                                        </CardContent>
+                                    </Card>
+                                </>
+                            ) : userEngagement ? (
                                 <>
                                     <div className="grid gap-4 md:grid-cols-3">
                                         <Card>
@@ -923,6 +1063,12 @@ export default function Analytics() {
                                         </CardContent>
                                     </Card>
                                 </>
+                            ) : (
+                                <Card>
+                                    <CardContent>
+                                        <p className="text-sm text-muted-foreground">No engagement data available.</p>
+                                    </CardContent>
+                                </Card>
                             )}
                         </TabsContent>
 
@@ -934,30 +1080,34 @@ export default function Analytics() {
                                     <CardDescription>Last 20 content views across the platform</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="space-y-3">
-                                        {recentViews.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">No recent views</p>
-                                        ) : (
-                                            recentViews.map((view) => (
-                                                <div
-                                                    key={view.id}
-                                                    className="flex items-center justify-between border-b pb-2 last:border-0"
-                                                >
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-medium">{view.viewable_title}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {view.user_name} • {view.viewable_type}
-                                                        </p>
+                                    {isViewsRefreshing || isSubTabRefreshing ? (
+                                        <ListSkeleton rows={4} />
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {recentViews.length === 0 ? (
+                                                <p className="text-sm text-muted-foreground">No recent views</p>
+                                            ) : (
+                                                recentViews.map((view) => (
+                                                    <div
+                                                        key={view.id}
+                                                        className="flex items-center justify-between border-b pb-2 last:border-0"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium">{view.viewable_title}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {view.user_name} • {view.viewable_type}
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {view.viewed_at_human}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {view.viewed_at_human}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -984,7 +1134,7 @@ export default function Analytics() {
                                     <Play className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-8 w-20" />
                                     ) : (
                                         <>
@@ -1005,7 +1155,7 @@ export default function Analytics() {
                                     <Repeat className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-8 w-20" />
                                     ) : (
                                         <>
@@ -1026,7 +1176,7 @@ export default function Analytics() {
                                     <Film className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-8 w-20" />
                                     ) : (
                                         <>
@@ -1047,7 +1197,7 @@ export default function Analytics() {
                                     <Tv className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-8 w-20" />
                                     ) : (
                                         <>
@@ -1072,7 +1222,7 @@ export default function Analytics() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {loading ? (
+                                {isPlaysRefreshing ? (
                                     <Skeleton className="h-[350px] w-full" />
                                 ) : (
                                     <Chart
@@ -1105,7 +1255,7 @@ export default function Analytics() {
                                     <CardDescription>Distribution of plays between movies and episodes</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-[300px] w-full" />
                                     ) : (
                                         <Chart
@@ -1136,7 +1286,7 @@ export default function Analytics() {
                                     <CardDescription>When users complete their watching</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <Skeleton className="h-[300px] w-full" />
                                     ) : (
                                         <Chart
@@ -1187,7 +1337,7 @@ export default function Analytics() {
                                     <CardDescription>Top movies by total plays</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <div className="space-y-3">
                                             {[1, 2, 3, 4, 5].map((i) => (
                                                 <Skeleton key={i} className="h-16 w-full" />
@@ -1238,7 +1388,7 @@ export default function Analytics() {
                                     <CardDescription>Top episodes by total plays</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {loading ? (
+                                    {isPlaysRefreshing ? (
                                         <div className="space-y-3">
                                             {[1, 2, 3, 4, 5].map((i) => (
                                                 <Skeleton key={i} className="h-16 w-full" />
@@ -1286,7 +1436,7 @@ export default function Analytics() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {loading ? (
+                                {isPlaysRefreshing ? (
                                     <div className="space-y-3">
                                         {[1, 2, 3, 4, 5].map((i) => (
                                             <Skeleton key={i} className="h-20 w-full" />
@@ -1337,7 +1487,7 @@ export default function Analytics() {
                                 <CardDescription>Plays distribution across days of the week</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {loading ? (
+                                {isPlaysRefreshing ? (
                                     <Skeleton className="h-[300px] w-full" />
                                 ) : (
                                     <Chart
@@ -1376,7 +1526,7 @@ export default function Analytics() {
                                 <CardDescription>Latest completed playbacks on the platform</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {loading ? (
+                                {isPlaysRefreshing ? (
                                     <div className="space-y-3">
                                         {[1, 2, 3, 4, 5].map((i) => (
                                             <Skeleton key={i} className="h-16 w-full" />
