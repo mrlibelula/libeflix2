@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Chart from 'react-apexcharts';
 import { type ApexOptions } from 'apexcharts';
@@ -232,12 +232,55 @@ export default function Analytics() {
     const [playsLoaded, setPlaysLoaded] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const isViewsRefreshing = (loading && !isInitialLoad) || mainTabTransitioning;
-    const isPlaysRefreshing = (playsLoading && playsLoaded) || mainTabTransitioning;
+    const isPlaysRefreshing = playsLoading || mainTabTransitioning;
     const isSubTabRefreshing = subTabTransitioning;
+    const mainTabTransitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const viewsAbortController = useRef<AbortController | null>(null);
+    const playsAbortController = useRef<AbortController | null>(null);
 
     useEffect(() => {
         fetchViewsData();
     }, [timeRange]);
+
+    useEffect(() => {
+        return () => {
+            if (mainTabTransitionTimer.current) {
+                clearTimeout(mainTabTransitionTimer.current);
+            }
+        };
+    }, []);
+
+    // Safety mechanism: ensure loading states don't stay stuck forever
+    useEffect(() => {
+        const safetyTimer = setTimeout(() => {
+            if (loading && !isInitialLoad) {
+                console.warn('Views loading state stuck - forcing reset');
+                setLoading(false);
+                // Cancel any pending requests
+                if (viewsAbortController.current) {
+                    viewsAbortController.current.abort();
+                }
+            }
+            if (playsLoading) {
+                console.warn('Plays loading state stuck - forcing reset');
+                setPlaysLoading(false);
+                // Cancel any pending requests
+                if (playsAbortController.current) {
+                    playsAbortController.current.abort();
+                }
+            }
+            if (mainTabTransitioning) {
+                console.warn('Main tab transition stuck - forcing reset');
+                setMainTabTransitioning(false);
+            }
+            if (subTabTransitioning) {
+                console.warn('Sub tab transition stuck - forcing reset');
+                setSubTabTransitioning(false);
+            }
+        }, 5000); // 5 second safety timeout (reduced from 10)
+
+        return () => clearTimeout(safetyTimer);
+    }, [loading, playsLoading, mainTabTransitioning, subTabTransitioning, isInitialLoad]);
 
     useEffect(() => {
         if (mainTab === 'plays' && !playsLoaded) {
@@ -253,6 +296,15 @@ export default function Analytics() {
     }, [timeRange]);
 
     const fetchViewsData = async () => {
+        // Cancel any existing request
+        if (viewsAbortController.current) {
+            viewsAbortController.current.abort();
+        }
+        
+        const controller = new AbortController();
+        viewsAbortController.current = controller;
+        
+        const fetchStart = performance.now();
         setLoading(true);
         try {
             const [
@@ -267,16 +319,16 @@ export default function Analytics() {
                 hourlyRes,
                 weeklyRes,
             ] = await Promise.all([
-                axios.get('/api/analytics/overview'),
-                axios.get(`/api/analytics/views-over-time?days=${timeRange}`),
-                axios.get('/api/analytics/views-by-content-type'),
-                axios.get(`/api/analytics/most-viewed-movies?limit=10&days=${timeRange}`),
-                axios.get(`/api/analytics/most-viewed-episodes?limit=10&days=${timeRange}`),
-                axios.get('/api/analytics/user-engagement'),
-                axios.get('/api/analytics/recent-views?limit=20'),
-                axios.get('/api/analytics/completion-rate-distribution'),
-                axios.get('/api/analytics/hourly-distribution'),
-                axios.get('/api/analytics/weekly-distribution'),
+                axios.get('/api/analytics/overview', { signal: controller.signal }),
+                axios.get(`/api/analytics/views-over-time?days=${timeRange}`, { signal: controller.signal }),
+                axios.get('/api/analytics/views-by-content-type', { signal: controller.signal }),
+                axios.get(`/api/analytics/most-viewed-movies?limit=10&days=${timeRange}`, { signal: controller.signal }),
+                axios.get(`/api/analytics/most-viewed-episodes?limit=10&days=${timeRange}`, { signal: controller.signal }),
+                axios.get('/api/analytics/user-engagement', { signal: controller.signal }),
+                axios.get('/api/analytics/recent-views?limit=20', { signal: controller.signal }),
+                axios.get('/api/analytics/completion-rate-distribution', { signal: controller.signal }),
+                axios.get('/api/analytics/hourly-distribution', { signal: controller.signal }),
+                axios.get('/api/analytics/weekly-distribution', { signal: controller.signal }),
             ]);
 
             setOverview(overviewRes.data);
@@ -290,14 +342,54 @@ export default function Analytics() {
             setHourlyDistribution(hourlyRes.data);
             setWeeklyDistribution(weeklyRes.data);
         } catch (error) {
-            console.error('Error fetching views analytics data:', error);
+            if (axios.isCancel(error)) {
+                console.log('Views data fetch cancelled');
+            } else {
+                console.error('Error fetching views analytics data:', error);
+            }
         } finally {
-            setLoading(false);
-            setIsInitialLoad(false);
+            viewsAbortController.current = null;
+            const elapsed = performance.now() - fetchStart;
+            const remaining = Math.max(0, 200 - elapsed);
+            setTimeout(() => {
+                setLoading(false);
+                setIsInitialLoad(false);
+            }, remaining);
         }
     };
 
+    const scheduleMainTabTransitionEnd = () => {
+        if (mainTabTransitionTimer.current) {
+            clearTimeout(mainTabTransitionTimer.current);
+        }
+        mainTabTransitionTimer.current = setTimeout(() => {
+            setMainTabTransitioning(false);
+            mainTabTransitionTimer.current = null;
+        }, 300); // Increased to 300ms for better visibility
+    };
+
+    const handleMainTabChange = (value: string) => {
+        if (value === mainTab) {
+            return;
+        }
+        setMainTabTransitioning(true);
+        if (value === 'plays') {
+            setPlaysLoading(true);
+        }
+        setMainTab(value);
+        scheduleMainTabTransitionEnd();
+    };
+
     const fetchPlaysData = async () => {
+        // Cancel any existing request
+        if (playsAbortController.current) {
+            playsAbortController.current.abort();
+        }
+        
+        const controller = new AbortController();
+        playsAbortController.current = controller;
+        
+        const fetchStart = performance.now();
         setPlaysLoading(true);
         try {
             const [
@@ -310,14 +402,14 @@ export default function Analytics() {
                 playsHourlyRes,
                 playsWeeklyRes,
             ] = await Promise.all([
-                axios.get(`/api/analytics/plays-over-time?days=${timeRange}`),
-                axios.get('/api/analytics/plays-by-content-type'),
-                axios.get(`/api/analytics/most-played-movies?limit=10&days=${timeRange}`),
-                axios.get(`/api/analytics/most-played-episodes?limit=10&days=${timeRange}`),
-                axios.get('/api/analytics/replay-rate-by-content'),
-                axios.get('/api/analytics/recent-plays?limit=20'),
-                axios.get('/api/analytics/plays-hourly-distribution'),
-                axios.get('/api/analytics/plays-weekly-distribution'),
+                axios.get(`/api/analytics/plays-over-time?days=${timeRange}`, { signal: controller.signal }),
+                axios.get('/api/analytics/plays-by-content-type', { signal: controller.signal }),
+                axios.get(`/api/analytics/most-played-movies?limit=10&days=${timeRange}`, { signal: controller.signal }),
+                axios.get(`/api/analytics/most-played-episodes?limit=10&days=${timeRange}`, { signal: controller.signal }),
+                axios.get('/api/analytics/replay-rate-by-content', { signal: controller.signal }),
+                axios.get('/api/analytics/recent-plays?limit=20', { signal: controller.signal }),
+                axios.get('/api/analytics/plays-hourly-distribution', { signal: controller.signal }),
+                axios.get('/api/analytics/plays-weekly-distribution', { signal: controller.signal }),
             ]);
 
             setPlaysOverTime(playsRes.data);
@@ -330,9 +422,16 @@ export default function Analytics() {
             setPlaysWeeklyDistribution(playsWeeklyRes.data);
             setPlaysLoaded(true);
         } catch (error) {
-            console.error('Error fetching plays analytics data:', error);
+            if (axios.isCancel(error)) {
+                console.log('Plays data fetch cancelled');
+            } else {
+                console.error('Error fetching plays analytics data:', error);
+            }
         } finally {
-            setPlaysLoading(false);
+            playsAbortController.current = null;
+            const elapsed = performance.now() - fetchStart;
+            const remaining = Math.max(0, 200 - elapsed);
+            setTimeout(() => setPlaysLoading(false), remaining);
         }
     };
 
@@ -579,6 +678,7 @@ export default function Analytics() {
                             <button
                                 onClick={() => {
                                     setLoading(true);
+                                    if (mainTab === 'plays') setPlaysLoading(true);
                                     setTimeRange(7);
                                 }}
                                 className={`px-3 py-1 text-sm rounded ${
@@ -592,6 +692,7 @@ export default function Analytics() {
                             <button
                                 onClick={() => {
                                     setLoading(true);
+                                    if (mainTab === 'plays') setPlaysLoading(true);
                                     setTimeRange(30);
                                 }}
                                 className={`px-3 py-1 text-sm rounded ${
@@ -605,6 +706,7 @@ export default function Analytics() {
                             <button
                                 onClick={() => {
                                     setLoading(true);
+                                    if (mainTab === 'plays') setPlaysLoading(true);
                                     setTimeRange(90);
                                 }}
                                 className={`px-3 py-1 text-sm rounded ${
@@ -619,15 +721,7 @@ export default function Analytics() {
                     </div>
 
                     {/* Main Tabs: Views vs Plays */}
-                    <Tabs value={mainTab} onValueChange={(value) => {
-                        setMainTabTransitioning(true);
-                        if (value === 'plays' && !playsLoaded) {
-                            setPlaysLoading(true);
-                        }
-                        setMainTab(value);
-                        // Brief delay to show skeleton before rendering content
-                        setTimeout(() => setMainTabTransitioning(false), 100);
-                    }} className="space-y-6">
+                    <Tabs value={mainTab} onValueChange={handleMainTabChange} className="space-y-6">
                         <TabsList className="grid w-full max-w-md grid-cols-2">
                             <TabsTrigger value="views" className="flex items-center gap-2">
                                 <Eye className="h-4 w-4" />
