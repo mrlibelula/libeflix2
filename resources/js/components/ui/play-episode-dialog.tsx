@@ -3453,7 +3453,7 @@ export function PlayEpisodeDialog({
                         <Tooltip text="Seasons & Episodes" position="bottom">
                           <button 
                             onClick={handleToggleEpisodesMenu}
-                            className={`focus:outline-none relative cursor-pointer ${!tvshowSlug ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`focus:outline-none relative cursor-pointer hidden sm:block ${!tvshowSlug ? 'opacity-50 cursor-not-allowed' : ''}`}
                             aria-label="Seasons and Episodes"
                             disabled={!tvshowSlug}
                           >
