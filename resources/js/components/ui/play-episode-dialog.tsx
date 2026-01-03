@@ -9,7 +9,8 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart, Eye, PlayCircle, ThumbsUp, ThumbsDown, MessageCircle, ChevronDown } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import { InlinePremiumNotice } from "@/components/premium-content-notice";
@@ -246,6 +247,12 @@ export function PlayEpisodeDialog({
   const [viewsCount, setViewsCount] = useState(0);
   const [playsCount, setPlaysCount] = useState(0);
   
+  // Mobile detection state
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileSeasonNumber, setMobileSeasonNumber] = useState<number>(episode?.season_number || 1);
+  const [mobileEpisodeListLoading, setMobileEpisodeListLoading] = useState(false);
+  const mobileScrollContainerRef = useRef<HTMLDivElement>(null);
+  
   // Add watch later state (only used when external state is not provided)
   const [isWatchLater, setIsWatchLater] = useState(false);
   const [isWatchLaterToggling, setIsWatchLaterToggling] = useState(false);
@@ -264,6 +271,82 @@ export function PlayEpisodeDialog({
     setRepeatSeason(initialRepeatMode === 'season');
     setRepeatTvshow(initialRepeatMode === 'tvshow');
   }, [initialRepeatMode]);
+  
+  // Mobile detection effect
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Update mobile season number when episode changes
+  useEffect(() => {
+    if (episode?.season_number) {
+      setMobileSeasonNumber(episode.season_number);
+    }
+  }, [episode?.season_number]);
+  
+  // Fetch seasons data on mobile when dialog opens
+  useEffect(() => {
+    const fetchMobileSeasonsData = async () => {
+      if (!isMobile || !dialogOpen || !tvshowSlug || seasonsData.length > 0) {
+        return;
+      }
+
+      setMobileEpisodeListLoading(true);
+      try {
+        const validSeasons: Array<{season_number: number; episodes: any[]}> = [];
+        let seasonNum = 1;
+        const maxSeasons = totalSeasons || 25;
+        let foundAnySeason = false;
+        
+        while (seasonNum <= maxSeasons) {
+          try {
+            const response = await fetch(`/api/tvshows/${tvshowSlug}/seasons/${seasonNum}/episodes`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.episodes && data.episodes.length > 0) {
+                validSeasons.push({ season_number: seasonNum, episodes: data.episodes });
+                foundAnySeason = true;
+              } else {
+                if (foundAnySeason) break;
+              }
+            } else {
+              if (totalSeasons && seasonNum > totalSeasons) break;
+              if (foundAnySeason) break;
+            }
+          } catch (error) {
+            if (totalSeasons && seasonNum > totalSeasons) break;
+            if (foundAnySeason) break;
+          }
+          
+          seasonNum++;
+        }
+
+        setSeasonsData(validSeasons);
+      } catch (error) {
+        console.error('Failed to fetch seasons data for mobile:', error);
+      } finally {
+        setMobileEpisodeListLoading(false);
+      }
+    };
+
+    fetchMobileSeasonsData();
+  }, [isMobile, dialogOpen, tvshowSlug, seasonsData.length, totalSeasons]);
   
   // Fetch user's audio preference when episode or tvshow changes
   useEffect(() => {
@@ -2865,7 +2948,7 @@ export function PlayEpisodeDialog({
   return (
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent 
-        className="sm:max-w-[800px] p-0 overflow-hidden"
+        className={`p-0 overflow-hidden ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px]'}`}
         onPointerDownOutside={(e) => {
           // Prevent closing on outside clicks
           e.preventDefault();
@@ -2882,11 +2965,11 @@ export function PlayEpisodeDialog({
           Debug info
         </div>
         
-        <div className="w-full h-full flex flex-col">
-          {/* Video player area */}
+        <div className={`w-full h-full flex flex-col ${isMobile ? 'overflow-hidden' : ''}`}>
+          {/* Video player area - sticky on mobile when scrolling */}
           <div 
             ref={containerRef} 
-            className="relative w-full aspect-video bg-black outline-none"
+            className={`relative w-full aspect-video bg-black outline-none ${isMobile ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
             tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
@@ -3675,198 +3758,448 @@ export function PlayEpisodeDialog({
             )}
           </div>
           
-          {/* Episode details */}
-          <div className="p-6">
-            <DialogHeader>
-              <DialogTitle>
-                <div className="sm:flex justify-between items-start w-full">
-                  <div>
-                    <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
-                      {tvshowName}
-                    </div>
-                    <div className="text-xl">
-                      {episode.name}
-                    </div>
+          {/* Mobile scrollable content container */}
+          {isMobile ? (
+            <div 
+              ref={mobileScrollContainerRef}
+              className="flex-1 overflow-y-auto bg-neutral-900"
+            >
+              {/* Mobile Episode Info Section */}
+              <div className="px-4 py-3 border-b border-neutral-800">
+                {/* Episode title */}
+                <h2 className="text-base font-semibold text-white truncate">
+                  {episode.episode_number}. {episode.name}
+                </h2>
+                
+                {/* Stats row */}
+                <div className="flex items-center gap-2 mt-2 text-xs text-neutral-400">
+                  <span>{viewsCount || 0} views</span>
+                  {episode.vote_average > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="flex items-center gap-0.5">
+                        <span className="text-yellow-500">★</span>
+                        {(episode.vote_average * 10).toFixed(0)}%
+                      </span>
+                    </>
+                  )}
+                </div>
+                
+                {/* Action buttons row */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-800">
+                  {/* Like button */}
+                  <button
+                    onClick={handleLikeToggle}
+                    disabled={isLikeToggling || !isAuthenticated}
+                    className="flex flex-col items-center gap-1 text-neutral-400 disabled:opacity-50"
+                  >
+                    <ThumbsUp 
+                      className={`w-5 h-5 ${isLiked ? 'text-rose-500 fill-rose-500' : ''}`}
+                    />
+                    <span className="text-[10px]">{likesCount || 0}</span>
+                  </button>
+                  
+                  {/* Dislike placeholder for UI balance */}
+                  <button className="flex flex-col items-center gap-1 text-neutral-400 opacity-50 cursor-not-allowed">
+                    <ThumbsDown className="w-5 h-5" />
+                    <span className="text-[10px]">0</span>
+                  </button>
+                  
+                  {/* Comments count */}
+                  <button className="flex flex-col items-center gap-1 text-neutral-400 opacity-50 cursor-not-allowed">
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="text-[10px]">0</span>
+                  </button>
+                  
+                  {/* Share button */}
+                  <button
+                    onClick={handleShareEpisode}
+                    disabled={isSharing}
+                    className="flex flex-col items-center gap-1 text-neutral-400 disabled:opacity-50"
+                  >
+                    <Share2 className="w-5 h-5" />
+                    <span className="text-[10px]">Share</span>
+                  </button>
+                </div>
+              </div>
+              
+              {/* Season selector and repeat controls */}
+              <div className="px-4 py-3 border-b border-neutral-800">
+                <div className="flex items-center justify-between gap-4">
+                  {/* Season selector dropdown */}
+                  <div className="flex-1">
+                    <Select 
+                      value={mobileSeasonNumber.toString()} 
+                      onValueChange={(val) => setMobileSeasonNumber(parseInt(val))}
+                    >
+                      <SelectTrigger className="w-full bg-neutral-800 border-neutral-700 text-white">
+                        <SelectValue placeholder="Select Season" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {seasonsData.length > 0 ? (
+                          seasonsData.map((season) => (
+                            <SelectItem 
+                              key={season.season_number} 
+                              value={season.season_number.toString()}
+                              className="text-white hover:bg-neutral-700"
+                            >
+                              Season {season.season_number} ({season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length} eps)
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value={episode.season_number.toString()} className="text-white">
+                            Season {episode.season_number}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="hidden sm:flex items-center gap-x-4">
-                    {/* Watch Later button - Only show for playable episodes */}
-                    {isAuthenticated && episode?.encFilePath && (
-                      <Tooltip 
-                        text={
-                          currentWatchLaterState.isWatchLater 
-                            ? "Remove episode from watch later" 
-                            : "Add episode to watch later"
-                        } 
-                        position="bottom"
-                      >
-                        <button
-                          onClick={handleWatchLaterToggle}
-                          disabled={currentWatchLaterState.isToggling}
-                          className={`focus:outline-none cursor-pointer disabled:opacity-50 p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all duration-300 ease-in-out ${
-                            currentWatchLaterState.isAnimating ? 'rotate-180' : 'rotate-0'
-                          }`}
-                          style={{
-                            transform: currentWatchLaterState.isAnimating 
-                              ? 'rotate(180deg)' 
-                              : 'rotate(0deg)',
+                  
+                  {/* Available episodes count */}
+                  <div className="text-sm text-neutral-400">
+                    <span className="text-rose-500 font-medium">
+                      {seasonsData.find(s => s.season_number === mobileSeasonNumber)?.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length || '?'}
+                    </span>
+                    <span className="text-neutral-500"> / </span>
+                    <span>
+                      {seasonsData.find(s => s.season_number === mobileSeasonNumber)?.episodes.length || '?'}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Repeat mode toggles - all three modes like desktop */}
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  {/* Repeat entire TV show */}
+                  <button
+                    onClick={toggleRepeatTvshow}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                      repeatTvshow 
+                        ? 'bg-rose-600 text-white' 
+                        : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                    }`}
+                  >
+                    <Repeat2 className="w-3.5 h-3.5" />
+                    <span>Repeat all</span>
+                  </button>
+                  
+                  {/* Repeat current season */}
+                  <button
+                    onClick={toggleRepeatSeason}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                      repeatSeason 
+                        ? 'bg-rose-600 text-white' 
+                        : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                    }`}
+                  >
+                    <Repeat className="w-3.5 h-3.5" />
+                    <span>Repeat season</span>
+                  </button>
+                  
+                  {/* Repeat one episode */}
+                  <button
+                    onClick={toggleRepeatOne}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                      repeatOne 
+                        ? 'bg-rose-600 text-white' 
+                        : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                    }`}
+                  >
+                    <Repeat1 className="w-3.5 h-3.5" />
+                    <span>Repeat one</span>
+                  </button>
+                </div>
+              </div>
+              
+              {/* Episode list with thumbnails */}
+              <div className="py-2">
+                {mobileEpisodeListLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
+                  </div>
+                ) : (
+                  <>
+                    {(seasonsData.find(s => s.season_number === mobileSeasonNumber)?.episodes || []).map((ep: any) => {
+                      const isCurrentEpisode = episode?.id === ep.id;
+                      const isAvailable = ep.is_in_storage && ep.encFilePath;
+                      
+                      return (
+                        <div
+                          key={`mobile-${ep.id}`}
+                          onClick={() => {
+                            if (isAvailable && onEpisodeSelect) {
+                              onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
+                            }
                           }}
+                          className={`flex items-start gap-3 px-4 py-3 ${
+                            isCurrentEpisode 
+                              ? 'bg-neutral-800/50' 
+                              : isAvailable 
+                                ? 'active:bg-neutral-800' 
+                                : 'opacity-40'
+                          } ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                         >
-                          {currentWatchLaterState.isWatchLater ? (
-                            <svg 
-                              className="w-5 h-5 text-green-500 dark:text-green-400" 
-                              fill="currentColor" 
-                              viewBox="0 0 20 20"
-                            >
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          {/* Episode thumbnail */}
+                          <div className="relative flex-shrink-0 w-28 h-16 rounded overflow-hidden bg-neutral-800">
+                            {ep.stillUrl || ep.still_path ? (
+                              <img 
+                                src={ep.stillUrl || `https://image.tmdb.org/t/p/w300${ep.still_path}`}
+                                alt={ep.name}
+                                className={`w-full h-full object-cover ${!isAvailable ? 'grayscale' : ''}`}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <PlayCircle className="w-8 h-8 text-neutral-600" />
+                              </div>
+                            )}
+                            {/* Play indicator for current episode */}
+                            {isCurrentEpisode && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center">
+                                  <PlayCircle className="w-5 h-5 text-white fill-white" />
+                                </div>
+                              </div>
+                            )}
+                            {/* Episode number badge */}
+                            <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white font-medium">
+                              {ep.episode_number}
+                            </div>
+                            {/* Runtime badge */}
+                            {ep.runtime && (
+                              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
+                                {ep.runtime}m
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Episode info */}
+                          <div className="flex-1 min-w-0 py-0.5">
+                            <h3 className={`text-sm font-medium truncate ${
+                              isCurrentEpisode ? 'text-rose-400' : 'text-white'
+                            }`}>
+                              {ep.name || `Episode ${ep.episode_number}`}
+                            </h3>
+                            {ep.overview && (
+                              <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
+                                {ep.overview}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Options menu button */}
+                          <button className="flex-shrink-0 p-1 text-neutral-500">
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="2" />
+                              <circle cx="12" cy="12" r="2" />
+                              <circle cx="12" cy="19" r="2" />
                             </svg>
-                          ) : (
-                            <svg 
-                              className="w-5 h-5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200" 
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                          )}
-                        </button>
-                      </Tooltip>
-                    )}
+                          </button>
+                        </div>
+                      );
+                    })}
                     
-                    {/* Like button - only for premium users and admins */}
-                    {(props.auth.canAccessPremium || props.auth.isAdmin) && (
-                      <Tooltip 
-                        text={
-                          isAuthenticated 
-                            ? (isLiked ? "Unlike this episode" : "Like this episode") 
-                            : "Login to like this episode"
-                        } 
-                        position="bottom"
-                      >
-                        <button
-                          onClick={handleLikeToggle}
-                          disabled={isLikeToggling || !isAuthenticated}
-                          className="focus:outline-none cursor-pointer disabled:opacity-50"
+                    {seasonsData.length === 0 && !mobileEpisodeListLoading && (
+                      <div className="px-4 py-8 text-center text-neutral-400">
+                        <p>Loading episodes...</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Desktop Episode details */
+            <div className="p-6">
+              <DialogHeader>
+                <DialogTitle>
+                  <div className="sm:flex justify-between items-start w-full">
+                    <div>
+                      <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
+                        {tvshowName}
+                      </div>
+                      <div className="text-xl">
+                        {episode.name}
+                      </div>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-x-4">
+                      {/* Watch Later button - Only show for playable episodes */}
+                      {isAuthenticated && episode?.encFilePath && (
+                        <Tooltip 
+                          text={
+                            currentWatchLaterState.isWatchLater 
+                              ? "Remove episode from watch later" 
+                              : "Add episode to watch later"
+                          } 
+                          position="bottom"
                         >
-                          <div
-                            className={`transition-all duration-300 ease-in-out ${
-                              isLikeAnimating ? 'rotate-180' : 'rotate-0'
+                          <button
+                            onClick={handleWatchLaterToggle}
+                            disabled={currentWatchLaterState.isToggling}
+                            className={`focus:outline-none cursor-pointer disabled:opacity-50 p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all duration-300 ease-in-out ${
+                              currentWatchLaterState.isAnimating ? 'rotate-180' : 'rotate-0'
                             }`}
                             style={{
-                              transform: isLikeAnimating 
+                              transform: currentWatchLaterState.isAnimating 
                                 ? 'rotate(180deg)' 
                                 : 'rotate(0deg)',
                             }}
                           >
-                            <Heart 
-                              className={`w-5 h-5 transition-colors duration-200 ${
-                                isLiked 
-                                  ? 'text-rose-500 fill-rose-500 hover:text-rose-600 hover:fill-rose-600' 
-                                  : 'hover:text-rose-500'
+                            {currentWatchLaterState.isWatchLater ? (
+                              <svg 
+                                className="w-5 h-5 text-green-500 dark:text-green-400" 
+                                fill="currentColor" 
+                                viewBox="0 0 20 20"
+                              >
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <svg 
+                                className="w-5 h-5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                            )}
+                          </button>
+                        </Tooltip>
+                      )}
+                      
+                      {/* Like button - only for premium users and admins */}
+                      {(props.auth.canAccessPremium || props.auth.isAdmin) && (
+                        <Tooltip 
+                          text={
+                            isAuthenticated 
+                              ? (isLiked ? "Unlike this episode" : "Like this episode") 
+                              : "Login to like this episode"
+                          } 
+                          position="bottom"
+                        >
+                          <button
+                            onClick={handleLikeToggle}
+                            disabled={isLikeToggling || !isAuthenticated}
+                            className="focus:outline-none cursor-pointer disabled:opacity-50"
+                          >
+                            <div
+                              className={`transition-all duration-300 ease-in-out ${
+                                isLikeAnimating ? 'rotate-180' : 'rotate-0'
                               }`}
-                            />
-                          </div>
+                              style={{
+                                transform: isLikeAnimating 
+                                  ? 'rotate(180deg)' 
+                                  : 'rotate(0deg)',
+                              }}
+                            >
+                              <Heart 
+                                className={`w-5 h-5 transition-colors duration-200 ${
+                                  isLiked 
+                                    ? 'text-rose-500 fill-rose-500 hover:text-rose-600 hover:fill-rose-600' 
+                                    : 'hover:text-rose-500'
+                                }`}
+                              />
+                            </div>
+                          </button>
+                        </Tooltip>
+                      )}
+
+                      {/* Repeat mode indicator */}
+                      {(repeatOne || repeatSeason || repeatTvshow) && (
+                        <span className="hidden text-xs text-rose-500 ml-2">
+                          {repeatOne ? "Repeating episode" : ""}
+                          {repeatSeason ? "Repeating season" : ""}
+                          {repeatTvshow ? "Repeating entire series" : ""}
+                        </span>
+                      )}
+                      {/* share episode button */}
+                      <Tooltip 
+                        text={
+                          isShareSupported 
+                            ? "Share this episode" 
+                            : "Share this episode (copy link)"
+                        } 
+                        position="bottom"
+                      >
+                        <button
+                          onClick={handleShareEpisode}
+                          disabled={isSharing}
+                          className="focus:outline-none cursor-pointer disabled:opacity-50"
+                        >
+                          <Share2 
+                            className={`w-5 h-5 transition-colors duration-150 hover:text-rose-500`}
+                          />
                         </button>
                       </Tooltip>
-                    )}
-
-                    {/* Repeat mode indicator */}
-                    {(repeatOne || repeatSeason || repeatTvshow) && (
-                      <span className="hidden text-xs text-rose-500 ml-2">
-                        {repeatOne ? "Repeating episode" : ""}
-                        {repeatSeason ? "Repeating season" : ""}
-                        {repeatTvshow ? "Repeating entire series" : ""}
-                      </span>
-                    )}
-                    {/* share episode button */}
-                    <Tooltip 
-                      text={
-                        isShareSupported 
-                          ? "Share this episode" 
-                          : "Share this episode (copy link)"
-                      } 
-                      position="bottom"
-                    >
-                      <button
-                        onClick={handleShareEpisode}
-                        disabled={isSharing}
-                        className="focus:outline-none cursor-pointer disabled:opacity-50"
-                      >
-                        <Share2 
-                          className={`w-5 h-5 transition-colors duration-150 hover:text-rose-500`}
-                        />
-                      </button>
-                    </Tooltip>
-                    {/* repeat episode (loop episode) */}
-                    <Tooltip text="Repeat current episode" position="bottom">
-                      <button
-                        className="focus:outline-none cursor-pointer"
-                        onClick={toggleRepeatOne}
-                      >
-                        <Repeat1 
-                          className={`w-5 h-5 transition-colors duration-150 ${
-                            repeatOne ? 'text-rose-500' : 'hover:text-rose-500'
-                          }`}
-                        />
-                      </button>
-                    </Tooltip>
-                    {/* repeat season playlist (loop season) */}
-                    <Tooltip text="Repeat current season" position="bottom">
-                      <button
-                        className="focus:outline-none cursor-pointer"
-                        onClick={toggleRepeatSeason}
-                      >
-                        <Repeat 
-                          className={`w-5 h-5 transition-colors duration-150 ${
-                            repeatSeason ? 'text-rose-500' : 'hover:text-rose-500'
-                          }`}
-                        />
-                      </button>
-                    </Tooltip>
-                    {/* repeat entire tvshow episodes (loop all seasons) */}
-                    <Tooltip text="Repeat entire TV show" position="bottom">
-                      <button
-                        className="focus:outline-none cursor-pointer"
-                        onClick={toggleRepeatTvshow}
-                      >
-                        <Repeat2 
-                          className={`w-5 h-5 transition-colors duration-150 ${
-                            repeatTvshow ? 'text-rose-500' : 'hover:text-rose-500'
-                          }`}
-                        />
-                      </button>
-                    </Tooltip>
+                      {/* repeat episode (loop episode) */}
+                      <Tooltip text="Repeat current episode" position="bottom">
+                        <button
+                          className="focus:outline-none cursor-pointer"
+                          onClick={toggleRepeatOne}
+                        >
+                          <Repeat1 
+                            className={`w-5 h-5 transition-colors duration-150 ${
+                              repeatOne ? 'text-rose-500' : 'hover:text-rose-500'
+                            }`}
+                          />
+                        </button>
+                      </Tooltip>
+                      {/* repeat season playlist (loop season) */}
+                      <Tooltip text="Repeat current season" position="bottom">
+                        <button
+                          className="focus:outline-none cursor-pointer"
+                          onClick={toggleRepeatSeason}
+                        >
+                          <Repeat 
+                            className={`w-5 h-5 transition-colors duration-150 ${
+                              repeatSeason ? 'text-rose-500' : 'hover:text-rose-500'
+                            }`}
+                          />
+                        </button>
+                      </Tooltip>
+                      {/* repeat entire tvshow episodes (loop all seasons) */}
+                      <Tooltip text="Repeat entire TV show" position="bottom">
+                        <button
+                          className="focus:outline-none cursor-pointer"
+                          onClick={toggleRepeatTvshow}
+                        >
+                          <Repeat2 
+                            className={`w-5 h-5 transition-colors duration-150 ${
+                              repeatTvshow ? 'text-rose-500' : 'hover:text-rose-500'
+                            }`}
+                          />
+                        </button>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              </DialogTitle>
-              <DialogDescription>
-                <span className="sm:flex justify-start items-center gap-x-2 w-full">
-                    <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
-                    {/* Views count - always show, even when 0 */}
-                    <>
-                      <span> · </span>
-                      <span>
-                        {viewsCount || 0} {(viewsCount || 0) === 1 ? 'view' : 'views'}
-                      </span>
-                    </>
-                    {/* Plays count - always show, even when 0 */}
-                    <>
-                      <span> · </span>
-                      <span>
-                        {playsCount || 0} {(playsCount || 0) === 1 ? 'play' : 'plays'}
-                      </span>
-                    </>
-                    {/* Likes count - only show when there is at least 1 like */}
-                    {likesCount > 0 && (
+                </DialogTitle>
+                <DialogDescription>
+                  <span className="sm:flex justify-start items-center gap-x-2 w-full">
+                      <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
+                      {/* Views count - always show, even when 0 */}
                       <>
                         <span> · </span>
-                        <span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span>
+                        <span>
+                          {viewsCount || 0} {(viewsCount || 0) === 1 ? 'view' : 'views'}
+                        </span>
                       </>
-                    )}
-                </span>
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+                      {/* Plays count - always show, even when 0 */}
+                      <>
+                        <span> · </span>
+                        <span>
+                          {playsCount || 0} {(playsCount || 0) === 1 ? 'play' : 'plays'}
+                        </span>
+                      </>
+                      {/* Likes count - only show when there is at least 1 like */}
+                      {likesCount > 0 && (
+                        <>
+                          <span> · </span>
+                          <span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span>
+                        </>
+                      )}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
