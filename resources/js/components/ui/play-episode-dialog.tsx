@@ -3368,7 +3368,7 @@ export function PlayEpisodeDialog({
                     </div>
                     
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-x-4">
+                      <div className="flex items-center gap-x-2 sm:gap-x-4">
                         {/* play/pause button */}
                         <Tooltip text={isPlaying ? "Pause (Space)" : "Play (Space)"} position="bottom">
                           <button onClick={togglePlay} className="hover:text-rose-500 transition-colors duration-150">
