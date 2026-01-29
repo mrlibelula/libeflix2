@@ -324,9 +324,33 @@ class TvshowService
                 ], 
             ]);
             $content = $response->choices[0]->message->content;
-            $json = json_decode($content, true);
-            echo "OpenAI responded with release year: {$json['releaseYear']}\n";
-            return (int)$json['releaseYear'];
+            
+            // Strip markdown code block wrapper if present (GPT-4o-mini often wraps JSON in ```json ... ```)
+            $content = trim($content);
+            // Match ```json or ``` at start, capture everything until closing ```
+            if (preg_match('/^```(?:json)?\s*\n?(.*?)\n?```\s*$/s', $content, $matches)) {
+                $content = trim($matches[1]);
+            }
+            
+            // Decode JSON with error handling
+            $json = @json_decode($content, true);
+            $jsonError = json_last_error();
+            
+            if ($jsonError !== JSON_ERROR_NONE) {
+                echo "\033[33mWarning: JSON decode error: " . json_last_error_msg() . "\033[0m\n";
+                info("JSON decode error: " . json_last_error_msg());
+                info("Failed content: " . $content);
+                return 0;
+            }
+            
+            if (is_array($json) && isset($json['releaseYear']) && $json['releaseYear'] > 0) {
+                echo "OpenAI responded with release year: {$json['releaseYear']}\n";
+                return (int)$json['releaseYear'];
+            } else {
+                echo "\033[33mWarning: Could not extract release year from OpenAI response\033[0m\n";
+                info("Failed to extract releaseYear from parsed JSON");
+                return 0;
+            }
         } catch (\OpenAI\Exceptions\ErrorException $ee) {
             echo "\033[31mError getting release year from OpenAI: {$ee->getMessage()}\033[0m\n";
             info($ee->getMessage());
