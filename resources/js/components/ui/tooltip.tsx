@@ -32,6 +32,7 @@ export function Tooltip({
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTouchRef = useRef(false);
 
   // Variant classes for styling
   const variantClasses = {
@@ -124,8 +125,26 @@ export function Tooltip({
     setActualPosition(newPosition);
   };
 
+  // Suppress tooltip on touch devices: a tap fires touchstart before the
+  // synthesized mouseenter, so we set a flag and skip showing.
+  const handleTouchStart = () => {
+    isTouchRef.current = true;
+    // Dismiss any visible tooltip immediately on touch
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsVisible(false);
+  };
+
   // Handle mouse events
   const handleMouseEnter = () => {
+    // Skip tooltip when the mouseenter was synthesized from a touch
+    if (isTouchRef.current) {
+      isTouchRef.current = false;
+      return;
+    }
+
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -149,6 +168,7 @@ export function Tooltip({
     }
     
     setIsVisible(false);
+    isTouchRef.current = false;
   };
 
   // Update position when window resizes or scrolls
@@ -204,6 +224,7 @@ export function Tooltip({
         onMouseLeave={handleMouseLeave}
         onFocus={handleMouseEnter}
         onBlur={handleMouseLeave}
+        onTouchStart={handleTouchStart}
       >
         {children}
       </div>

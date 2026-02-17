@@ -588,47 +588,46 @@ export function PlayMoviePlayer({
     video.addEventListener('seeked', handleSeeked, { once: true });
   };
 
-  const handleProgressBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const updateProgressTooltipAtX = (clientX: number, withThumbnail: boolean = false) => {
     if (!progressBarRef.current || !duration) return;
-    
+
     const rect = progressBarRef.current.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
+    const relativeX = clientX - rect.left;
     const percentage = Math.max(0, Math.min(100, (relativeX / rect.width) * 100));
     const timeAtPosition = (percentage / 100) * duration;
-    
+
     // Calculate tooltip position with boundary constraints
-    const tooltipWidth = 160; // Width of the thumbnail
+    const tooltipWidth = 160;
     const halfTooltipWidth = tooltipWidth / 2;
-    
-    // Calculate the ideal left position (centered on cursor)
+
     let leftPosition = relativeX;
-    
-    // Constrain to boundaries
+
     if (leftPosition - halfTooltipWidth < 0) {
-      // Too close to left edge
       leftPosition = halfTooltipWidth;
     } else if (leftPosition + halfTooltipWidth > rect.width) {
-      // Too close to right edge
       leftPosition = rect.width - halfTooltipWidth;
     }
-    
+
     setProgressTooltipPosition(percentage);
     setTooltipLeftOffset(leftPosition);
     setProgressTooltipTime(timeAtPosition);
     setProgressTooltipVisible(true);
-    
-    // Keep controls visible while hovering progress bar
+
     setControlsVisible(true);
     setUserActive(true);
-    
-    // Minimal debounce for thumbnail generation (30ms for fastest response while avoiding excessive calls)
-    if (thumbnailGenerationTimeoutRef.current) {
-      clearTimeout(thumbnailGenerationTimeoutRef.current);
+
+    if (withThumbnail) {
+      if (thumbnailGenerationTimeoutRef.current) {
+        clearTimeout(thumbnailGenerationTimeoutRef.current);
+      }
+      thumbnailGenerationTimeoutRef.current = setTimeout(() => {
+        generateThumbnailPreview(timeAtPosition);
+      }, 30);
     }
-    
-    thumbnailGenerationTimeoutRef.current = setTimeout(() => {
-      generateThumbnailPreview(timeAtPosition);
-    }, 30);
+  };
+
+  const handleProgressBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    updateProgressTooltipAtX(e.clientX, true);
   };
 
   const handleProgressBarMouseEnter = () => {
@@ -655,6 +654,36 @@ export function PlayMoviePlayer({
     }
     
     // Resume auto-hide behavior after leaving progress bar
+    handleUserActivity();
+  };
+
+  // Touch handlers for mobile progress bar tooltip
+  const handleProgressBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    updateProgressTooltipAtX(touch.clientX);
+
+    if (userActivityTimeout.current) {
+      clearTimeout(userActivityTimeout.current);
+      userActivityTimeout.current = null;
+    }
+  };
+
+  const handleProgressBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    updateProgressTooltipAtX(touch.clientX);
+  };
+
+  const handleProgressBarTouchEnd = () => {
+    setProgressTooltipVisible(false);
+    setPreviewThumbnail(null);
+
+    if (thumbnailGenerationTimeoutRef.current) {
+      clearTimeout(thumbnailGenerationTimeoutRef.current);
+      thumbnailGenerationTimeoutRef.current = null;
+    }
+
     handleUserActivity();
   };
 
@@ -1553,6 +1582,10 @@ export function PlayMoviePlayer({
                   onMouseMove={handleProgressBarMouseMove}
                   onMouseEnter={handleProgressBarMouseEnter}
                   onMouseLeave={handleProgressBarMouseLeave}
+                  onTouchStart={handleProgressBarTouchStart}
+                  onTouchMove={handleProgressBarTouchMove}
+                  onTouchEnd={handleProgressBarTouchEnd}
+                  onTouchCancel={handleProgressBarTouchEnd}
                 >
                   <div 
                     className="absolute top-0 left-0 h-2 bg-rose-500 rounded-full pointer-events-none" 
