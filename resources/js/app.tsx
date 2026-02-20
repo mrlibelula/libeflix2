@@ -1,11 +1,36 @@
 import '../css/app.css';
 
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
+import axios from 'axios';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
 import { useState, useEffect } from 'react';
 
+function syncCsrfToken(token?: string) {
+  if (token) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+    const meta = document.head.querySelector('meta[name="csrf-token"]');
+    if (meta) {
+      meta.setAttribute('content', token);
+    }
+  }
+}
+
+// Set initial token from meta tag
+const initialToken = document.head
+  .querySelector('meta[name="csrf-token"]')
+  ?.getAttribute('content');
+syncCsrfToken(initialToken ?? undefined);
+
+// Keep token in sync after every Inertia navigation (handles session
+// regeneration on login/logout)
+router.on('navigate', (event) => {
+  const pageToken = (event.detail.page.props as Record<string, unknown>).csrf_token;
+  if (typeof pageToken === 'string') {
+    syncCsrfToken(pageToken);
+  }
+});
 
 // Extend Window interface to include _scrollPositions
 declare global {
