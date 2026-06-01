@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminMovieImportController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
@@ -265,6 +266,19 @@ Route::middleware(['auth', 'role_or_permission:editor|manage movies'])->prefix('
     // Editor content management routes (future implementation)
     // Route::get('movies', [EditorMovieController::class, 'index'])->name('movies.index');
     // Route::get('tvshows', [EditorTvshowController::class, 'index'])->name('tvshows.index');
+});
+
+// Content management — admin and editors with manage movies permission
+Route::middleware(['auth', 'role_or_permission:admin|manage movies'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('content-management', [AdminMovieImportController::class, 'index'])->name('content-management');
+
+    Route::prefix('api/movies/import')->name('api.movies.import.')->group(function () {
+        Route::get('scan', [AdminMovieImportController::class, 'scan'])->name('scan');
+        Route::post('suggest-year', [AdminMovieImportController::class, 'suggestYear'])->name('suggest-year');
+        Route::get('search', [AdminMovieImportController::class, 'search'])->name('search');
+        Route::post('metadata', [AdminMovieImportController::class, 'storeMetadata'])->name('metadata');
+        Route::post('run', [AdminMovieImportController::class, 'run'])->name('run');
+    });
 });
 
 // Test route for debugging comments

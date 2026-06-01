@@ -78,11 +78,12 @@ export default function AdminLayout({ children }: PropsWithChildren) {
         if (href === '/admin/users' && currentPath.startsWith('/admin/users')) {
             return true;
         }
+
+        if (href === '/admin/content-management' && currentPath.startsWith('/admin/content-management')) {
+            return true;
+        }
         
         // Add more sub-route matching for other sections as needed
-        // if (href === '/admin/content-management' && currentPath.startsWith('/admin/content-management')) {
-        //     return true;
-        // }
         
         return false;
     };
