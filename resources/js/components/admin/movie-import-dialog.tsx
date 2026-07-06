@@ -341,7 +341,7 @@ export async function importReadyFolder(folder: string, onSuccess: () => void): 
         <span>
           Imported &quot;{result.title}&quot;{' '}
           {result.slug && (
-            <Link href={`/movies/${result.slug}`} className="underline">
+            <Link href={`/movie/${result.slug}`} className="underline">
               View
             </Link>
           )}
