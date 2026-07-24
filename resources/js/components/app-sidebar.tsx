@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv, Handshake, Search } from 'lucide-react';
+import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv, Handshake, Search, Clapperboard } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import AppLogo from './app-logo';
 
@@ -23,6 +23,11 @@ const mainNavItems: NavItem[] = [
         title: 'Movies',
         href: '/movies',
         icon: Film,
+    },
+    {
+        title: 'Party Theater',
+        href: '/party',
+        icon: Clapperboard,
     },
     {
         title: 'Watch Later',

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { cn } from '@/lib/utils';
 
 type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
 type TooltipVariant = 'dark' | 'light';
@@ -12,7 +13,19 @@ interface TooltipProps {
   position?: TooltipPosition;
   variant?: TooltipVariant;
   className?: string;
+  triggerClassName?: string;
+  /** Only show the tooltip when truncated text (`.truncate` or the trigger) overflows. */
+  onlyWhenTruncated?: boolean;
   offset?: number;
+}
+
+function isTruncatedWithin(root: HTMLElement): boolean {
+  const candidates = [
+    root,
+    ...Array.from(root.querySelectorAll<HTMLElement>('.truncate')),
+  ];
+
+  return candidates.some((el) => el.scrollWidth > el.clientWidth + 1);
 }
 
 // Our custom tooltip component
@@ -24,6 +37,8 @@ export function Tooltip({
   position = 'top',
   variant = 'dark',
   className = '',
+  triggerClassName,
+  onlyWhenTruncated = false,
   offset = 8
 }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
@@ -150,6 +165,10 @@ export function Tooltip({
     }
     
     timeoutRef.current = setTimeout(() => {
+      if (onlyWhenTruncated && triggerRef.current && !isTruncatedWithin(triggerRef.current)) {
+        return;
+      }
+
       setIsVisible(true);
       // Reset position to initial prop value when showing
       setActualPosition(position);
@@ -219,7 +238,7 @@ export function Tooltip({
     <>
       <div 
         ref={triggerRef}
-        className="inline-flex"
+        className={cn('inline-flex', triggerClassName)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onFocus={handleMouseEnter}

@@ -16,6 +16,7 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserPreferenceController;
 use App\Http\Controllers\ViewsController;
+use App\Http\Controllers\Party\PartyController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -79,7 +80,23 @@ Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/credits', [TvshowControlle
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
-    
+
+    // Party Theater (polling sync MVP)
+    Route::get('party', [PartyController::class, 'index'])->name('party.index');
+    Route::post('party', [PartyController::class, 'store'])->name('party.store');
+    Route::post('party/join', [PartyController::class, 'join'])->name('party.join');
+    Route::get('api/party/lobby', [PartyController::class, 'lobby'])->name('api.party.lobby');
+    Route::get('api/party/content/search', [PartyController::class, 'searchContent'])->name('api.party.content.search');
+    Route::get('party/{code}', [PartyController::class, 'theater'])->name('party.theater');
+    Route::post('party/{code}/leave', [PartyController::class, 'leave'])->name('party.leave');
+    Route::delete('party/{code}', [PartyController::class, 'destroy'])->name('party.destroy');
+    Route::get('api/party/{code}/sync', [PartyController::class, 'sync'])->name('api.party.sync');
+    Route::patch('api/party/{code}/settings', [PartyController::class, 'updateSettings'])->name('api.party.settings');
+    Route::post('api/party/{code}/queue', [PartyController::class, 'addQueue'])->name('api.party.queue.add');
+    Route::delete('api/party/{code}/queue/{item}', [PartyController::class, 'removeQueue'])->name('api.party.queue.remove');
+    Route::post('api/party/{code}/playback', [PartyController::class, 'playback'])->name('api.party.playback');
+    Route::post('api/party/{code}/chat', [PartyController::class, 'chat'])->name('api.party.chat');
+    Route::post('api/party/{code}/voice', [PartyController::class, 'voiceSignal'])->name('api.party.voice');
     Route::post('movies/{movie}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('movies.toggle-watch-later');
     Route::post('api/movies/{movie:slug}/toggle-watch-later', [MovieController::class, 'toggleWatchLater'])->name('api.movies.toggle-watch-later-by-slug');
     

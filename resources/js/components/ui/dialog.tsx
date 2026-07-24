@@ -48,8 +48,13 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  inline = false,
+  hideClose = false,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  inline?: boolean;
+  hideClose?: boolean;
+}) {
   const [isVideoMuted, setIsVideoMuted] = React.useState(false);
   const [hasNativeVideo, setHasNativeVideo] = React.useState(false);
 
@@ -87,52 +92,21 @@ function DialogContent({
     };
   }, []);
 
-  return (
-    <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          "bg-neutral-50 dark:bg-neutral-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-neutral-200 dark:border-neutral-900 p-6 shadow duration-200 sm:max-w-lg",
-          className
-        )}
-        {...props}
-      >
-        {children}
+  const content = (
+    <DialogPrimitive.Content
+      data-slot="dialog-content"
+      className={cn(
+        inline
+          ? "bg-neutral-50 dark:bg-neutral-900 relative z-10 grid w-full max-w-none translate-x-0 translate-y-0 gap-4 rounded-lg border border-neutral-200 dark:border-neutral-900 p-6 shadow-none"
+          : "bg-neutral-50 dark:bg-neutral-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-neutral-200 dark:border-neutral-900 p-6 shadow duration-200 sm:max-w-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      {!hideClose && (
         <div className="absolute top-5 right-5 flex gap-1 items-center z-50">
           {isVideoMuted && <div className="bg-neutral-100/50 dark:bg-neutral-800/50 p-1.5 rounded text-xs text-rose-600 dark:text-rose-400 font-medium">Muted</div>}
-          {/* {hasNativeVideo && (
-            <Tooltip text="Picture in Picture (p)" position="bottom">
-              <button
-                className="ring-offset-background focus:ring-ring opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded flex items-center cursor-pointer"
-                onClick={() => {
-                  const videoElement = document.querySelector('video');
-
-                  if (videoElement && document.pictureInPictureElement !== videoElement) {
-                    videoElement.requestPictureInPicture()
-                      .then(() => {
-                        // Ensure video continues playing in PiP mode
-                        if (videoElement.paused) {
-                          videoElement.play().catch(error => {
-                            console.error("Picture-in-Picture play failed:", error);
-                          });
-                        }
-                      })
-                      .catch(error => {
-                        console.error("Picture-in-Picture failed:", error);
-                      });
-                  } else if (document.pictureInPictureElement) {
-                    document.exitPictureInPicture().catch(error => {
-                      console.error("Exiting Picture-in-Picture failed:", error);
-                    });
-                  }
-                }}
-              >
-                <PictureInPicture2 className="w-4 h-4" />
-                <span className="sr-only">Picture in Picture</span>
-              </button>
-            </Tooltip>
-          )} */}
           <Tooltip text="Close (esc)" position="bottom">
             <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none bg-neutral-100/70 dark:bg-neutral-800/70 p-1.5 rounded cursor-pointer">
               <XIcon className="w-4 h-4" />
@@ -140,7 +114,18 @@ function DialogContent({
             </DialogPrimitive.Close>
           </Tooltip>
         </div>
-      </DialogPrimitive.Content>
+      )}
+    </DialogPrimitive.Content>
+  );
+
+  if (inline) {
+    return content;
+  }
+
+  return (
+    <DialogPortal data-slot="dialog-portal">
+      <DialogOverlay />
+      {content}
     </DialogPortal>
   )
 }

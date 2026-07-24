@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, XIcon, PictureInPicture2, MessageSquareText, Check, LockIcon, UserIcon, CreditCardIcon, StepBack, StepForward, SkipBack, SkipForward } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, XIcon, PictureInPicture2, MessageSquareText, Check, LockIcon, UserIcon, CreditCardIcon, StepBack, StepForward, SkipBack, SkipForward, Play } from 'lucide-react';
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
 import { Link, usePage } from "@inertiajs/react";
 import axios from 'axios';
+import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
+import { Button } from '@/components/ui/button';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -33,6 +35,8 @@ type PlayMoviePlayerProps = {
   onError?: (error: Error) => void;
   className?: string;
   imgBaseUrl?: string;
+  /** When set, this player follows / drives a Party Theater room */
+  partySync?: PartyPlayerSync | null;
 };
 
 export function PlayMoviePlayer({
@@ -41,7 +45,8 @@ export function PlayMoviePlayer({
   autoPlay = false,
   onError,
   className = '',
-  imgBaseUrl = ''
+  imgBaseUrl = '',
+  partySync = null,
 }: PlayMoviePlayerProps) {
   const { props } = usePage<{
     auth: {
@@ -76,6 +81,17 @@ export function PlayMoviePlayer({
   const [isPipActive, setIsPipActive] = useState(false);
   const [isAccessChecked, setIsAccessChecked] = useState(false);
   const pipTriggeredByScroll = useRef(false); // Track if PiP was auto-triggered by scroll
+  /** Native MP4 aspect (width/height); used in party theater so we don't force 16:9 */
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
+
+  const partyBridge = usePartyPlaybackBridge({
+    videoRef,
+    sync: partySync,
+    isPlaying,
+    setIsPlaying,
+  });
+  const controlsLockedByParty = partyBridge.enabled && !partyBridge.canControl;
+  const preserveNativeAspect = Boolean(partySync?.enabled);
   
   // Wake Lock state for keeping screen awake during playback
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -112,6 +128,10 @@ export function PlayMoviePlayer({
   ]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
   const [currentEncFilePath, setCurrentEncFilePath] = useState(encFilePath);
+
+  useEffect(() => {
+    setVideoAspectRatio(null);
+  }, [currentEncFilePath]);
 
   // Progress bar tooltip state
   const [progressTooltipVisible, setProgressTooltipVisible] = useState(false);
@@ -329,7 +349,10 @@ export function PlayMoviePlayer({
   }, [isPlaying, canAccessMovie]);
 
   const togglePlay = () => {
-    setIsPlaying(!isPlaying);
+    if (controlsLockedByParty) return;
+    const next = !isPlaying;
+    setIsPlaying(next);
+    partyBridge.onLocalPlayPause(next);
   };
 
   const toggleMute = () => {
@@ -343,18 +366,20 @@ export function PlayMoviePlayer({
   };
 
   const handleStepBack = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || controlsLockedByParty) return;
     const newTime = Math.max(0, videoRef.current.currentTime - SEEK_INTERVAL_SECONDS);
     videoRef.current.currentTime = newTime;
+    partyBridge.onLocalSeek(newTime, isPlaying);
   };
 
   const handleStepForward = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || controlsLockedByParty) return;
     const newTime = Math.min(
       videoRef.current.duration || 0, 
       videoRef.current.currentTime + SEEK_INTERVAL_SECONDS
     );
     videoRef.current.currentTime = newTime;
+    partyBridge.onLocalSeek(newTime, isPlaying);
   };
 
   const toggleFullscreen = () => {
@@ -414,8 +439,11 @@ export function PlayMoviePlayer({
     };
   }, []);
 
-  // Track watch progress and send to API periodically
+  // Track watch progress and send to API periodically (skipped in party theaters)
   useEffect(() => {
+    if (partySync?.enabled) {
+      return;
+    }
     if (!movie?.id || !isAuthenticated || !videoRef.current) {
       return;
     }
@@ -501,15 +529,17 @@ export function PlayMoviePlayer({
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [movie?.id, isAuthenticated]);
+  }, [movie?.id, isAuthenticated, partySync?.enabled]);
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (controlsLockedByParty) return;
     const newProgress = parseFloat(e.target.value);
     setProgress(newProgress);
     
     if (videoRef.current && videoRef.current.duration) {
       const newTime = (newProgress / 100) * videoRef.current.duration;
       videoRef.current.currentTime = newTime;
+      partyBridge.onLocalSeek(newTime, isPlaying);
     }
   };
 
@@ -729,10 +759,12 @@ export function PlayMoviePlayer({
   };
 
   useEffect(() => {
+    // Don't steal focus from party theater queue/chat when syncing playback
+    if (partySync?.enabled) return;
     if (containerRef.current) {
       containerRef.current.focus();
     }
-  }, []);
+  }, [partySync?.enabled]);
 
   const handleUserActivity = useCallback((forceShow: boolean = false, duration: number = CONTROLS_AUTOHIDE_TIMEOUT_MS) => {
     // Always show controls when user is active
@@ -1303,13 +1335,16 @@ export function PlayMoviePlayer({
     );
   }
 
+  const useNativeAspect = preserveNativeAspect && videoAspectRatio != null && !isFullscreen;
+
   return (
     <div 
       ref={containerRef} 
-      className={`relative w-full aspect-video bg-black outline-none ${className}`}
+      className={`relative w-full bg-black outline-none ${useNativeAspect ? '' : 'aspect-video'} ${className}`}
       tabIndex={0}
       style={{
         cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none',
+        ...(useNativeAspect ? { aspectRatio: String(videoAspectRatio) } : {}),
         ...(isFullscreen && {
           width: '100%',
           height: '100%',
@@ -1376,9 +1411,9 @@ export function PlayMoviePlayer({
                   key={currentEncFilePath}
                   src={canAccessMovie ? `${route('movie.serve', { encFilePath: currentEncFilePath, disk: 'movies' })}` : undefined}
                   poster={movie.backdrop_path ? `${imgBaseUrl}${movie.backdrop_path}` : undefined}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full ${preserveNativeAspect ? 'object-contain' : 'object-cover'}`}
                   style={{
-                    ...(isFullscreen ? { objectFit: 'contain' } : {}),
+                    ...(isFullscreen || preserveNativeAspect ? { objectFit: 'contain' } : {}),
                     cursor: (userActive || !isFullscreen || !isPlaying) ? 'pointer' : 'none'
                   }}
                   data-controls-visible={controlsVisible ? 'true' : 'false'}
@@ -1402,6 +1437,10 @@ export function PlayMoviePlayer({
                   onLoadedMetadata={(e) => {
                     if (canAccessMovie && e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                       setDuration(e.currentTarget.duration);
+
+                      if (preserveNativeAspect && e.currentTarget.videoWidth > 0 && e.currentTarget.videoHeight > 0) {
+                        setVideoAspectRatio(e.currentTarget.videoWidth / e.currentTarget.videoHeight);
+                      }
                       
                       // Apply subtitle after video metadata is loaded
                       if (currentSubtitleId && currentSubtitleId !== 'off') {
@@ -1444,6 +1483,21 @@ export function PlayMoviePlayer({
                     );
                   })}
                 </video>
+
+                {partyBridge.needsTap && (
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center">
+                    <p className="text-lg font-medium text-white">
+                      {partySync?.isPlaying ? 'The show already started' : 'Join the screening'}
+                    </p>
+                    <p className="max-w-sm text-sm text-zinc-300">
+                      Tap once so this browser can play along with everyone else.
+                    </p>
+                    <Button type="button" size="lg" onClick={() => void partyBridge.joinPlayback()}>
+                      <Play className="mr-2 size-4 fill-current" />
+                      Watch together
+                    </Button>
+                  </div>
+                )}
 
                 {/* Hidden preview video for generating thumbnails */}
                 {canAccessMovie && currentEncFilePath && (

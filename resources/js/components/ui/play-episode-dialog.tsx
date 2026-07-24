@@ -9,7 +9,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart, Eye, PlayCircle, ThumbsUp, ThumbsDown, MessageCircle, ChevronDown } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart, Eye, Play, PlayCircle, ThumbsUp, ThumbsDown, MessageCircle, ChevronDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
@@ -18,6 +18,7 @@ import { Link, usePage } from "@inertiajs/react";
 import { useWebShare } from "@/hooks/use-web-share";
 import { EpisodesApi } from "@/services/episodes-api";
 import axios from 'axios';
+import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -90,6 +91,9 @@ type PlayEpisodeDialogProps = {
   };
   onExternalWatchLaterToggle?: (episodeId: number) => void;
   onEpisodeSelect?: (season: number, episode: number) => void;
+  /** Embed player inline (Party Theater) instead of a modal dialog */
+  embedded?: boolean;
+  partySync?: PartyPlayerSync | null;
 };
 
 export function PlayEpisodeDialog({
@@ -125,7 +129,9 @@ export function PlayEpisodeDialog({
   // External watch later state management
   externalWatchLaterState,
   onExternalWatchLaterToggle,
-  onEpisodeSelect
+  onEpisodeSelect,
+  embedded = false,
+  partySync = null,
 }: PlayEpisodeDialogProps) {
   const { props } = usePage<{
     auth: {
@@ -150,7 +156,7 @@ export function PlayEpisodeDialog({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [dialogOpen, setDialogOpen] = useState(isOpen);
+  const [dialogOpen, setDialogOpen] = useState(embedded ? true : isOpen);
   const [wasPlaying, setWasPlaying] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -164,6 +170,17 @@ export function PlayEpisodeDialog({
   const [isHoveringDialog, setIsHoveringDialog] = useState(false);
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
+
+  const partyBridge = usePartyPlaybackBridge({
+    videoRef,
+    sync: partySync,
+    isPlaying,
+    setIsPlaying,
+  });
+  const controlsLockedByParty = partyBridge.enabled && !partyBridge.canControl;
+  const preserveNativeAspect = Boolean(embedded || partySync?.enabled);
+  /** Native MP4 aspect (width/height); used in party theater so we don't force 16:9 */
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
   const [repeatSeason, setRepeatSeason] = useState(false);
   const [repeatTvshow, setRepeatTvshow] = useState(false);
@@ -216,6 +233,10 @@ export function PlayEpisodeDialog({
   const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
   const [currentEncFilePath, setCurrentEncFilePath] = useState(episode?.encFilePath || '');
   const [userPreferredAudio, setUserPreferredAudio] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVideoAspectRatio(null);
+  }, [currentEncFilePath]);
 
   // Check if subtitles exist
   const [hasSubtitles, setHasSubtitles] = useState(false);
@@ -846,6 +867,7 @@ export function PlayEpisodeDialog({
 
   // Fix the progress bar handler to be more reliable
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (controlsLockedByParty) return;
     if (!videoRef.current || !videoRef.current.duration) return;
     
     // Parse the value as a float for precision
@@ -860,6 +882,7 @@ export function PlayEpisodeDialog({
     // Update state manually to avoid waiting for timeupdate event
     setProgress(newProgress);
     setCurrentTime(newTime);
+    partyBridge.onLocalSeek(newTime, isPlaying);
   };
 
   const handleError = (err: Error) => {
@@ -904,7 +927,10 @@ export function PlayEpisodeDialog({
   };
 
   const togglePlay = () => {
-    setIsPlaying(!isPlaying);
+    if (controlsLockedByParty) return;
+    const next = !isPlaying;
+    setIsPlaying(next);
+    partyBridge.onLocalPlayPause(next);
   };
 
   const toggleMute = () => {
@@ -922,21 +948,23 @@ export function PlayEpisodeDialog({
 
   // Step backward fixed interval
   const handleStepBack = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || controlsLockedByParty) return;
     
     const newTime = Math.max(0, videoRef.current.currentTime - SEEK_INTERVAL_SECONDS);
     videoRef.current.currentTime = newTime;
+    partyBridge.onLocalSeek(newTime, isPlaying);
   };
 
   // Step forward fixed interval
   const handleStepForward = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || controlsLockedByParty) return;
     
     const newTime = Math.min(
       videoRef.current.duration || 0, 
       videoRef.current.currentTime + SEEK_INTERVAL_SECONDS
     );
     videoRef.current.currentTime = newTime;
+    partyBridge.onLocalSeek(newTime, isPlaying);
   };
 
   // Simple fullscreen implementation with cross-browser support
@@ -1201,6 +1229,10 @@ export function PlayEpisodeDialog({
 
   // Handle visibility change to fix audio/video sync
   useEffect(() => {
+    // Party mode owns play/pause across tabs — don't locally pause on hide or
+    // fight the room sync when users come back from another room/tab.
+    if (partyBridge.enabled) return;
+
     const handleVisibilityChange = () => {
       const video = videoRef.current;
       if (!video) return;
@@ -1238,7 +1270,7 @@ export function PlayEpisodeDialog({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isPlaying, wasPlaying]);
+  }, [isPlaying, partyBridge.enabled, wasPlaying]);
 
   // Enhanced navigation to previous episode with smart episode finding
   const handlePreviousEpisode = () => {
@@ -1307,13 +1339,23 @@ export function PlayEpisodeDialog({
     }
   };
 
-  // Add keyboard controls for video navigation
+  // Focus player once when the modal opens — never while embedded in party theater
+  // (sync polls re-render this component; re-focusing would yank focus off queue/chat inputs).
+  const wasDialogOpenRef = useRef(false);
   useEffect(() => {
-    // Focus the container when dialog opens
-    if (dialogOpen && containerRef.current) {
+    if (dialogOpen && !wasDialogOpenRef.current && !embedded && containerRef.current) {
       containerRef.current.focus();
     }
-    
+    wasDialogOpenRef.current = dialogOpen;
+  }, [dialogOpen, embedded]);
+
+  // Add keyboard controls for video navigation
+  useEffect(() => {
+    // Party theater embeds the player beside interactive panels — don't capture global keys
+    if (embedded) {
+      return;
+    }
+
     // Create a ref for the dialog content element
     const dialogContentRef = containerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
 
@@ -1321,25 +1363,29 @@ export function PlayEpisodeDialog({
     // we only need this for events that might bubble up to the window
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip if user is typing in an input element
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
         return;
       }
 
       // Only handle keyboard events when the dialog is open
       if (!dialogOpen) return;
-      
-      // Only process key events that originate from outside the dialog, 
+
+      // Only process key events that originate from outside the dialog,
       // but we want to capture them anyway to prevent affecting background elements
-      const isInDialog = dialogContentRef?.contains(e.target as Node) || 
+      const isInDialog = dialogContentRef?.contains(e.target as Node) ||
                          (e.target instanceof Node && containerRef.current?.contains(e.target as Node));
-      
+
       // For events originating outside dialog but while dialog is open,
       // prevent them from affecting background elements
       if (!isInDialog && dialogOpen) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
-            e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+            e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' ||
             e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B') {
-          
+
           // Only prevent video control keys if user has access to the content
           // This prevents accidental triggering of video actions on restricted content
           if (canAccessEpisode) {
@@ -1352,11 +1398,11 @@ export function PlayEpisodeDialog({
 
     // We still need this to catch any events that might bubble up to window
     window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [dialogOpen, handleStepBack, handleStepForward, togglePlay, handleNextEpisode, handlePreviousEpisode]);
+  }, [dialogOpen, embedded, canAccessEpisode]);
 
   // Implement YouTube-like behavior for controls visibility
   const handleUserActivity = useCallback((forceShow: boolean = false, duration: number = CONTROLS_AUTOHIDE_TIMEOUT_MS) => {
@@ -1640,7 +1686,7 @@ export function PlayEpisodeDialog({
     
   // Add auto Picture-in-Picture when user navigates away from the page
   useEffect(() => {
-    if (!isPipSupported || !videoRef.current) return;
+    if (!isPipSupported || !videoRef.current || partyBridge.enabled) return;
     
     const handleVisibilityChange = () => {
       // Only trigger PiP if video is playing and dialog is open
@@ -1676,7 +1722,7 @@ export function PlayEpisodeDialog({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isPipSupported, isPlaying, dialogOpen]);
+  }, [isPipSupported, isPlaying, dialogOpen, partyBridge.enabled]);
 
   // Add keyboard shortcut for Picture-in-Picture (p key)
   useEffect(() => {
@@ -1740,6 +1786,14 @@ export function PlayEpisodeDialog({
 
   // Handle keyboard events at the dialog root level
   const handleDialogKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target instanceof HTMLElement && e.target.isContentEditable)
+    ) {
+      return;
+    }
+
     // Process keyboard events at the dialog root level
     if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ' || 
                        e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
@@ -2946,13 +3000,29 @@ export function PlayEpisodeDialog({
   }
 
   return (
-    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={embedded ? true : dialogOpen} onOpenChange={embedded ? () => undefined : handleOpenChange} modal={!embedded}>
       <DialogContent 
-        className={`p-0 overflow-hidden ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px]'}`}
+        inline={embedded}
+        hideClose={embedded}
+        className={
+          embedded
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full p-0 overflow-hidden rounded-lg border border-zinc-800 shadow-none'
+            : `p-0 overflow-hidden ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px]'}`
+        }
+        onOpenAutoFocus={(e) => {
+          // Party theater embeds this player beside queue/chat — don't trap focus on mount
+          if (embedded) {
+            e.preventDefault();
+          }
+        }}
         onPointerDownOutside={(e) => {
+          if (embedded) {
+            // Allow focusing/typing in theater side panels (queue search, chat, settings)
+            return;
+          }
           // Prevent closing on outside clicks
           e.preventDefault();
-          
+
           // Ensure the dialog maintains focus when clicking outside
           if (containerRef.current) {
             containerRef.current.focus();
@@ -2969,10 +3039,13 @@ export function PlayEpisodeDialog({
           {/* Video player area - sticky on mobile when scrolling */}
           <div 
             ref={containerRef} 
-            className={`relative w-full aspect-video bg-black outline-none ${isMobile ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
+            className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
             tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
+              ...(preserveNativeAspect && videoAspectRatio != null && !isFullscreen
+                ? { aspectRatio: String(videoAspectRatio) }
+                : {}),
               ...(isFullscreen && {
                 width: '100%',
                 height: '100%',
@@ -3052,9 +3125,9 @@ export function PlayEpisodeDialog({
                         ref={videoRef}
                         key={currentEncFilePath}
                         src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: currentEncFilePath, disk: 'tvshows' })}` : undefined}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full ${preserveNativeAspect ? 'object-contain' : 'object-cover'}`}
                         style={{
-                          ...(isFullscreen ? { objectFit: 'contain' } : {}),
+                          ...(isFullscreen || preserveNativeAspect ? { objectFit: 'contain' } : {}),
                           cursor: (userActive || !isFullscreen || !isPlaying) ? 'pointer' : 'none'
                         }}
                         controls={false}
@@ -3077,6 +3150,10 @@ export function PlayEpisodeDialog({
                         onLoadedMetadata={(e) => {
                           if (canAccessEpisode && e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
                             setDuration(e.currentTarget.duration);
+
+                            if (preserveNativeAspect && e.currentTarget.videoWidth > 0 && e.currentTarget.videoHeight > 0) {
+                              setVideoAspectRatio(e.currentTarget.videoWidth / e.currentTarget.videoHeight);
+                            }
                           }
                         }}
                         onDurationChange={(e) => {
@@ -3126,6 +3203,21 @@ export function PlayEpisodeDialog({
                           );
                         })}
                       </video>
+
+                      {partyBridge.needsTap && (
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center">
+                          <p className="text-lg font-medium text-white">
+                            {partySync?.isPlaying ? 'The show already started' : 'Join the screening'}
+                          </p>
+                          <p className="max-w-sm text-sm text-zinc-300">
+                            Tap once so this browser can play along with everyone else.
+                          </p>
+                          <Button type="button" size="lg" onClick={() => void partyBridge.joinPlayback()}>
+                            <Play className="mr-2 size-4 fill-current" />
+                            Watch together
+                          </Button>
+                        </div>
+                      )}
 
                       {/* Hidden preview video for generating thumbnails */}
                       {canAccessEpisode && episode.encFilePath && (
