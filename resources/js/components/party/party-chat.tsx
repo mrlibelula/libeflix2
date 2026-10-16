@@ -129,20 +129,20 @@ export function PartyChat({ messages, enabled, localUserId, onSend }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Chat</h3>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Chat</h3>
       {!enabled && <p className="text-xs text-zinc-500">Chat is disabled by the host.</p>}
       <div
         ref={listRef}
         onScroll={onListScroll}
         className={cn(
-          'min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain rounded border border-zinc-800 p-2 transition-[border-color,box-shadow] duration-500',
+          'min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain rounded border border-zinc-200 bg-white/50 p-2 transition-[border-color,box-shadow] duration-500 dark:border-zinc-800 dark:bg-transparent',
           shine && 'party-chat-shine border-sky-400/60 shadow-[0_0_22px_-6px_rgba(56,189,248,0.55)]'
         )}
       >
         {messages.map((m) => (
           <div key={m.id} className="text-sm">
-            <span className="font-medium text-zinc-200">{m.user_name || 'User'}: </span>
-            <span className="text-zinc-300">{m.body}</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">{m.user_name || 'User'}: </span>
+            <span className="text-zinc-600 dark:text-zinc-300">{m.body}</span>
           </div>
         ))}
       </div>

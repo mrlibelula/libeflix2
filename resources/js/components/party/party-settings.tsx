@@ -37,8 +37,8 @@ export function PartySettings({ snapshot, absoluteMaxMembers, onSave, onDelete }
   }
 
   return (
-    <div className="space-y-3 rounded border border-zinc-800 p-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Theater settings</h3>
+    <div className="space-y-3 rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Theater settings</h3>
       <div className="space-y-1">
         <Label htmlFor="party-name">Name</Label>
         <Input id="party-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />

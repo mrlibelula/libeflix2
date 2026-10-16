@@ -60,7 +60,7 @@ export function PartyQueue({ queue, currentId, canControl, onAdd, onRemove, onPl
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Queue</h3>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Queue</h3>
 
       {canControl && (
         <div className="space-y-2">
@@ -74,12 +74,12 @@ export function PartyQueue({ queue, currentId, canControl, onAdd, onRemove, onPl
             <p className="text-xs text-zinc-500">No playable titles matched that search.</p>
           )}
           {results.length > 0 && (
-            <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-zinc-800 p-1">
+            <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-zinc-200 p-1 dark:border-zinc-800">
               {results.map((r) => (
                 <li key={`${r.type}-${r.id}`}>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-800"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     onClick={async () => {
                       await onAdd(r.type, r.id);
                       setQuery('');
@@ -117,7 +117,7 @@ export function PartyQueue({ queue, currentId, canControl, onAdd, onRemove, onPl
             <li
               key={item.id}
               className={`flex items-center gap-2 rounded px-2 py-2 text-sm ${
-                active ? 'bg-zinc-800' : 'hover:bg-zinc-900'
+                active ? 'bg-zinc-100 dark:bg-zinc-800' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'
               }`}
             >
               <Tooltip

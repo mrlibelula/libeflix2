@@ -41,7 +41,7 @@ function OccupancyBar({ count, max }: { count: number; max: number }) {
   const pct = Math.min(100, Math.round((count / Math.max(max, 1)) * 100));
 
   return (
-    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
       <div
         className={cn(
           'h-full rounded-full transition-all duration-500',
@@ -70,8 +70,9 @@ function RoomCard({
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-2xl border border-zinc-800/90 bg-zinc-950/60 p-4 transition-all duration-300',
-        'hover:border-zinc-600 hover:bg-zinc-900/80',
+        'group relative overflow-hidden rounded-2xl border border-zinc-200/90 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all duration-300',
+        'hover:border-zinc-300 hover:bg-white/95',
+        'dark:border-zinc-800/90 dark:bg-zinc-950/60 dark:shadow-none dark:hover:border-zinc-600 dark:hover:bg-zinc-900/80',
         highlighted && 'animate-in fade-in zoom-in-95 border-emerald-500/50 bg-emerald-500/5 shadow-[0_0_24px_-8px_rgba(16,185,129,0.55)]',
         isPaused && 'border-amber-500/35 bg-amber-500/[0.04]',
         !canEnter && 'opacity-60'
@@ -87,39 +88,39 @@ function RoomCard({
           className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold tracking-tight text-zinc-50">{room.name}</h3>
+            <h3 className="truncate text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{room.name}</h3>
             {highlighted && (
-              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                 New
               </span>
             )}
             {isPaused && (
-              <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+              <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
                 Continue
               </span>
             )}
             {room.is_host && (
-              <span className="rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-300">
+              <span className="rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-600 dark:text-red-300">
                 Host
               </span>
             )}
             {!canEnter && (
-              <span className="rounded-md bg-zinc-700/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
+              <span className="rounded-md bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600 dark:bg-zinc-700/60 dark:text-zinc-300">
                 Full
               </span>
             )}
           </div>
-          <p className="mt-1 truncate text-sm text-zinc-400">
+          <p className="mt-1 truncate text-sm text-zinc-500 dark:text-zinc-400">
             {isPaused
               ? 'Paused — pick up where you left off'
               : room.host_name
                 ? `Hosted by ${room.host_name}`
                 : 'Open theater'}
             {' · '}
-            <span className="font-mono text-zinc-300">{room.code}</span>
+            <span className="font-mono text-zinc-700 dark:text-zinc-300">{room.code}</span>
           </p>
           {room.now_showing && (
-            <div className="mt-2.5 flex items-center gap-2.5 rounded-lg border border-zinc-800/80 bg-black/25 px-2 py-1.5">
+            <div className="mt-2.5 flex items-center gap-2.5 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800/80 dark:bg-black/25">
               {room.now_showing.poster ? (
                 <img
                   src={room.now_showing.poster}
@@ -127,7 +128,7 @@ function RoomCard({
                   className="size-9 shrink-0 rounded-md object-cover"
                 />
               ) : (
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-800/80 text-zinc-500">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-200 text-zinc-500 dark:bg-zinc-800/80">
                   <Clapperboard className="size-3.5" />
                 </div>
               )}
@@ -135,7 +136,7 @@ function RoomCard({
                 <p
                   className={cn(
                     'inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider',
-                    room.now_showing.state === 'playing' ? 'text-red-400/90' : 'text-amber-400/90'
+                    room.now_showing.state === 'playing' ? 'text-red-600 dark:text-red-400/90' : 'text-amber-600 dark:text-amber-400/90'
                   )}
                 >
                   {room.now_showing.state === 'playing' ? (
@@ -147,17 +148,17 @@ function RoomCard({
                     'About to play'
                   )}
                 </p>
-                <p className="truncate text-sm text-zinc-200">{room.now_showing.title}</p>
+                <p className="truncate text-sm text-zinc-800 dark:text-zinc-200">{room.now_showing.title}</p>
               </div>
             </div>
           )}
-          <div className="mt-3 flex items-center gap-3 text-xs text-zinc-400">
+          <div className="mt-3 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
             <span className="inline-flex items-center gap-1.5">
               <Users className="size-3.5" />
               {isPaused ? 'Empty' : `${room.member_count}/${room.max_members}`}
             </span>
             {room.is_public !== false ? (
-              <span className="inline-flex items-center gap-1.5 text-emerald-400/90">
+              <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/90">
                 <Globe2 className="size-3.5" />
                 Public
               </span>
@@ -176,7 +177,7 @@ function RoomCard({
             type="button"
             variant="ghost"
             size="sm"
-            className="shrink-0 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-400"
+            className="shrink-0 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-500 dark:hover:text-rose-400"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -264,19 +265,19 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
             backgroundPosition: 'center',
             backgroundAttachment: 'fixed',
           }}
-          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-20"
+          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-30 dark:opacity-20"
         />
-        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full light-gradient-hero dark:dark-gradient-hero" />
+        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full bg-gradient-to-b from-white/40 via-white/55 to-white/75 dark:from-transparent dark:via-transparent dark:to-transparent dark:dark-gradient-hero" />
 
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-10 p-6 md:p-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-red-400/90">
+            <div className="mb-2 flex items-center gap-2 text-red-600 dark:text-red-400/90">
               <Clapperboard className="size-5" />
               <span className="text-sm font-medium uppercase tracking-[0.18em]">Watch together</span>
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Party Theater</h1>
-            <p className="mt-2 max-w-2xl text-zinc-400">
+            <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl dark:text-zinc-50">Party Theater</h1>
+            <p className="mt-2 max-w-2xl text-zinc-600 dark:text-zinc-400">
               Open a screening, share the code, and stay in sync — up to {absoluteMaxMembers} seats with
               chat and optional mic.
             </p>
@@ -285,8 +286,8 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
             className={cn(
               'inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-medium',
               live
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-300'
+                : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:text-amber-300'
             )}
           >
             <Radio className={cn('size-3.5', live && 'animate-pulse')} />
@@ -297,11 +298,11 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
         <div className="grid gap-6 lg:grid-cols-2">
           <form
             onSubmit={onCreate}
-            className="relative space-y-4 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900/90 via-zinc-950 to-black p-5 shadow-lg shadow-black/20"
+            className="relative space-y-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white/85 p-5 shadow-lg shadow-zinc-900/5 backdrop-blur-sm dark:border-zinc-800 dark:bg-gradient-to-br dark:from-zinc-900/90 dark:via-zinc-950 dark:to-black dark:shadow-black/20"
           >
             <div className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-red-500/15 blur-2xl" />
             <div className="relative">
-              <h2 className="text-lg font-medium">Create a theater</h2>
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">Create a theater</h2>
               <p className="mt-1 text-sm text-zinc-500">Public by default — friends can find you in the lobby.</p>
             </div>
             <div className="relative space-y-1">
@@ -325,8 +326,8 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
                 onChange={(e) => createForm.setData('max_members', Number(e.target.value))}
               />
             </div>
-            <div className="relative space-y-2.5 rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-              <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <div className="relative space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800/80 dark:bg-black/30">
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700 dark:text-zinc-200">
                 <input
                   type="checkbox"
                   className="size-4 accent-red-500"
@@ -335,7 +336,7 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
                 />
                 Show in the public lobby
               </label>
-              <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700 dark:text-zinc-200">
                 <input
                   type="checkbox"
                   className="size-4 accent-red-500"
@@ -352,10 +353,10 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
 
           <form
             onSubmit={onJoin}
-            className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5"
+            className="space-y-4 rounded-2xl border border-zinc-200 bg-white/85 p-5 shadow-lg shadow-zinc-900/5 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70 dark:shadow-none"
           >
             <div>
-              <h2 className="text-lg font-medium">Join a theater</h2>
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">Join a theater</h2>
               <p className="mt-1 text-sm text-zinc-500">Got an invite code? Drop it in and take a seat.</p>
             </div>
             <div className="space-y-1">
@@ -369,7 +370,7 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
                 className="font-mono tracking-[0.2em]"
               />
             </div>
-            {joinError && <p className="text-sm text-red-400">{joinError}</p>}
+            {joinError && <p className="text-sm text-red-600 dark:text-red-400">{joinError}</p>}
             <Button type="submit" disabled={joining || !joinCode.trim()} className="w-full" variant="secondary">
               <DoorOpen className="mr-2 size-4" />
               Enter theater
@@ -380,7 +381,7 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
         {myRooms.length > 0 && (
           <section>
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-medium">Your theaters</h2>
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">Your theaters</h2>
               <span className="text-xs text-zinc-500">{myRooms.length} saved</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -399,16 +400,16 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
         <section>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-medium">Open lobbies</h2>
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">Open lobbies</h2>
               <p className="mt-0.5 text-sm text-zinc-500">Updates live as theaters open or close.</p>
             </div>
             <span className="text-xs text-zinc-500">{publicRooms.length} public</span>
           </div>
           {publicRooms.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-800 px-6 py-12 text-center">
-              <Clapperboard className="mx-auto mb-3 size-8 text-zinc-600" />
-              <p className="text-sm text-zinc-400">No open theaters right now.</p>
-              <p className="mt-1 text-xs text-zinc-600">Create one and it will appear here for everyone.</p>
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 px-6 py-12 text-center backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
+              <Clapperboard className="mx-auto mb-3 size-8 text-zinc-400 dark:text-zinc-600" />
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">No open theaters right now.</p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-600">Create one and it will appear here for everyone.</p>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">

@@ -87,16 +87,16 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
             backgroundPosition: 'center',
             backgroundAttachment: 'fixed',
           }}
-          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-20"
+          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-30 dark:opacity-20"
         />
-        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full light-gradient-hero dark:dark-gradient-hero" />
+        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full bg-gradient-to-b from-white/40 via-white/55 to-white/75 dark:from-transparent dark:via-transparent dark:to-transparent dark:dark-gradient-hero" />
 
         <div className="relative z-10 flex flex-col gap-4 p-4 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold">{snapshot.room.name}</h1>
-              <p className="text-sm text-zinc-400">
-                Room <span className="font-mono text-zinc-200">{snapshot.room.code}</span>
+              <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{snapshot.room.name}</h1>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Room <span className="font-mono text-zinc-800 dark:text-zinc-200">{snapshot.room.code}</span>
                 {snapshot.room.host_only_controls
                   ? ' · Only the host controls playback'
                   : ' · Anyone here can control playback'}
@@ -155,7 +155,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
               />
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
+                <div className="min-h-64 rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
                   <PartyQueue
                     queue={snapshot.queue}
                     currentId={snapshot.playback.current_queue_item_id}
@@ -167,7 +167,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
                     }}
                   />
                 </div>
-                <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
+                <div className="min-h-64 rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
                   <PartyChat
                     messages={chatMessages}
                     enabled={snapshot.room.allow_chat}
@@ -179,7 +179,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
             </div>
 
             <aside className="space-y-4">
-              <div className="rounded-xl border border-zinc-800 p-3">
+              <div className="rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
                 <PartyMembers members={snapshot.members} maxMembers={snapshot.room.max_members} />
               </div>
               <PartySettings
