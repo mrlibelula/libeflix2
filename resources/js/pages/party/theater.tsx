@@ -19,9 +19,10 @@ type Props = {
   code: string;
   initialSnapshot: PartySnapshot;
   absoluteMaxMembers: number;
+  backdropUrl: string;
 };
 
-export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers }: Props) {
+export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers, backdropUrl }: Props) {
   const voiceHandlerRef = useRef<(signals: PartyVoiceSignal[]) => void>(() => undefined);
 
   const {
@@ -78,104 +79,117 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${snapshot.room.name} · Party`} />
 
-      <div className="flex flex-col gap-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">{snapshot.room.name}</h1>
-            <p className="text-sm text-zinc-400">
-              Room <span className="font-mono text-zinc-200">{snapshot.room.code}</span>
-              {snapshot.room.host_only_controls
-                ? ' · Only the host controls playback'
-                : ' · Anyone here can control playback'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                await navigator.clipboard.writeText(window.location.href);
-                toast.success('Invite link copied');
-              }}
-            >
-              <Copy className="mr-1.5 size-3.5" />
-              Copy link
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!snapshot.room.allow_voice}
-              onClick={() => void voice.toggleMic()}
-            >
-              {voice.micOn ? <MicOff className="mr-1.5 size-3.5" /> : <Mic className="mr-1.5 size-3.5" />}
-              {voice.micOn ? 'Mic off' : 'Mic on'}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                voice.stopAll();
-                await leave();
-                router.visit(route('party.index'));
-              }}
-            >
-              <LogOut className="mr-1.5 size-3.5" />
-              Leave
-            </Button>
-          </div>
-        </div>
+      <div className="relative flex min-h-[calc(100vh-5.5rem)] flex-col overflow-hidden overflow-y-auto sidebar-scrollbar">
+        <div
+          style={{
+            backgroundImage: `url(${backdropUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+          }}
+          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-20"
+        />
+        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full light-gradient-hero dark:dark-gradient-hero" />
 
-        {voice.error && <p className="text-sm text-amber-400">{voice.error}</p>}
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-4">
-            <PartyPlayer
-              item={snapshot.current_item}
-              playback={snapshot.playback}
-              canControl={snapshot.viewer.can_control}
-              isHost={snapshot.viewer.is_host}
-              onTransport={onTransport}
-              onPositionHeartbeat={onPositionHeartbeat}
-            />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
-                <PartyQueue
-                  queue={snapshot.queue}
-                  currentId={snapshot.playback.current_queue_item_id}
-                  canControl={snapshot.viewer.can_control}
-                  onAdd={addToQueue}
-                  onRemove={removeFromQueue}
-                  onPlayItem={async (id) => {
-                    await postPlayback({ queue_item_id: id, is_playing: true, position_seconds: 0 });
-                  }}
-                />
-              </div>
-              <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
-                <PartyChat
-                  messages={chatMessages}
-                  enabled={snapshot.room.allow_chat}
-                  localUserId={snapshot.viewer.user_id}
-                  onSend={sendChat}
-                />
-              </div>
+        <div className="relative z-10 flex flex-col gap-4 p-4 md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold">{snapshot.room.name}</h1>
+              <p className="text-sm text-zinc-400">
+                Room <span className="font-mono text-zinc-200">{snapshot.room.code}</span>
+                {snapshot.room.host_only_controls
+                  ? ' · Only the host controls playback'
+                  : ' · Anyone here can control playback'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(window.location.href);
+                  toast.success('Invite link copied');
+                }}
+              >
+                <Copy className="mr-1.5 size-3.5" />
+                Copy link
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!snapshot.room.allow_voice}
+                onClick={() => void voice.toggleMic()}
+              >
+                {voice.micOn ? <MicOff className="mr-1.5 size-3.5" /> : <Mic className="mr-1.5 size-3.5" />}
+                {voice.micOn ? 'Mic off' : 'Mic on'}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  voice.stopAll();
+                  await leave();
+                  router.visit(route('party.index'));
+                }}
+              >
+                <LogOut className="mr-1.5 size-3.5" />
+                Leave
+              </Button>
             </div>
           </div>
 
-          <aside className="space-y-4">
-            <div className="rounded-xl border border-zinc-800 p-3">
-              <PartyMembers members={snapshot.members} maxMembers={snapshot.room.max_members} />
+          {voice.error && <p className="text-sm text-amber-400">{voice.error}</p>}
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-4">
+              <PartyPlayer
+                item={snapshot.current_item}
+                playback={snapshot.playback}
+                canControl={snapshot.viewer.can_control}
+                isHost={snapshot.viewer.is_host}
+                onTransport={onTransport}
+                onPositionHeartbeat={onPositionHeartbeat}
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
+                  <PartyQueue
+                    queue={snapshot.queue}
+                    currentId={snapshot.playback.current_queue_item_id}
+                    canControl={snapshot.viewer.can_control}
+                    onAdd={addToQueue}
+                    onRemove={removeFromQueue}
+                    onPlayItem={async (id) => {
+                      await postPlayback({ queue_item_id: id, is_playing: true, position_seconds: 0 });
+                    }}
+                  />
+                </div>
+                <div className="min-h-64 rounded-xl border border-zinc-800 p-3">
+                  <PartyChat
+                    messages={chatMessages}
+                    enabled={snapshot.room.allow_chat}
+                    localUserId={snapshot.viewer.user_id}
+                    onSend={sendChat}
+                  />
+                </div>
+              </div>
             </div>
-            <PartySettings
-              snapshot={snapshot}
-              absoluteMaxMembers={absoluteMaxMembers}
-              onSave={updateSettings}
-              onDelete={deleteRoom}
-            />
-          </aside>
+
+            <aside className="space-y-4">
+              <div className="rounded-xl border border-zinc-800 p-3">
+                <PartyMembers members={snapshot.members} maxMembers={snapshot.room.max_members} />
+              </div>
+              <PartySettings
+                snapshot={snapshot}
+                absoluteMaxMembers={absoluteMaxMembers}
+                onSave={updateSettings}
+                onDelete={deleteRoom}
+              />
+            </aside>
+          </div>
         </div>
       </div>
     </AppLayout>

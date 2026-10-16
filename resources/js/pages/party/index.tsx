@@ -32,6 +32,7 @@ type Props = {
   publicRooms: PartyLobbyRoom[];
   myRooms: PartyLobbyRoom[];
   absoluteMaxMembers: number;
+  backdropUrl: string;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Party Theater', href: '/party' }];
@@ -190,7 +191,7 @@ function RoomCard({
   );
 }
 
-export default function PartyIndex({ publicRooms: initialPublic, myRooms: initialMy, absoluteMaxMembers }: Props) {
+export default function PartyIndex({ publicRooms: initialPublic, myRooms: initialMy, absoluteMaxMembers, backdropUrl }: Props) {
   const { publicRooms, myRooms, live, highlightIds, deleteRoom } = usePartyLobby({
     initialPublicRooms: initialPublic,
     initialMyRooms: initialMy,
@@ -255,10 +256,19 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Party Theater" />
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 overflow-hidden p-6 md:p-8">
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.18),transparent_60%)]" />
-        <div className="pointer-events-none absolute -left-24 top-40 -z-10 size-64 rounded-full bg-red-600/10 blur-3xl" />
+      <div className="relative flex min-h-[calc(100vh-5.5rem)] flex-col overflow-hidden overflow-y-auto sidebar-scrollbar">
+        <div
+          style={{
+            backgroundImage: `url(${backdropUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+          }}
+          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full opacity-20"
+        />
+        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-5.5rem)] w-full light-gradient-hero dark:dark-gradient-hero" />
 
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-10 p-6 md:p-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-red-400/90">
@@ -414,6 +424,7 @@ export default function PartyIndex({ publicRooms: initialPublic, myRooms: initia
             </div>
           )}
         </section>
+        </div>
       </div>
 
       <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>

@@ -23,6 +23,7 @@ class PartyController extends Controller
             'publicRooms' => $this->party->listPublicRooms($user),
             'myRooms' => $this->party->listMyRooms($user),
             'absoluteMaxMembers' => PartyRoom::ABSOLUTE_MAX_MEMBERS,
+            'backdropUrl' => '/images/party01.jpg',
         ]);
     }
 
@@ -85,6 +86,7 @@ class PartyController extends Controller
             'code' => $room->code,
             'initialSnapshot' => $snapshot,
             'absoluteMaxMembers' => PartyRoom::ABSOLUTE_MAX_MEMBERS,
+            'backdropUrl' => '/images/party01.jpg',
         ]);
     }
 
