@@ -1699,6 +1699,12 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                     initialRepeatMode="tvshow"
                     tvshowSlug={tvshow.slug}
                     totalSeasons={tvshow.seasons?.length || 0}
+                    seasonsMeta={tvshow.seasons
+                      ?.filter((s: any) => s.season_number > 0)
+                      .map((s: any) => ({
+                        season_number: s.season_number,
+                        episode_count: s.episode_count,
+                      }))}
                     onEpisodeSelect={(seasonNumber, episodeNumber) => {
                       // Find the season
                       const targetSeason = tvshow.seasons.find((s: any) => s.season_number === seasonNumber);

@@ -53,12 +53,21 @@ const CONTROLS_AUTOHIDE_TIMEOUT_MS = 3800;
  * - Shows user-friendly notifications when skipping missing episodes or looping
  */
 
+type SeasonMenuData = {
+  season_number: number;
+  episodes: any[];
+  episode_count?: number;
+  loaded: boolean;
+};
+
 type PlayEpisodeDialogProps = {
   episode: any;
   tvshowName: string;
   tvshowId?: number;
   tvshowSlug?: string;
   totalSeasons?: number;
+  /** Lightweight season list (no episodes) for the player menu — episodes load per season on demand */
+  seasonsMeta?: Array<{ season_number: number; episode_count?: number }>;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   onError?: (error: Error) => void;
@@ -102,6 +111,7 @@ export function PlayEpisodeDialog({
   tvshowId,
   tvshowSlug,
   totalSeasons,
+  seasonsMeta,
   isOpen,
   onOpenChange,
   onError,
@@ -199,12 +209,36 @@ export function PlayEpisodeDialog({
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  // Seasons & Episodes menu state
+  // Seasons & Episodes menu state — season list is cheap; episodes load per season on demand
   const [showEpisodesMenu, setShowEpisodesMenu] = useState(false);
-  const [seasonsData, setSeasonsData] = useState<Array<{season_number: number; episodes: any[]}>>([]);
-  const [loadingSeasonsData, setLoadingSeasonsData] = useState(false);
+  const [seasonsData, setSeasonsData] = useState<SeasonMenuData[]>([]);
+  const [loadingSeasonNumber, setLoadingSeasonNumber] = useState<number | null>(null);
   const [activeSeasonNumber, setActiveSeasonNumber] = useState<number | null>(null);
   const episodesMenuRef = useRef<HTMLDivElement>(null);
+  const seasonsDataRef = useRef<SeasonMenuData[]>([]);
+  const loadingSeasonRequestsRef = useRef<Set<number>>(new Set());
+  seasonsDataRef.current = seasonsData;
+
+  const buildSeasonList = useCallback((): SeasonMenuData[] => {
+    if (seasonsMeta && seasonsMeta.length > 0) {
+      return seasonsMeta
+        .filter((s) => s.season_number > 0)
+        .sort((a, b) => a.season_number - b.season_number)
+        .map((s) => ({
+          season_number: s.season_number,
+          episodes: [],
+          episode_count: s.episode_count,
+          loaded: false,
+        }));
+    }
+
+    const maxSeasons = totalSeasons || 0;
+    return Array.from({ length: maxSeasons }, (_, i) => ({
+      season_number: i + 1,
+      episodes: [],
+      loaded: false,
+    }));
+  }, [seasonsMeta, totalSeasons]);
 
   // Mobile gesture state & refs
   const [gestureFeedback, setGestureFeedback] = useState<GestureFeedbackState | null>(null);
@@ -312,63 +346,27 @@ export function PlayEpisodeDialog({
     }
   }, [episode?.season_number]);
   
-  // Fetch seasons data on mobile when dialog opens
+  // Reset season menu cache when switching TV shows
   useEffect(() => {
-    const fetchMobileSeasonsData = async () => {
-      if (!isMobile || !dialogOpen || !tvshowSlug || seasonsData.length > 0) {
-        return;
-      }
+    loadingSeasonRequestsRef.current = new Set();
+    setSeasonsData(buildSeasonList());
+    setActiveSeasonNumber(null);
+    setLoadingSeasonNumber(null);
+  }, [tvshowSlug, buildSeasonList]);
 
-      setMobileEpisodeListLoading(true);
-      try {
-        const validSeasons: Array<{season_number: number; episodes: any[]}> = [];
-        let seasonNum = 1;
-        const maxSeasons = totalSeasons || 25;
-        let foundAnySeason = false;
-        
-        while (seasonNum <= maxSeasons) {
-          try {
-            const response = await fetch(`/api/tvshows/${tvshowSlug}/seasons/${seasonNum}/episodes`, {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-              },
-              credentials: 'same-origin'
-            });
+  // Ensure season list exists when the modal opens (no episode payloads yet)
+  useEffect(() => {
+    if (!dialogOpen) {
+      setShowEpisodesMenu(false);
+      setActiveSeasonNumber(null);
+      return;
+    }
 
-            if (response.ok) {
-              const data = await response.json();
-              if (data && data.episodes && data.episodes.length > 0) {
-                validSeasons.push({ season_number: seasonNum, episodes: data.episodes });
-                foundAnySeason = true;
-              } else {
-                if (foundAnySeason) break;
-              }
-            } else {
-              if (totalSeasons && seasonNum > totalSeasons) break;
-              if (foundAnySeason) break;
-            }
-          } catch (error) {
-            if (totalSeasons && seasonNum > totalSeasons) break;
-            if (foundAnySeason) break;
-          }
-          
-          seasonNum++;
-        }
+    if (seasonsDataRef.current.length === 0) {
+      setSeasonsData(buildSeasonList());
+    }
+  }, [dialogOpen, buildSeasonList]);
 
-        setSeasonsData(validSeasons);
-      } catch (error) {
-        console.error('Failed to fetch seasons data for mobile:', error);
-      } finally {
-        setMobileEpisodeListLoading(false);
-      }
-    };
-
-    fetchMobileSeasonsData();
-  }, [isMobile, dialogOpen, tvshowSlug, seasonsData.length, totalSeasons]);
-  
   // Fetch user's audio preference when episode or tvshow changes
   useEffect(() => {
     const fetchAudioPreference = async () => {
@@ -1056,9 +1054,10 @@ export function PlayEpisodeDialog({
     };
   }, []);
 
-  // Add keyboard shortcut for fullscreen (F key)
+  // Fullscreen shortcut when the episode dialog is closed (open dialog handles F itself)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (dialogOpen) return;
       if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
       }
@@ -1069,7 +1068,7 @@ export function PlayEpisodeDialog({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [dialogOpen]);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseInt(e.target.value);
@@ -1339,70 +1338,26 @@ export function PlayEpisodeDialog({
     }
   };
 
+  // Keep keyboard focus on the player surface so shortcuts keep working after UI clicks
+  const focusPlayerForKeyboard = useCallback(() => {
+    if (embedded) return;
+    containerRef.current?.focus({ preventScroll: true });
+  }, [embedded]);
+
   // Focus player once when the modal opens — never while embedded in party theater
   // (sync polls re-render this component; re-focusing would yank focus off queue/chat inputs).
   const wasDialogOpenRef = useRef(false);
   useEffect(() => {
     if (dialogOpen && !wasDialogOpenRef.current && !embedded && containerRef.current) {
-      containerRef.current.focus();
+      containerRef.current.focus({ preventScroll: true });
     }
-    wasDialogOpenRef.current = dialogOpen;
+    wasDialogOpenRef.current = !!dialogOpen;
   }, [dialogOpen, embedded]);
 
-  // Add keyboard controls for video navigation
-  useEffect(() => {
-    // Party theater embeds the player beside interactive panels — don't capture global keys
-    if (embedded) {
-      return;
-    }
-
-    // Create a ref for the dialog content element
-    const dialogContentRef = containerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
-
-    // Since we're handling key events at the dialog root level,
-    // we only need this for events that might bubble up to the window
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if user is typing in an input element
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
-        return;
-      }
-
-      // Only handle keyboard events when the dialog is open
-      if (!dialogOpen) return;
-
-      // Only process key events that originate from outside the dialog,
-      // but we want to capture them anyway to prevent affecting background elements
-      const isInDialog = dialogContentRef?.contains(e.target as Node) ||
-                         (e.target instanceof Node && containerRef.current?.contains(e.target as Node));
-
-      // For events originating outside dialog but while dialog is open,
-      // prevent them from affecting background elements
-      if (!isInDialog && dialogOpen) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
-            e.key === ' ' || e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' ||
-            e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B') {
-
-          // Only prevent video control keys if user has access to the content
-          // This prevents accidental triggering of video actions on restricted content
-          if (canAccessEpisode) {
-            e.stopPropagation();
-            e.preventDefault();
-          }
-        }
-      }
-    };
-
-    // We still need this to catch any events that might bubble up to window
-    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [dialogOpen, embedded, canAccessEpisode]);
+  // Prevent toolbar/action buttons from stealing focus on mouse click
+  const preventFocusSteal = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
 
   // Implement YouTube-like behavior for controls visibility
   const handleUserActivity = useCallback((forceShow: boolean = false, duration: number = CONTROLS_AUTOHIDE_TIMEOUT_MS) => {
@@ -1724,27 +1679,6 @@ export function PlayEpisodeDialog({
     };
   }, [isPipSupported, isPlaying, dialogOpen, partyBridge.enabled]);
 
-  // Add keyboard shortcut for Picture-in-Picture (p key)
-  useEffect(() => {
-    if (!isPipSupported) return;
-    
-    const handlePipKeyDown = (e: KeyboardEvent) => {
-      // Only handle if dialog is open and user has access to content
-      if (!dialogOpen || !canAccessEpisode) return;
-      
-      if (e.key === 'p' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        e.preventDefault();
-        togglePictureInPicture();
-      }
-    };
-
-    window.addEventListener('keydown', handlePipKeyDown);
-    
-    return () => {
-      window.removeEventListener('keydown', handlePipKeyDown);
-    };
-  }, [dialogOpen, isPipSupported, canAccessEpisode]);
-  
   // Add a cleanup effect to ensure video and PiP are properly terminated
   useEffect(() => {
     // This effect runs when dialogOpen changes or when component unmounts
@@ -1784,73 +1718,6 @@ export function PlayEpisodeDialog({
     }
   }, [dialogOpen]);
 
-  // Handle keyboard events at the dialog root level
-  const handleDialogKeyDown = (e: React.KeyboardEvent) => {
-    if (
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement ||
-      (e.target instanceof HTMLElement && e.target.isContentEditable)
-    ) {
-      return;
-    }
-
-    // Process keyboard events at the dialog root level
-    if (dialogOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ' || 
-                       e.key === 'f' || e.key === 'F' || e.key === 'n' || e.key === 'N' || 
-                       e.key === 'p' || e.key === 'P' || e.key === 'b' || e.key === 'B' ||
-                       e.key === 'm' || e.key === 'M') ) {
-      e.stopPropagation();
-      e.preventDefault();
-      
-      // Don't handle video control keys if user doesn't have access to the content
-      if (!canAccessEpisode && (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || 
-                                e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'm' || e.key === 'M' ||
-                                e.key === 'f' || e.key === 'F' || e.key === 'p' || e.key === 'P')) {
-        return; // Skip video control actions when content is restricted
-      }
-      
-      switch (e.key) {
-        case 'ArrowLeft':
-          handleStepBack();
-          break;
-        case 'ArrowRight':
-          handleStepForward();
-          break;
-        case 'ArrowUp':
-          increaseVolume();
-          break;
-        case 'ArrowDown':
-          decreaseVolume();
-          break;
-        case 'f':
-        case 'F':
-          toggleFullscreen();
-          break;
-        case ' ':
-          togglePlay();
-          break;
-        case 'n':
-        case 'N':
-          handleNextEpisode();
-          break;
-        case 'b':
-        case 'B':
-          handlePreviousEpisode();
-          break;
-        case 'p':
-        case 'P':
-          if (isPipSupported) {
-            togglePictureInPicture();
-          }
-          break;
-        case 'm':
-        case 'M':
-          toggleMute();
-          break;
-      }
-    }
-  };
-
   // Function to increase volume
   const increaseVolume = () => {
     if (isMuted) {
@@ -1879,32 +1746,118 @@ export function PlayEpisodeDialog({
     }
   };
 
-  // Add keyboard shortcut for volume control (up/down arrow keys)
-  useEffect(() => {
-    const handleVolumeKeyDown = (e: KeyboardEvent) => {
-      // Only handle if dialog is open and user has access to content
-      if (!dialogOpen || !canAccessEpisode) return;
-      
-      // Prevent default behavior (scrolling)
-      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && 
-           // Skip if user is typing in an input element
-           !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-        e.preventDefault();
-        
-        if (e.key === 'ArrowUp') {
-          increaseVolume();
-        } else if (e.key === 'ArrowDown') {
-          decreaseVolume();
+  const isPlayerShortcutKey = (key: string) =>
+    key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown' ||
+    key === ' ' || key === 'f' || key === 'F' || key === 'n' || key === 'N' ||
+    key === 'p' || key === 'P' || key === 'b' || key === 'B' || key === 'm' || key === 'M';
+
+  const applyPlayerShortcut = (key: string) => {
+    // Don't handle video control keys if user doesn't have access to the content
+    if (!canAccessEpisode && (key === ' ' || key === 'ArrowLeft' || key === 'ArrowRight' ||
+                              key === 'ArrowUp' || key === 'ArrowDown' || key === 'm' || key === 'M' ||
+                              key === 'f' || key === 'F' || key === 'p' || key === 'P')) {
+      return;
+    }
+
+    switch (key) {
+      case 'ArrowLeft':
+        handleStepBack();
+        break;
+      case 'ArrowRight':
+        handleStepForward();
+        break;
+      case 'ArrowUp':
+        increaseVolume();
+        break;
+      case 'ArrowDown':
+        decreaseVolume();
+        break;
+      case 'f':
+      case 'F':
+        toggleFullscreen();
+        break;
+      case ' ':
+        togglePlay();
+        break;
+      case 'n':
+      case 'N':
+        handleNextEpisode();
+        break;
+      case 'b':
+      case 'B':
+        handlePreviousEpisode();
+        break;
+      case 'p':
+      case 'P':
+        if (isPipSupported) {
+          togglePictureInPicture();
         }
+        break;
+      case 'm':
+      case 'M':
+        toggleMute();
+        break;
+    }
+  };
+
+  // Dialog-level handler (embedded / fallback). Primary path is the window capture listener below.
+  const handleDialogKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      e.target instanceof HTMLSelectElement ||
+      (e.target instanceof HTMLElement && e.target.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (!dialogOpen || !isPlayerShortcutKey(e.key)) return;
+
+    // Window capture listener already handled this key for the non-embedded modal
+    if (!embedded && e.nativeEvent.defaultPrevented) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+    applyPlayerShortcut(e.key);
+  };
+
+  // Keep shortcut applicator fresh without re-binding the window listener every render
+  const applyPlayerShortcutRef = useRef(applyPlayerShortcut);
+  applyPlayerShortcutRef.current = applyPlayerShortcut;
+
+  // Capture-phase window listener so player shortcuts work even after clicking action buttons
+  // (those buttons would otherwise keep focus and Space/arrows would stop controlling playback).
+  useEffect(() => {
+    if (embedded || !dialogOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return;
       }
+
+      // Let Radix Select / listbox use arrow keys and typeahead
+      if (
+        e.target instanceof HTMLElement &&
+        (e.target.closest('[role="listbox"]') || e.target.closest('[data-radix-select-content]'))
+      ) {
+        return;
+      }
+
+      if (!isPlayerShortcutKey(e.key)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      applyPlayerShortcutRef.current(e.key);
     };
 
-    window.addEventListener('keydown', handleVolumeKeyDown, true); // Use capture phase
-    
-    return () => {
-      window.removeEventListener('keydown', handleVolumeKeyDown, true);
-    };
-  }, [dialogOpen, volume, isMuted, canAccessEpisode]);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [dialogOpen, embedded]);
 
   // Toggle repeat modes with exclusive selection
   const toggleRepeatOne = () => {
@@ -2678,70 +2631,105 @@ export function PlayEpisodeDialog({
     }
   };
 
-  // Fetch seasons and episodes data when menu is opened
-  useEffect(() => {
-    const fetchSeasonsData = async () => {
-      if (!showEpisodesMenu || !tvshowSlug || seasonsData.length > 0) {
-        return;
-      }
+  // Load a single season's episodes on demand (cached after first fetch)
+  const loadSeasonEpisodesForMenu = useCallback(async (seasonNumber: number) => {
+    if (!tvshowSlug || !seasonNumber) return;
 
-      setLoadingSeasonsData(true);
-      try {
-        const validSeasons: Array<{season_number: number; episodes: any[]}> = [];
-        let seasonNum = 1;
-        const maxSeasons = totalSeasons || 25; // Use provided total or default to 25
-        let foundAnySeason = false;
-        
-        // Fetch seasons one by one, stop when we hit first 404 after finding at least one season
-        // If totalSeasons is provided, we know exactly how many to fetch (NO 404s!)
-        while (seasonNum <= maxSeasons) {
-          try {
-            const response = await fetch(`/api/tvshows/${tvshowSlug}/seasons/${seasonNum}/episodes`, {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
+    const existing = seasonsDataRef.current.find((s) => s.season_number === seasonNumber);
+    if (existing?.loaded || loadingSeasonRequestsRef.current.has(seasonNumber)) return;
+
+    loadingSeasonRequestsRef.current.add(seasonNumber);
+    setLoadingSeasonNumber(seasonNumber);
+    try {
+      const response = await fetch(`/api/tvshows/${tvshowSlug}/seasons/${seasonNumber}/episodes`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+      });
+
+      const episodes = response.ok ? ((await response.json())?.episodes || []) : [];
+
+      setSeasonsData((prev) => {
+        const list = prev.length > 0 ? prev : buildSeasonList();
+        const hasSeason = list.some((s) => s.season_number === seasonNumber);
+        const next = hasSeason
+          ? list.map((s) =>
+              s.season_number === seasonNumber
+                ? {
+                    ...s,
+                    episodes,
+                    episode_count: episodes.length,
+                    loaded: true,
+                  }
+                : s
+            )
+          : [
+              ...list,
+              {
+                season_number: seasonNumber,
+                episodes,
+                episode_count: episodes.length,
+                loaded: true,
               },
-              credentials: 'same-origin'
-            });
+            ].sort((a, b) => a.season_number - b.season_number);
 
-            if (response.ok) {
-              const data = await response.json();
-              if (data && data.episodes && data.episodes.length > 0) {
-                validSeasons.push({ season_number: seasonNum, episodes: data.episodes });
-                foundAnySeason = true;
-              } else {
-                // Empty response but OK status - might be an edge case, continue
-                if (foundAnySeason) break;
-              }
-            } else {
-              // 404 or error - if totalSeasons is provided and we're beyond it, stop
-              if (totalSeasons && seasonNum > totalSeasons) break;
-              // If we've found seasons already, we're done
-              if (foundAnySeason) break;
-              // Otherwise keep trying (might be missing Season 1)
-            }
-          } catch (error) {
-            // Network error - if totalSeasons is provided and we're beyond it, stop
-            if (totalSeasons && seasonNum > totalSeasons) break;
-            // If we've found seasons already, we're done
-            if (foundAnySeason) break;
-          }
-          
-          seasonNum++;
-        }
+        return next;
+      });
+    } catch (error) {
+      console.error('Failed to fetch season episodes:', error);
+      // Mark loaded so the submenu does not spin forever on failure
+      setSeasonsData((prev) =>
+        prev.map((s) =>
+          s.season_number === seasonNumber ? { ...s, episodes: [], loaded: true } : s
+        )
+      );
+    } finally {
+      loadingSeasonRequestsRef.current.delete(seasonNumber);
+      setLoadingSeasonNumber((current) => (current === seasonNumber ? null : current));
+    }
+  }, [tvshowSlug, buildSeasonList]);
 
-        setSeasonsData(validSeasons);
-      } catch (error) {
-        console.error('Failed to fetch seasons data:', error);
-      } finally {
-        setLoadingSeasonsData(false);
-      }
+  // Desktop: preload current season when the menu opens; load others on hover/select
+  useEffect(() => {
+    if (!showEpisodesMenu) return;
+    if (episode?.season_number) {
+      loadSeasonEpisodesForMenu(episode.season_number);
+    }
+  }, [showEpisodesMenu, episode?.season_number, loadSeasonEpisodesForMenu]);
+
+  useEffect(() => {
+    if (!showEpisodesMenu || activeSeasonNumber == null) return;
+    loadSeasonEpisodesForMenu(activeSeasonNumber);
+  }, [showEpisodesMenu, activeSeasonNumber, loadSeasonEpisodesForMenu]);
+
+  // Mobile: load only the selected season's episodes (not the whole show)
+  useEffect(() => {
+    if (!isMobile || !dialogOpen || !tvshowSlug) return;
+
+    if (seasonsDataRef.current.length === 0) {
+      setSeasonsData(buildSeasonList());
+    }
+
+    const season = seasonsDataRef.current.find((s) => s.season_number === mobileSeasonNumber);
+    if (season?.loaded) {
+      setMobileEpisodeListLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMobileEpisodeListLoading(true);
+    loadSeasonEpisodesForMenu(mobileSeasonNumber).finally(() => {
+      if (!cancelled) setMobileEpisodeListLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
     };
-
-    fetchSeasonsData();
-  }, [showEpisodesMenu, tvshowSlug, seasonsData.length, totalSeasons]);
+  }, [isMobile, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
 
   // Handle click outside episodes menu
   useEffect(() => {
@@ -3023,10 +3011,8 @@ export function PlayEpisodeDialog({
           // Prevent closing on outside clicks
           e.preventDefault();
 
-          // Ensure the dialog maintains focus when clicking outside
-          if (containerRef.current) {
-            containerRef.current.focus();
-          }
+          // Ensure the dialog maintains keyboard control when clicking outside
+          focusPlayerForKeyboard();
         }}
         onKeyDown={handleDialogKeyDown}
       >
@@ -3706,17 +3692,15 @@ export function PlayEpisodeDialog({
                             onTouchStart={(e) => e.stopPropagation()}
                             onTouchEnd={(e) => e.stopPropagation()}
                           >
-                            {loadingSeasonsData ? (
-                              <div className="flex items-center justify-center py-8">
-                                <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
-                              </div>
-                            ) : seasonsData.length > 0 ? (
+                            {seasonsData.length > 0 ? (
                               <>
-                                {/* Main menu items */}
+                                {/* Main menu items — season list only; episodes load on demand */}
                                 <div className="py-1 overflow-y-auto" style={{ maxHeight: 'min(350px, 50vh)' }}>
                                   {seasonsData.map((season) => {
-                                    const currentSeasonEpisodeCount = season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length;
-                                    const isCurrentSeason = season.episodes.some((ep: any) => ep.id === episode?.id);
+                                    const currentSeasonEpisodeCount = season.loaded
+                                      ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
+                                      : season.episode_count;
+                                    const isCurrentSeason = season.season_number === episode?.season_number;
                                     
                                     return (
                                       <div
@@ -3740,7 +3724,7 @@ export function PlayEpisodeDialog({
                                         <span className="text-sm font-medium">Season {season.season_number}</span>
                                         <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                                           {isCurrentSeason && <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>}
-                                          {currentSeasonEpisodeCount} eps
+                                          {currentSeasonEpisodeCount != null ? `${currentSeasonEpisodeCount} eps` : '…'}
                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                                           </svg>
@@ -3750,7 +3734,7 @@ export function PlayEpisodeDialog({
                                   })}
                                 </div>
                                 
-                                {/* Episodes submenu - positioned relative to the menu container */}
+                                {/* Episodes submenu — loads when a season is hovered/selected */}
                                 {activeSeasonNumber !== null && seasonsData.find(s => s.season_number === activeSeasonNumber) && (
                                   <div 
                                     className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
@@ -3758,7 +3742,13 @@ export function PlayEpisodeDialog({
                                     onClick={(e) => e.stopPropagation()}
                                     onTouchStart={(e) => e.stopPropagation()}
                                   >
-                                    {seasonsData.find(s => s.season_number === activeSeasonNumber)?.episodes.map((ep: any) => {
+                                    {loadingSeasonNumber === activeSeasonNumber ||
+                                    !seasonsData.find(s => s.season_number === activeSeasonNumber)?.loaded ? (
+                                      <div className="flex items-center justify-center py-8">
+                                        <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
+                                      </div>
+                                    ) : (
+                                      seasonsData.find(s => s.season_number === activeSeasonNumber)?.episodes.map((ep: any) => {
                                       const isCurrentEpisode = episode?.id === ep.id;
                                       const isAvailable = ep.is_in_storage && ep.encFilePath;
                                       
@@ -3806,7 +3796,8 @@ export function PlayEpisodeDialog({
                                           {isCurrentEpisode && <Check className="w-4 h-4 text-rose-500 flex-shrink-0" />}
                                         </div>
                                       );
-                                    })}
+                                    })
+                                    )}
                                   </div>
                                 )}
                               </>
@@ -3929,15 +3920,21 @@ export function PlayEpisodeDialog({
                       </SelectTrigger>
                       <SelectContent className="bg-neutral-800 border-neutral-700">
                         {seasonsData.length > 0 ? (
-                          seasonsData.map((season) => (
-                            <SelectItem 
-                              key={season.season_number} 
-                              value={season.season_number.toString()}
-                              className="text-white hover:bg-neutral-700"
-                            >
-                              Season {season.season_number} ({season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length} eps)
-                            </SelectItem>
-                          ))
+                          seasonsData.map((season) => {
+                            const availableCount = season.loaded
+                              ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
+                              : season.episode_count;
+                            return (
+                              <SelectItem 
+                                key={season.season_number} 
+                                value={season.season_number.toString()}
+                                className="text-white hover:bg-neutral-700"
+                              >
+                                Season {season.season_number}
+                                {availableCount != null ? ` (${availableCount} eps)` : ''}
+                              </SelectItem>
+                            );
+                          })
                         ) : (
                           <SelectItem value={episode.season_number.toString()} className="text-white">
                             Season {episode.season_number}
@@ -4124,7 +4121,11 @@ export function PlayEpisodeDialog({
                           position="bottom"
                         >
                           <button
-                            onClick={handleWatchLaterToggle}
+                            onMouseDown={preventFocusSteal}
+                            onClick={() => {
+                              handleWatchLaterToggle();
+                              focusPlayerForKeyboard();
+                            }}
                             disabled={currentWatchLaterState.isToggling}
                             className={`focus:outline-none cursor-pointer disabled:opacity-50 p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all duration-300 ease-in-out ${
                               currentWatchLaterState.isAnimating ? 'rotate-180' : 'rotate-0'
@@ -4168,7 +4169,11 @@ export function PlayEpisodeDialog({
                           position="bottom"
                         >
                           <button
-                            onClick={handleLikeToggle}
+                            onMouseDown={preventFocusSteal}
+                            onClick={() => {
+                              handleLikeToggle();
+                              focusPlayerForKeyboard();
+                            }}
                             disabled={isLikeToggling || !isAuthenticated}
                             className="focus:outline-none cursor-pointer disabled:opacity-50"
                           >
@@ -4212,7 +4217,11 @@ export function PlayEpisodeDialog({
                         position="bottom"
                       >
                         <button
-                          onClick={handleShareEpisode}
+                          onMouseDown={preventFocusSteal}
+                          onClick={() => {
+                            handleShareEpisode();
+                            focusPlayerForKeyboard();
+                          }}
                           disabled={isSharing}
                           className="focus:outline-none cursor-pointer disabled:opacity-50"
                         >
@@ -4225,7 +4234,11 @@ export function PlayEpisodeDialog({
                       <Tooltip text="Repeat current episode" position="bottom">
                         <button
                           className="focus:outline-none cursor-pointer"
-                          onClick={toggleRepeatOne}
+                          onMouseDown={preventFocusSteal}
+                          onClick={() => {
+                            toggleRepeatOne();
+                            focusPlayerForKeyboard();
+                          }}
                         >
                           <Repeat1 
                             className={`w-5 h-5 transition-colors duration-150 ${
@@ -4238,7 +4251,11 @@ export function PlayEpisodeDialog({
                       <Tooltip text="Repeat current season" position="bottom">
                         <button
                           className="focus:outline-none cursor-pointer"
-                          onClick={toggleRepeatSeason}
+                          onMouseDown={preventFocusSteal}
+                          onClick={() => {
+                            toggleRepeatSeason();
+                            focusPlayerForKeyboard();
+                          }}
                         >
                           <Repeat 
                             className={`w-5 h-5 transition-colors duration-150 ${
@@ -4251,7 +4268,11 @@ export function PlayEpisodeDialog({
                       <Tooltip text="Repeat entire TV show" position="bottom">
                         <button
                           className="focus:outline-none cursor-pointer"
-                          onClick={toggleRepeatTvshow}
+                          onMouseDown={preventFocusSteal}
+                          onClick={() => {
+                            toggleRepeatTvshow();
+                            focusPlayerForKeyboard();
+                          }}
                         >
                           <Repeat2 
                             className={`w-5 h-5 transition-colors duration-150 ${
