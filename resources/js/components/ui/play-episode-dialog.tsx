@@ -19,6 +19,7 @@ import { useWebShare } from "@/hooks/use-web-share";
 import { EpisodesApi } from "@/services/episodes-api";
 import axios from 'axios';
 import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
+import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -206,7 +207,7 @@ export function PlayEpisodeDialog({
   
   // Subtitles & Audio menu state
   const [showContextMenu, setShowContextMenu] = useState(false);
-  const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio'>('none');
+  const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio' | 'sound'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   // Seasons & Episodes menu state — season list is cheap; episodes load per season on demand
@@ -267,6 +268,10 @@ export function PlayEpisodeDialog({
   const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
   const [currentEncFilePath, setCurrentEncFilePath] = useState(episode?.encFilePath || '');
   const [userPreferredAudio, setUserPreferredAudio] = useState<string | null>(null);
+  const { audioMode, setAudioMode, audioModeLabel, audioModeOptions } = useDialogueAudio(videoRef, {
+    sourceKey: currentEncFilePath,
+    active: Boolean(dialogOpen && canAccessEpisode && currentEncFilePath),
+  });
 
   useEffect(() => {
     setVideoAspectRatio(null);
@@ -3539,13 +3544,12 @@ export function PlayEpisodeDialog({
                           </button>
                         </Tooltip>
 
-                        {/* Subtitles and audio button */}
+                        {/* Subtitles and audio button — always enabled so Sound mode is reachable */}
                         <Tooltip text="Subtitles & Audio" position="bottom">
                           <button 
                             onClick={handleToggleContextMenu}
-                            className={`focus:outline-none relative cursor-pointer ${(!hasSubtitles && audioTracks.length <= 1) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className="focus:outline-none relative cursor-pointer"
                             aria-label="Subtitles and Audio Options"
-                            disabled={!hasSubtitles && audioTracks.length <= 1}
                           >
                             <MessageSquareText className={`w-5 h-5 ${showContextMenu ? 'text-rose-500' : 'hover:text-rose-500'} transition-colors duration-150`} />
                           </button>
@@ -3620,6 +3624,32 @@ export function PlayEpisodeDialog({
                                   </span>
                                 </div>
                               )}
+
+                              <div
+                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
+                                  activeSection === 'sound'
+                                    ? 'bg-neutral-100 dark:bg-neutral-800'
+                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                }`}
+                                onMouseEnter={() => setActiveSection('sound')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
+                                }}
+                              >
+                                <span className="text-sm font-medium">Sound</span>
+                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
+                                  {audioModeLabel}
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </span>
+                              </div>
                             </div>
                             
                             {/* Subtitles submenu */}
@@ -3675,6 +3705,35 @@ export function PlayEpisodeDialog({
                                   >
                                     <span className="flex-1 text-sm">{track.label}</span>
                                     {track.selected && <Check className="w-4 h-4 text-rose-500" />}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Sound mode submenu */}
+                            {activeSection === 'sound' && (
+                              <div
+                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1"
+                                style={{ width: '180px' }}
+                                onClick={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                              >
+                                {audioModeOptions.map((option) => (
+                                  <div
+                                    key={option.id}
+                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAudioMode(option.id);
+                                    }}
+                                    onTouchEnd={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      setAudioMode(option.id);
+                                    }}
+                                  >
+                                    <span className="flex-1 text-sm">{option.label}</span>
+                                    {audioMode === option.id && <Check className="w-4 h-4 text-rose-500" />}
                                   </div>
                                 ))}
                               </div>
