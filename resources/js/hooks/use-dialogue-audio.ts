@@ -257,6 +257,39 @@ export function useDialogueAudio(
     }
   }, [ensureGraph]);
 
+  // Re-apply the last saved Sound choice when playback becomes active again
+  // (new episode/movie dialog, tab return, language remount) and keep tabs in sync.
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    const stored = readStoredAudioMode();
+    if (stored !== audioModeRef.current) {
+      setAudioModeState(stored);
+      audioModeRef.current = stored;
+    }
+
+    const graph = graphRef.current;
+    if (graph) {
+      applyPreset(graph, audioModeRef.current);
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY || !isAudioMode(event.newValue)) {
+        return;
+      }
+      setAudioModeState(event.newValue);
+      audioModeRef.current = event.newValue;
+      if (graphRef.current) {
+        applyPreset(graphRef.current, event.newValue);
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [active]);
+
   useEffect(() => {
     if (!active) {
       tearDownGraph();

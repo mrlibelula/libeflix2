@@ -1359,6 +1359,28 @@ export function PlayEpisodeDialog({
     wasDialogOpenRef.current = !!dialogOpen;
   }, [dialogOpen, embedded]);
 
+  // When the browser tab/window regains focus, Radix may focus the dialog shell and
+  // paint a focus ring. Keep keyboard control on the player surface instead.
+  useEffect(() => {
+    if (!dialogOpen || embedded) {
+      return;
+    }
+
+    const onWindowFocus = () => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) {
+        focusPlayerForKeyboard();
+        return;
+      }
+      if (active.getAttribute('data-slot') === 'dialog-content' || active.getAttribute('role') === 'dialog') {
+        focusPlayerForKeyboard();
+      }
+    };
+
+    window.addEventListener('focus', onWindowFocus);
+    return () => window.removeEventListener('focus', onWindowFocus);
+  }, [dialogOpen, embedded, focusPlayerForKeyboard]);
+
   // Prevent toolbar/action buttons from stealing focus on mouse click
   const preventFocusSteal = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -2999,14 +3021,19 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full p-0 overflow-hidden rounded-lg border border-zinc-800 shadow-none'
-            : `p-0 overflow-hidden ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px]'}`
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full p-0 overflow-hidden rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
-          // Party theater embeds this player beside queue/chat — don't trap focus on mount
-          if (embedded) {
-            e.preventDefault();
+          // Never focus the dialog shell — browser/Radix focus rings show as a border,
+          // especially after the tab/window regains focus.
+          e.preventDefault();
+          if (!embedded) {
+            focusPlayerForKeyboard();
           }
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
         }}
         onPointerDownOutside={(e) => {
           if (embedded) {
