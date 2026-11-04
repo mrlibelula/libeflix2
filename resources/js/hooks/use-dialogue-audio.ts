@@ -322,29 +322,37 @@ export function useDialogueAudio(
         if (graphRef.current) {
           tearDownGraph();
         }
-        if (attempts < 40) {
+        // Back off retries (~2s total) so we don't hammer the main thread.
+        if (attempts < 10) {
           attempts += 1;
-          retryTimer = setTimeout(tryAttach, 50);
+          retryTimer = setTimeout(tryAttach, 200);
         }
         return;
       }
 
-      const graph = ensureGraph();
-      if (!graph) {
-        return;
-      }
+      // Defer Web Audio graph setup so we don't block paint / routing.
+      retryTimer = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
 
-      applyPreset(graph, audioModeRef.current);
+        const graph = ensureGraph();
+        if (!graph) {
+          return;
+        }
 
-      if (attachedElement !== element) {
-        detachPlayListener();
-        attachedElement = element;
-        element.addEventListener('play', handlePlay);
-      }
+        applyPreset(graph, audioModeRef.current);
 
-      if (!element.paused) {
-        resumeContext();
-      }
+        if (attachedElement !== element) {
+          detachPlayListener();
+          attachedElement = element;
+          element.addEventListener('play', handlePlay);
+        }
+
+        if (!element.paused) {
+          resumeContext();
+        }
+      }, 0);
     };
 
     tryAttach();

@@ -201,15 +201,6 @@ export function CommentsSection({
     }
   }, [error]); // No dependencies to prevent infinite loops
 
-  usePolling(
-    stablePollingFetch,
-    {
-      interval: 30000,
-      enabled: true,
-      immediate: true
-    }
-  );
-  
   // Load more comments
   const loadMoreComments = useCallback(async () => {
     if (!hasMore || loadingMore) return;

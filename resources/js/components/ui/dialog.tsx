@@ -56,38 +56,40 @@ function DialogContent({
   hideClose?: boolean;
 }) {
   const [isVideoMuted, setIsVideoMuted] = React.useState(false);
-  const [hasNativeVideo, setHasNativeVideo] = React.useState(false);
 
-  // Effect to check if video is muted and detect video type
+  // Track muted state via events — no 1s polling (that caused forced-reflow spam).
   React.useEffect(() => {
-    const checkVideoStatus = () => {
-      const videoElement = document.querySelector('video');
-      const iframeElement = document.querySelector('iframe[src*="youtube.com/embed"]');
+    let attachedVideo: HTMLVideoElement | null = null;
+    let attempts = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-      if (videoElement) {
-        setIsVideoMuted(videoElement.muted);
-        setHasNativeVideo(true);
-      } else {
-        setHasNativeVideo(false);
-      }
+    const syncMuted = () => {
+      setIsVideoMuted(Boolean(attachedVideo?.muted));
     };
 
-    // Check initially
-    checkVideoStatus();
+    const attach = () => {
+      const videoElement = document.querySelector('video');
+      if (!videoElement) {
+        if (attempts < 5) {
+          attempts += 1;
+          retryTimer = setTimeout(attach, 300);
+        }
+        return;
+      }
 
-    // Set up an interval to check periodically
-    const interval = setInterval(checkVideoStatus, 1000);
+      attachedVideo = videoElement;
+      attachedVideo.addEventListener('volumechange', syncMuted);
+      syncMuted();
+    };
 
-    // Also listen for volume change events
-    const videoElement = document.querySelector('video');
-    if (videoElement) {
-      videoElement.addEventListener('volumechange', checkVideoStatus);
-    }
+    attach();
 
     return () => {
-      clearInterval(interval);
-      if (videoElement) {
-        videoElement.removeEventListener('volumechange', checkVideoStatus);
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+      if (attachedVideo) {
+        attachedVideo.removeEventListener('volumechange', syncMuted);
       }
     };
   }, []);

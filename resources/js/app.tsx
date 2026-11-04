@@ -3,9 +3,9 @@ import '../css/app.css';
 import { createInertiaApp, router } from '@inertiajs/react';
 import axios from 'axios';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import { createRoot, hydrateRoot } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { initializeTheme } from './hooks/use-appearance';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 function syncCsrfToken(token?: string) {
   if (token) {
@@ -32,6 +32,15 @@ router.on('navigate', (event) => {
   }
 });
 
+// Track the in-flight visit URL so a failed Vite chunk fetch can hard-navigate.
+let pendingVisitUrl: string | null = null;
+router.on('before', (event) => {
+  pendingVisitUrl = event.detail.visit.url.href;
+});
+router.on('finish', () => {
+  pendingVisitUrl = null;
+});
+
 // Extend Window interface to include _scrollPositions
 declare global {
   interface Window {
@@ -41,73 +50,48 @@ declare global {
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
+const pageModules = import.meta.glob('./pages/**/*.tsx');
+
+async function resolvePage(name: string) {
+  try {
+    return await resolvePageComponent(`./pages/${name}.tsx`, pageModules);
+  } catch (error) {
+    // When the Vite dev server drops mid-session, dynamic imports fail and
+    // client-side routing looks "broken". Fall back to a full page load.
+    const fallbackUrl = pendingVisitUrl ?? window.location.href;
+    console.warn(`[inertia] Failed to load page "${name}", recovering via full navigation.`, error);
+    window.location.assign(fallbackUrl);
+    return new Promise(() => {
+      // Intentionally unsettled until the browser navigates away.
+    });
+  }
+}
+
 // This component prevents the "Cannot read properties of null (reading 'scrollRegions')" error
 const ScrollRestoration = () => {
-  document.addEventListener('inertia:before-render', () => {
-    const scrollRegions = document.querySelectorAll('[data-scroll-region]');
-    const scrollPositions = Array.from(scrollRegions).map((region): [string, number] => [
-      region.id || region.getAttribute('data-scroll-region') || '',
-      region.scrollTop,
-    ]);
+  useEffect(() => {
+    const handleBeforeRender = () => {
+      const scrollRegions = document.querySelectorAll('[data-scroll-region]');
+      const scrollPositions = Array.from(scrollRegions).map((region): [string, number] => [
+        region.id || region.getAttribute('data-scroll-region') || '',
+        region.scrollTop,
+      ]);
 
-    window._scrollPositions = scrollPositions;
-  });
+      window._scrollPositions = scrollPositions;
+    };
+
+    document.addEventListener('inertia:before-render', handleBeforeRender);
+    return () => {
+      document.removeEventListener('inertia:before-render', handleBeforeRender);
+    };
+  }, []);
 
   return null;
 };
 
-// Clear browser storage function
-const clearBrowserStorage = () => {
-  try {
-    // Clear localStorage
-    localStorage.clear();
-    
-    // Clear sessionStorage
-    sessionStorage.clear();
-    
-    // Clear any episode or content caches
-    const cacheKeys = Object.keys(localStorage);
-    cacheKeys.forEach(key => {
-      if (key.includes('episode') || key.includes('content') || key.includes('cache')) {
-        localStorage.removeItem(key);
-      }
-    });
-    
-    console.log('Browser storage cleared successfully');
-  } catch (error) {
-    console.warn('Could not clear browser storage:', error);
-  }
-};
-
-// Storage clear hook
-const useClearStorageOnLogout = () => {
-  const [previousUserId, setPreviousUserId] = useState<number | null>(null);
-  
-  useEffect(() => {
-    // Get current user from window object if available
-    const getCurrentUserId = () => {
-      try {
-        const pageProps = (window as any)?.InertiaApp?.props?.auth?.user?.id;
-        return pageProps || null;
-      } catch {
-        return null;
-      }
-    };
-    
-    const currentUserId = getCurrentUserId();
-    
-    // If user changed (logged out or different user logged in)
-    if (previousUserId !== null && currentUserId !== previousUserId) {
-      clearBrowserStorage();
-    }
-    
-    setPreviousUserId(currentUserId);
-  }, [previousUserId]);
-};
-
 createInertiaApp({
   title: (title) => `${title} - ${appName}`,
-  resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
+  resolve: (name) => resolvePage(name),
   setup({ el, App, props }) {
     const root = createRoot(el);
 
