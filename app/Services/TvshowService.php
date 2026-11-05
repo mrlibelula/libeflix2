@@ -8,6 +8,7 @@ use App\Models\Tvshow;
 use App\Services\Tool;
 use Exception;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -395,70 +396,84 @@ class TvshowService
      */
     private static function fetchEpisode(int $tvshowId, int $seasonNumber, int $episodeNumber): array
     {
-        $client = new Client();
-        $response = $client->request('GET', self::$baseUrl . '/tv/' . $tvshowId . '/season/' . $seasonNumber . '/episode/' . $episodeNumber . '?' . self::$apiKey . '&append_to_response=credits');
-        return json_decode($response->getBody(), true);
+        self::initializeProps();
+        $response = Http::get(
+            self::$baseUrl . '/tv/' . $tvshowId . '/season/' . $seasonNumber . '/episode/' . $episodeNumber . '?' . self::$apiKey . '&append_to_response=credits'
+        );
+
+        return $response->json() ?? [];
     }
 
     /**
      * Fetch a season from TMDB API
-     * 
+     *
      * @param int $tvshowId
      * @param int $seasonNumber
      * @return array
      */
     private static function fetchSeason(int $tvshowId, int $seasonNumber): array
     {
-        $client = new Client();
-        $response = $client->request('GET', self::$baseUrl . '/tv/' . $tvshowId . '/season/' . $seasonNumber . '?' . self::$apiKey);
-        return json_decode($response->getBody(), true);
+        self::initializeProps();
+        $response = Http::get(
+            self::$baseUrl . '/tv/' . $tvshowId . '/season/' . $seasonNumber . '?' . self::$apiKey
+        );
+
+        return $response->json() ?? [];
     }
 
     /**
      * Fetch additional tvshow data from TMDB API
-     * 
+     *
      * @param int $tvshowId
      * @return array
      */
     private static function fetchAdditionalTvshowData(int $tvshowId): array
     {
-        $client = new Client();
-        $response = $client->request('GET', self::$baseUrl . '/tv/' . $tvshowId . '?' . self::$apiKey . '&append_to_response=cast,videos,images');
-        return json_decode($response->getBody(), true);
+        self::initializeProps();
+        $response = Http::get(
+            self::$baseUrl . '/tv/' . $tvshowId . '?' . self::$apiKey . '&append_to_response=cast,videos,images'
+        );
+
+        return $response->json() ?? [];
     }
 
     /**
      * Fetch a tvshow cast from TMDB API
-     * 
+     *
      * @param int $tmdbTvshowId
      * @return array
      */
     private static function getTvshowCast(int $tmdbTvshowId): array
     {
         self::initializeProps();
-        $client = new Client();
-        $response = $client->request('GET', self::$baseUrl . '/tv/' . $tmdbTvshowId . '/credits?' . self::$apiKey);
-        return json_decode($response->getBody(), true);
+        $response = Http::get(
+            self::$baseUrl . '/tv/' . $tmdbTvshowId . '/credits?' . self::$apiKey
+        );
+
+        return $response->json() ?? [];
     }
 
     /**
      * Fetch a tvshow from TMDB API
-     * 
+     *
      * @param string $name
      * @param int $releaseYear
      * @return array
      */
     private static function fetchTvshow(string $name, int $releaseYear): array
     {
-        $client = new Client();
-        $response = $client->request('GET', self::$baseUrl . '/search/tv?' . self::$apiKey . '&query=' . $name);
-        $results = json_decode($response->getBody(), true);
-        $res = $results['results'];
+        self::initializeProps();
+        $response = Http::get(
+            self::$baseUrl . '/search/tv?' . self::$apiKey . '&query=' . urlencode($name)
+        );
+        $results = $response->json() ?? [];
+        $res = $results['results'] ?? [];
         foreach ($res as $result) {
-            if (substr($result['first_air_date'], 0, 4) === (string)$releaseYear) {
+            if (substr($result['first_air_date'] ?? '', 0, 4) === (string) $releaseYear) {
                 return $result;
             }
         }
+
         return [];
     }
 
@@ -664,6 +679,514 @@ class TvshowService
             'crew' => $crew,
             'guestStars' => $guestStars,
         ];
+    }
+
+    public static function metadataPath(string $folder): string
+    {
+        return $folder . '/metadata.json';
+    }
+
+    public static function hasNumericEpisodePrefix(string $basename): bool
+    {
+        $parts = explode('.', $basename);
+
+        return count($parts) > 1 && is_numeric($parts[0]);
+    }
+
+    /**
+     * Parse an episode number from a video filename.
+     * Prefers SxxEyy / NxNN / bare Exx patterns; returns null when unresolved.
+     */
+    public static function parseEpisodeNumberFromFilename(string $basename, ?int $seasonNumber = null): ?int
+    {
+        if (self::hasNumericEpisodePrefix($basename)) {
+            return (int) explode('.', $basename)[0];
+        }
+
+        if (preg_match('/S(\d{1,2})E(\d{1,3})/i', $basename, $matches)) {
+            if ($seasonNumber === null || (int) $matches[1] === $seasonNumber) {
+                return (int) $matches[2];
+            }
+        }
+
+        if (preg_match('/(?:^|[^\d])(\d{1,2})x(\d{1,3})(?:[^\d]|$)/i', $basename, $matches)) {
+            if ($seasonNumber === null || (int) $matches[1] === $seasonNumber) {
+                return (int) $matches[2];
+            }
+        }
+
+        if ($seasonNumber !== null && preg_match('/(?:^|[^A-Za-z0-9])E(\d{1,3})(?:[^A-Za-z0-9]|$)/i', $basename, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Rename episode files under a show folder to `{episodeNumber}.{originalBasename}`.
+     *
+     * @return array<int, array{from: string, to: string}>
+     */
+    public static function normalizeEpisodeFilenames(string $folder, string $disk = 'tvshows'): array
+    {
+        $storage = Storage::disk($disk);
+        $renames = [];
+
+        if (!$storage->exists($folder)) {
+            return $renames;
+        }
+
+        foreach ($storage->directories($folder) as $seasonPath) {
+            $seasonName = basename($seasonPath);
+            if (!is_numeric($seasonName)) {
+                continue;
+            }
+
+            $seasonNumber = (int) $seasonName;
+            $files = array_values(array_filter(
+                $storage->files($seasonPath),
+                fn (string $file) => (bool) preg_match('/\.(mp4|ogg|webm)$/i', $file)
+            ));
+            natsort($files);
+            $files = array_values($files);
+
+            $assignments = [];
+            $usedNumbers = [];
+
+            foreach ($files as $file) {
+                $basename = basename($file);
+                if (self::hasNumericEpisodePrefix($basename)) {
+                    $num = (int) explode('.', $basename)[0];
+                    $assignments[$file] = $num;
+                    $usedNumbers[$num] = true;
+                    continue;
+                }
+
+                $parsed = self::parseEpisodeNumberFromFilename($basename, $seasonNumber);
+                if ($parsed !== null) {
+                    $assignments[$file] = $parsed;
+                    $usedNumbers[$parsed] = true;
+                }
+            }
+
+            $next = 1;
+            foreach ($files as $file) {
+                if (isset($assignments[$file])) {
+                    continue;
+                }
+                while (isset($usedNumbers[$next])) {
+                    $next++;
+                }
+                $assignments[$file] = $next;
+                $usedNumbers[$next] = true;
+                $next++;
+            }
+
+            foreach ($assignments as $file => $episodeNumber) {
+                $basename = basename($file);
+                if (self::hasNumericEpisodePrefix($basename)) {
+                    continue;
+                }
+
+                $newPath = $seasonPath . '/' . $episodeNumber . '.' . $basename;
+                if ($file === $newPath || $storage->exists($newPath)) {
+                    continue;
+                }
+
+                $storage->move($file, $newPath);
+                $renames[] = ['from' => $file, 'to' => $newPath];
+            }
+        }
+
+        return $renames;
+    }
+
+    public static function parseTitleFromFolderName(string $folder): string
+    {
+        $title = preg_replace('/\s*\(\d{4}\)\s*$/', '', $folder);
+
+        return trim($title ?: $folder);
+    }
+
+    public static function parseReleaseYearFromFolderName(string $folder): ?int
+    {
+        if (preg_match('/\((\d{4})\)\s*$/', $folder, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    public static function suggestReleaseYear(string $folderName, bool $useOpenAi = false): array
+    {
+        $parsed = self::parseReleaseYearFromFolderName($folderName);
+        $openai = null;
+
+        if ($useOpenAi) {
+            $year = self::getTvshowReleaseYearFromOpenAI(self::parseTitleFromFolderName($folderName));
+            $openai = $year > 0 ? $year : null;
+        }
+
+        return [
+            'parsed' => $parsed,
+            'openai' => $openai,
+            'suggested' => $parsed ?? $openai,
+        ];
+    }
+
+    public static function searchTmdbTvshows(string $name, ?int $year = null): array
+    {
+        self::initializeProps();
+        $url = self::$baseUrl . '/search/tv?' . self::$apiKey . '&query=' . urlencode(strtolower(trim($name)));
+        if ($year) {
+            $url .= '&first_air_date_year=' . $year;
+        }
+
+        $response = Http::get($url);
+        $results = $response->json()['results'] ?? [];
+
+        return collect($results)->values()->map(function ($result, int $index) {
+            return [
+                'pick' => $index,
+                'id' => $result['id'],
+                'title' => $result['name'] ?? $result['original_name'] ?? '',
+                'original_title' => $result['original_name'] ?? null,
+                'release_date' => $result['first_air_date'] ?? null,
+                'overview' => Str::limit($result['overview'] ?? '', 200),
+                'poster_url' => !empty($result['poster_path'])
+                    ? env('TMDB_IMAGE_BASE_URL_300') . $result['poster_path']
+                    : null,
+                'vote_average' => $result['vote_average'] ?? null,
+            ];
+        })->all();
+    }
+
+    public static function createMetadataJson(string $folder, array $data, string $disk = 'tvshows'): void
+    {
+        $metadata = [
+            'name' => $data['name'],
+            'release_year' => (int) $data['release_year'],
+            'releaseYear' => (int) $data['release_year'],
+            'pick' => (int) ($data['pick'] ?? 0),
+            'dir' => $folder,
+            'id' => (int) $data['id'],
+            'selected_logo' => (int) ($data['selected_logo'] ?? 0),
+        ];
+
+        Storage::disk($disk)->put(
+            self::metadataPath($folder),
+            json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    public static function readMetadataJson(string $folder, string $disk = 'tvshows'): ?array
+    {
+        $path = self::metadataPath($folder);
+        if (!Storage::disk($disk)->exists($path)) {
+            return null;
+        }
+
+        $metadata = json_decode(Storage::disk($disk)->get($path), true);
+        if (!is_array($metadata)) {
+            return null;
+        }
+
+        if (!isset($metadata['release_year']) && isset($metadata['releaseYear'])) {
+            $metadata['release_year'] = (int) $metadata['releaseYear'];
+        }
+
+        return $metadata;
+    }
+
+    public static function folderHasSeasonVideos(string $folder, string $disk = 'tvshows'): bool
+    {
+        $storage = Storage::disk($disk);
+
+        foreach ($storage->directories($folder) as $seasonPath) {
+            if (!is_numeric(basename($seasonPath))) {
+                continue;
+            }
+
+            foreach ($storage->files($seasonPath) as $file) {
+                if (preg_match('/\.(mp4|ogg|webm)$/i', $file)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{season_count: int, episode_file_count: int, needs_numbering: bool, sample_episode: string|null}
+     */
+    public static function summarizeShowFolder(string $folder, string $disk = 'tvshows'): array
+    {
+        $storage = Storage::disk($disk);
+        $seasonCount = 0;
+        $episodeFileCount = 0;
+        $needsNumbering = false;
+        $sampleEpisode = null;
+
+        foreach ($storage->directories($folder) as $seasonPath) {
+            if (!is_numeric(basename($seasonPath))) {
+                continue;
+            }
+
+            $seasonCount++;
+            foreach ($storage->files($seasonPath) as $file) {
+                if (!preg_match('/\.(mp4|ogg|webm)$/i', $file)) {
+                    continue;
+                }
+
+                $episodeFileCount++;
+                $basename = basename($file);
+                if ($sampleEpisode === null) {
+                    $sampleEpisode = $basename;
+                }
+                if (!self::hasNumericEpisodePrefix($basename)) {
+                    $needsNumbering = true;
+                }
+            }
+        }
+
+        return [
+            'season_count' => $seasonCount,
+            'episode_file_count' => $episodeFileCount,
+            'needs_numbering' => $needsNumbering,
+            'sample_episode' => $sampleEpisode,
+        ];
+    }
+
+    public static function isFolderImported(string $folder): bool
+    {
+        return Tvshow::where('folder_name', $folder)->exists();
+    }
+
+    public static function scanPendingTvshowFolders(string $disk = 'tvshows'): array
+    {
+        $storage = Storage::disk($disk);
+        $pending = [];
+        $ready = [];
+
+        foreach ($storage->directories() as $folder) {
+            if (!self::folderHasSeasonVideos($folder, $disk)) {
+                continue;
+            }
+
+            if (self::isFolderImported($folder)) {
+                continue;
+            }
+
+            $summary = self::summarizeShowFolder($folder, $disk);
+            $base = [
+                'folder' => $folder,
+                'suggested_title' => self::parseTitleFromFolderName($folder),
+                'parsed_release_year' => self::parseReleaseYearFromFolderName($folder),
+                'season_count' => $summary['season_count'],
+                'episode_file_count' => $summary['episode_file_count'],
+                'needs_numbering' => $summary['needs_numbering'],
+                'sample_episode' => $summary['sample_episode'],
+            ];
+
+            $metadata = self::readMetadataJson($folder, $disk);
+            if (!$metadata || empty($metadata['id'])) {
+                $pending[] = $base;
+                continue;
+            }
+
+            if (Tvshow::where('tmdb_id', $metadata['id'])->exists()) {
+                continue;
+            }
+
+            $ready[] = array_merge($base, ['metadata' => $metadata]);
+        }
+
+        return [
+            'pending' => $pending,
+            'ready' => $ready,
+            'stats' => [
+                'pending' => count($pending),
+                'ready' => count($ready),
+            ],
+        ];
+    }
+
+    /**
+     * Import a single TV show folder: normalize episode filenames, create full TMDB catalog, link storage.
+     */
+    public static function importTvshowFolder(string $folder, string $disk = 'tvshows'): Tvshow
+    {
+        self::initializeProps();
+
+        $metadata = self::readMetadataJson($folder, $disk);
+        if (!$metadata) {
+            throw new Exception("metadata.json not found in folder: {$folder}");
+        }
+
+        $metadata['dir'] = $folder;
+        if (!isset($metadata['release_year']) && isset($metadata['releaseYear'])) {
+            $metadata['release_year'] = (int) $metadata['releaseYear'];
+        }
+
+        Storage::disk($disk)->put(
+            self::metadataPath($folder),
+            json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+        );
+
+        self::normalizeEpisodeFilenames($folder, $disk);
+
+        if ($existing = Tvshow::where('folder_name', $folder)->first()) {
+            EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb($disk, $existing->id);
+            EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb($disk, $existing->id);
+
+            return $existing->fresh();
+        }
+
+        $tmdbId = !empty($metadata['id']) ? (int) $metadata['id'] : null;
+        if (!$tmdbId) {
+            $releaseYear = (int) ($metadata['release_year'] ?? $metadata['releaseYear'] ?? 0);
+            $found = self::fetchTvshow($metadata['name'] ?? $folder, $releaseYear);
+            if (empty($found['id'])) {
+                throw new Exception('TV show not found in TMDB: ' . ($metadata['name'] ?? $folder));
+            }
+            $tmdbId = (int) $found['id'];
+        }
+
+        if ($existingByTmdb = Tvshow::where('tmdb_id', $tmdbId)->first()) {
+            $existingByTmdb->folder_name = $folder;
+            $existingByTmdb->save();
+            EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb($disk, $existingByTmdb->id);
+            EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb($disk, $existingByTmdb->id);
+
+            return $existingByTmdb->fresh();
+        }
+
+        $additionalTvshowData = self::fetchAdditionalTvshowData($tmdbId);
+        if (empty($additionalTvshowData['id'])) {
+            throw new Exception('TV show not found in TMDB for id: ' . $tmdbId);
+        }
+
+        $tvshowCast = self::getTvshowCast($tmdbId);
+
+        $slug = Str::slug($additionalTvshowData['name']);
+        $slugCounter = 1;
+        while (Tvshow::where('slug', $slug)->exists()) {
+            $slug = Str::slug($additionalTvshowData['name'] . '-' . $slugCounter);
+            $slugCounter++;
+        }
+
+        $tvshow = Tvshow::create([
+            'tmdb_id' => $additionalTvshowData['id'],
+            'name' => $additionalTvshowData['name'],
+            'folder_name' => $folder,
+            'slug' => $slug,
+            'original_name' => $additionalTvshowData['original_name'] ?? $additionalTvshowData['name'],
+            'poster_path' => $additionalTvshowData['poster_path'] ?? null,
+            'backdrop_path' => $additionalTvshowData['backdrop_path'] ?? null,
+            'original_language' => $additionalTvshowData['original_language'] ?? null,
+            'overview' => $additionalTvshowData['overview'] ?? null,
+            'popularity' => $additionalTvshowData['popularity'] ?? null,
+            'first_air_date' => $additionalTvshowData['first_air_date'] ?? null,
+            'vote_average' => $additionalTvshowData['vote_average'] ?? null,
+            'vote_count' => $additionalTvshowData['vote_count'] ?? null,
+            'created_by' => $additionalTvshowData['created_by'] ?? [],
+            'cast' => $tvshowCast['cast'] ?? [],
+            'homepage' => $additionalTvshowData['homepage'] ?? null,
+            'languages' => $additionalTvshowData['languages'] ?? [],
+            'networks' => $additionalTvshowData['networks'] ?? [],
+            'number_of_episodes' => $additionalTvshowData['number_of_episodes'] ?? 0,
+            'number_of_seasons' => $additionalTvshowData['number_of_seasons'] ?? 0,
+            'origin_country' => $additionalTvshowData['origin_country'] ?? [],
+            'production_companies' => $additionalTvshowData['production_companies'] ?? [],
+            'production_countries' => $additionalTvshowData['production_countries'] ?? [],
+            'available_seasons' => $additionalTvshowData['seasons'] ?? [],
+            'spoken_languages' => $additionalTvshowData['spoken_languages'] ?? [],
+            'status' => $additionalTvshowData['status'] ?? null,
+            'tagline' => $additionalTvshowData['tagline'] ?? null,
+            'type' => $additionalTvshowData['type'] ?? null,
+            'videos' => $additionalTvshowData['videos'] ?? [],
+            'images' => $additionalTvshowData['images'] ?? [],
+            'selected_logo' => $metadata['selected_logo'] ?? 0,
+            'genres' => $additionalTvshowData['genres'] ?? [],
+        ]);
+
+        $numberOfSeasons = (int) ($additionalTvshowData['number_of_seasons'] ?? 0);
+        for ($season = 1; $season <= $numberOfSeasons; $season++) {
+            $seasonData = self::fetchSeason($tmdbId, $season);
+            if (empty($seasonData['id'])) {
+                continue;
+            }
+
+            $episodeCount = count($seasonData['episodes'] ?? []);
+            $importedSeason = Season::create([
+                'tmdb_id' => $seasonData['id'],
+                'tvshow_id' => $tvshow->id,
+                'name' => $seasonData['name'] ?? ('Season ' . $season),
+                'overview' => $seasonData['overview'] ?? null,
+                'poster_path' => $seasonData['poster_path'] ?? null,
+                'air_date' => $seasonData['air_date'] ?? null,
+                'episode_count' => $episodeCount,
+                'season_number' => $seasonData['season_number'] ?? $season,
+                'vote_average' => $seasonData['vote_average'] ?? null,
+            ]);
+
+            $seasonNumber = (int) ($seasonData['season_number'] ?? $season);
+            for ($episodeNumber = 1; $episodeNumber <= $episodeCount; $episodeNumber++) {
+                $episodeData = self::fetchEpisode($tmdbId, $seasonNumber, $episodeNumber);
+                if (empty($episodeData['id'])) {
+                    continue;
+                }
+
+                Episode::create([
+                    'tmdb_id' => $episodeData['id'],
+                    'season_id' => $importedSeason->id,
+                    'name' => $episodeData['name'] ?? ('Episode ' . $episodeNumber),
+                    'overview' => $episodeData['overview'] ?? null,
+                    'air_date' => $episodeData['air_date'] ?? null,
+                    'episode_number' => $episodeData['episode_number'] ?? $episodeNumber,
+                    'production_code' => $episodeData['production_code'] ?? null,
+                    'runtime' => $episodeData['runtime'] ?? null,
+                    'season_number' => $episodeData['season_number'] ?? $seasonNumber,
+                    'still_path' => $episodeData['still_path'] ?? null,
+                    'vote_average' => $episodeData['vote_average'] ?? null,
+                    'vote_count' => $episodeData['vote_count'] ?? null,
+                    'credits' => $episodeData['credits'] ?? [],
+                ]);
+            }
+        }
+
+        EpisodeService::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb($disk, $tvshow->id);
+        EpisodeService::checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb($disk, $tvshow->id);
+
+        return $tvshow->fresh();
+    }
+
+    public static function importTvshowFolders(array $folders, string $disk = 'tvshows'): array
+    {
+        $results = [];
+
+        foreach ($folders as $folder) {
+            try {
+                $tvshow = self::importTvshowFolder($folder, $disk);
+                $results[] = [
+                    'folder' => $folder,
+                    'success' => true,
+                    'tvshow_id' => $tvshow->id,
+                    'slug' => $tvshow->slug,
+                    'title' => $tvshow->name,
+                ];
+            } catch (\Throwable $e) {
+                info('TV show import failed for ' . $folder . ': ' . $e->getMessage());
+                $results[] = [
+                    'folder' => $folder,
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminMovieImportController;
+use App\Http\Controllers\AdminTvshowImportController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
@@ -295,6 +296,14 @@ Route::middleware(['auth', 'role_or_permission:admin|manage movies'])->prefix('a
         Route::get('search', [AdminMovieImportController::class, 'search'])->name('search');
         Route::post('metadata', [AdminMovieImportController::class, 'storeMetadata'])->name('metadata');
         Route::post('run', [AdminMovieImportController::class, 'run'])->name('run');
+    });
+
+    Route::prefix('api/tvshows/import')->name('api.tvshows.import.')->group(function () {
+        Route::get('scan', [AdminTvshowImportController::class, 'scan'])->name('scan');
+        Route::post('suggest-year', [AdminTvshowImportController::class, 'suggestYear'])->name('suggest-year');
+        Route::get('search', [AdminTvshowImportController::class, 'search'])->name('search');
+        Route::post('metadata', [AdminTvshowImportController::class, 'storeMetadata'])->name('metadata');
+        Route::post('run', [AdminTvshowImportController::class, 'run'])->name('run');
     });
 });
 

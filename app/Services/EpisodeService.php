@@ -8,6 +8,28 @@ use Illuminate\Support\Facades\Storage;
 class EpisodeService
 {
     /**
+     * Capture console echo noise so admin HTTP JSON responses stay valid.
+     * Artisan/CLI keeps progress output; web requests and HTTP feature tests are silenced.
+     */
+    private static function beginQuietHttpOutput(): bool
+    {
+        if (PHP_SAPI === 'cli' && !app()->runningUnitTests()) {
+            return false;
+        }
+
+        ob_start();
+
+        return true;
+    }
+
+    private static function endQuietHttpOutput(bool $buffering): void
+    {
+        if ($buffering) {
+            ob_end_clean();
+        }
+    }
+
+    /**
      * Check for additional language video files on each season folder.
      * Must comply with the following convention: 
      * Additional files: "tvshowName/seasonNumber/LANGUAGE_CODE/episodeNumber.fileName.mp4"
@@ -17,7 +39,18 @@ class EpisodeService
      * @param string $disk
      * @return bool
      */
-    public static function checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb(string $disk = 'tvshows'): bool
+    public static function checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDb(string $disk = 'tvshows', ?int $tvshowId = null): bool
+    {
+        $buffering = self::beginQuietHttpOutput();
+
+        try {
+            return self::checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDbInternal($disk, $tvshowId);
+        } finally {
+            self::endQuietHttpOutput($buffering);
+        }
+    }
+
+    private static function checkForAdditionalLanguageVideoFilesOnEachSeasonFolderAndStoreInDbInternal(string $disk = 'tvshows', ?int $tvshowId = null): bool
     {
         // Start timing the execution
         $startTime = microtime(true);
@@ -29,10 +62,15 @@ class EpisodeService
 
         $tvshowStorage = Storage::disk($disk);
         
-        // Load all episodes with their relationships
-        $episodes = Episode::select('episodes.id', 'season_id', 'episode_number', 'language_video_files')
-            ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name'])
-            ->get();
+        // Load all episodes with their relationships (optionally scoped to one show)
+        $query = Episode::select('episodes.id', 'season_id', 'episode_number', 'language_video_files')
+            ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name']);
+
+        if ($tvshowId !== null) {
+            $query->whereHas('season', fn ($q) => $q->where('tvshow_id', $tvshowId));
+        }
+
+        $episodes = $query->get();
             
         echo "Found " . $episodes->count() . " episodes to process.\n";
         $updatedCount = 0;
@@ -169,21 +207,38 @@ class EpisodeService
 
     /**
      * Check if all episodes and subtitles are in storage
-     * 
+     *
      * @param string $disk
+     * @param int|null $tvshowId When set, only check episodes for this TV show
      * @return bool
      */
-    public static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb(string $disk = 'tvshows'): bool
+    public static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDb(string $disk = 'tvshows', ?int $tvshowId = null): bool
+    {
+        $buffering = self::beginQuietHttpOutput();
+
+        try {
+            return self::checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDbInternal($disk, $tvshowId);
+        } finally {
+            self::endQuietHttpOutput($buffering);
+        }
+    }
+
+    private static function checkIfAllEpisodesAndSubtitlesAreInStorageAndUpdateDbInternal(string $disk = 'tvshows', ?int $tvshowId = null): bool
     {
         // Start timing the execution
         $startTime = microtime(true);
 
         echo "Starting to check all episodes and subtitles in storage...\n";
         
-        // Load all required relationships with their proper columns
-        $episodes = Episode::select('episodes.id', 'season_id', 'episode_number', 'is_in_storage', 'subtitles')
-            ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name'])
-            ->get();
+        // Load all required relationships with their proper columns (optionally scoped to one show)
+        $query = Episode::select('episodes.id', 'season_id', 'episode_number', 'is_in_storage', 'subtitles')
+            ->with(['season:id,season_number,tvshow_id', 'season.tvshow:id,folder_name']);
+
+        if ($tvshowId !== null) {
+            $query->whereHas('season', fn ($q) => $q->where('tvshow_id', $tvshowId));
+        }
+
+        $episodes = $query->get();
             
         echo "Found " . $episodes->count() . " episodes to check.\n";
         $foundCount = 0;
