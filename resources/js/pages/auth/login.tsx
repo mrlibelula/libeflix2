@@ -129,7 +129,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
             <a href={route('login.google')} className="group flex mt-8_ justify-center items-center gap-x-2">
                 <div className="flex justify-center items-center gap-x-4 bg-gray-200 dark:bg-gray-300 group-hover:bg-gray-200 px-6 py-3 rounded-full text-gray-800 group-hover:text-black cursor-pointer transition-all duration-300 ease-in-out">
-                    <img className="w-6 h-6" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png" alt="" />
+                    <img className="w-6 h-6" src="https://libe.dev/images/Google_Favicon_2025.svg" alt="" />
                     Sign in with Google
                 </div>
             </a>
