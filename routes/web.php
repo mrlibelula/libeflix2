@@ -88,6 +88,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('party/join', [PartyController::class, 'join'])->name('party.join');
     Route::get('api/party/lobby', [PartyController::class, 'lobby'])->name('api.party.lobby');
     Route::get('api/party/content/search', [PartyController::class, 'searchContent'])->name('api.party.content.search');
+    Route::get('api/party/content/browse', [PartyController::class, 'browseContent'])->name('api.party.content.browse');
+    Route::get('api/party/content/tvshows/{tvshowId}', [PartyController::class, 'browseTvshow'])->name('api.party.content.tvshow');
+    Route::get('api/party/content/tvshows/{tvshowId}/seasons/{seasonNumber}', [PartyController::class, 'browseTvshowSeason'])->name('api.party.content.tvshow.season');
     Route::get('party/{code}', [PartyController::class, 'theater'])->name('party.theater');
     Route::post('party/{code}/leave', [PartyController::class, 'leave'])->name('party.leave');
     Route::delete('party/{code}', [PartyController::class, 'destroy'])->name('party.destroy');

@@ -117,11 +117,17 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
       is_playing?: boolean;
       position_seconds?: number;
       queue_item_id?: number;
+      episode_repeat_mode?: 'none' | 'one' | 'season' | 'tvshow';
     }) => {
       const postId = ++latestPlaybackPost.current;
       // Hold longer when changing play/pause so heartbeats/polls can't undo it
       const holdMs = typeof payload.is_playing === 'boolean' ? 2500 : 1200;
       holdPlaybackUntil.current = Date.now() + holdMs;
+
+      const transportChanged =
+        typeof payload.is_playing === 'boolean' ||
+        typeof payload.position_seconds === 'number' ||
+        typeof payload.queue_item_id === 'number';
 
       setSnapshot((prev) => ({
         ...prev,
@@ -137,7 +143,22 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
             typeof payload.queue_item_id === 'number'
               ? payload.queue_item_id
               : prev.playback.current_queue_item_id,
-          playback_updated_at: new Date().toISOString(),
+          episode_repeat_mode:
+            typeof payload.episode_repeat_mode === 'string'
+              ? payload.episode_repeat_mode
+              : prev.playback.episode_repeat_mode,
+          episode_repeat_updated_by:
+            typeof payload.episode_repeat_mode === 'string'
+              ? prev.viewer.user_id
+              : prev.playback.episode_repeat_updated_by,
+          episode_repeat_updated_at:
+            typeof payload.episode_repeat_mode === 'string'
+              ? new Date().toISOString()
+              : prev.playback.episode_repeat_updated_at,
+          // Repeat-only posts must not re-anchor peer clocks
+          playback_updated_at: transportChanged
+            ? new Date().toISOString()
+            : prev.playback.playback_updated_at,
         },
         current_item:
           typeof payload.queue_item_id === 'number'
@@ -150,13 +171,16 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
         if (postId !== latestPlaybackPost.current) {
           return;
         }
-        if (data?.playback) {
+        if (data?.playback || data?.activity) {
           setSnapshot((prev) => ({
             ...prev,
-            playback: {
-              ...prev.playback,
-              ...data.playback,
-            },
+            playback: data?.playback
+              ? {
+                  ...prev.playback,
+                  ...data.playback,
+                }
+              : prev.playback,
+            activity: data?.activity !== undefined ? data.activity : prev.activity,
           }));
           holdPlaybackUntil.current = Date.now() + 800;
         }
@@ -202,7 +226,10 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
 
   const addToQueue = useCallback(
     async (type: 'movie' | 'episode', id: number) => {
-      await axios.post(route('api.party.queue.add', { code }), { type, id });
+      const { data } = await axios.post(route('api.party.queue.add', { code }), { type, id });
+      if (data?.activity) {
+        setSnapshot((prev) => ({ ...prev, activity: data.activity }));
+      }
       await fetchSync();
     },
     [code, fetchSync]
@@ -210,7 +237,10 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
 
   const removeFromQueue = useCallback(
     async (itemId: number) => {
-      await axios.delete(route('api.party.queue.remove', { code, item: itemId }));
+      const { data } = await axios.delete(route('api.party.queue.remove', { code, item: itemId }));
+      if (data?.activity) {
+        setSnapshot((prev) => ({ ...prev, activity: data.activity }));
+      }
       await fetchSync();
     },
     [code, fetchSync]
@@ -218,7 +248,10 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
 
   const updateSettings = useCallback(
     async (settings: Record<string, unknown>) => {
-      await axios.patch(route('api.party.settings', { code }), settings);
+      const { data } = await axios.patch(route('api.party.settings', { code }), settings);
+      if (data?.activity) {
+        setSnapshot((prev) => ({ ...prev, activity: data.activity }));
+      }
       await fetchSync();
     },
     [code, fetchSync]

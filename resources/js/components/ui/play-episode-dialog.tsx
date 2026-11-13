@@ -127,11 +127,12 @@ export function PlayEpisodeDialog({
   onRepeatModeChange,
   onFirstEpisodeOfSeason = () => {},
   onFirstEpisodeOfTVShow = () => {},
-  // Enhanced navigation props for handling missing episodes
-  onFindNextAvailableEpisode = () => {},
-  onFindPreviousAvailableEpisode = () => {},
-  onLastEpisodeOfSeason = () => {},
-  onLastEpisodeOfTVShow = () => {},
+  // Enhanced navigation props for handling missing episodes.
+  // Defaults stay undefined so callers can omit them (empty fns would always look "provided").
+  onFindNextAvailableEpisode,
+  onFindPreviousAvailableEpisode,
+  onLastEpisodeOfSeason,
+  onLastEpisodeOfTVShow,
   // Information about episode availability
   isFirstEpisodeOfSeason = false,
   isLastEpisodeOfSeason = false,
@@ -268,7 +269,14 @@ export function PlayEpisodeDialog({
   const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
   const [currentEncFilePath, setCurrentEncFilePath] = useState(episode?.encFilePath || '');
   const [userPreferredAudio, setUserPreferredAudio] = useState<string | null>(null);
-  const { audioMode, setAudioMode, audioModeLabel, audioModeOptions } = useDialogueAudio(videoRef, {
+  const {
+    audioMode,
+    setAudioMode,
+    audioModeLabel,
+    audioModeOptions,
+    normalizeVolume,
+    setNormalizeVolume,
+  } = useDialogueAudio(videoRef, {
     sourceKey: currentEncFilePath,
     active: Boolean(dialogOpen && canAccessEpisode && currentEncFilePath),
   });
@@ -1276,27 +1284,29 @@ export function PlayEpisodeDialog({
     };
   }, [isPlaying, partyBridge.enabled, wasPlaying]);
 
+  const isPartyTheater = Boolean(partySync?.enabled);
+
   // Enhanced navigation to previous episode with smart episode finding
   const handlePreviousEpisode = () => {
     if (hasPreviousEpisode) {
       // Use regular previous episode if available
       onPreviousEpisode();
-    } else {
+    } else if (isPartyTheater) {
+      // Party theater navigates the room playlist only — never hunt TV-show episodes
+      return;
+    } else if (typeof onFindPreviousAvailableEpisode === 'function') {
       // No direct previous episode, try to find previous available episode
-      if (onFindPreviousAvailableEpisode && typeof onFindPreviousAvailableEpisode === 'function') {
-        // Show notification that we're skipping missing episodes
-        setShowSkippingEpisodesNotification(true);
-        setTimeout(() => {
-          setShowSkippingEpisodesNotification(false);
-          onFindPreviousAvailableEpisode();
-        }, 1500);
-      } else if (repeatSeason || repeatTvshow) {
-        // Fallback: If no previous episode but repeat mode is enabled, go to last episode
-        if (repeatSeason && onLastEpisodeOfSeason) {
-          onLastEpisodeOfSeason();
-        } else if (repeatTvshow && onLastEpisodeOfTVShow) {
-          onLastEpisodeOfTVShow();
-        }
+      setShowSkippingEpisodesNotification(true);
+      setTimeout(() => {
+        setShowSkippingEpisodesNotification(false);
+        onFindPreviousAvailableEpisode();
+      }, 1500);
+    } else if (repeatSeason || repeatTvshow) {
+      // Fallback: If no previous episode but repeat mode is enabled, go to last episode
+      if (repeatSeason && typeof onLastEpisodeOfSeason === 'function') {
+        onLastEpisodeOfSeason();
+      } else if (repeatTvshow && typeof onLastEpisodeOfTVShow === 'function') {
+        onLastEpisodeOfTVShow();
       }
     }
   };
@@ -1312,33 +1322,39 @@ export function PlayEpisodeDialog({
     if (hasNextEpisode) {
       // Use regular next episode if available
       onNextEpisode();
-    } else {
-      // No direct next episode, try to find next available episode or handle repeat modes
-      if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
-        // Show notification that we're skipping missing episodes
-        setShowSkippingEpisodesNotification(true);
+    } else if (isPartyTheater) {
+      // Party: wrap playlist when season/show repeat is on; otherwise stay put
+      if (repeatSeason || repeatTvshow) {
+        setShowLoopNotification(true);
         setTimeout(() => {
-          setShowSkippingEpisodesNotification(false);
-          // Try to find next available episode (skipping missing ones)
-          onFindNextAvailableEpisode();
+          setShowLoopNotification(false);
+          onFirstEpisodeOfTVShow();
         }, 1500);
-      } else if (repeatSeason || repeatTvshow) {
-        // Fallback: No next episode found, handle according to repeat mode
-        if (repeatSeason) {
-          // Loop back to first episode of current season
-          setShowLoopNotification(true);
-          setTimeout(() => {
-            setShowLoopNotification(false);
-            onFirstEpisodeOfSeason();
-          }, 1500);
-        } else if (repeatTvshow) {
-          // Loop back to first episode of entire TV show
-          setShowNextEpisodeNotification(true);
-          setTimeout(() => {
-            setShowNextEpisodeNotification(false);
-            onFirstEpisodeOfTVShow();
-          }, 1500);
-        }
+      }
+    } else if (typeof onFindNextAvailableEpisode === 'function') {
+      // No direct next episode, try to find next available episode or handle repeat modes
+      setShowSkippingEpisodesNotification(true);
+      setTimeout(() => {
+        setShowSkippingEpisodesNotification(false);
+        // Try to find next available episode (skipping missing ones)
+        onFindNextAvailableEpisode();
+      }, 1500);
+    } else if (repeatSeason || repeatTvshow) {
+      // Fallback: No next episode found, handle according to repeat mode
+      if (repeatSeason) {
+        // Loop back to first episode of current season
+        setShowLoopNotification(true);
+        setTimeout(() => {
+          setShowLoopNotification(false);
+          onFirstEpisodeOfSeason();
+        }, 1500);
+      } else if (repeatTvshow) {
+        // Loop back to first episode of entire TV show
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onFirstEpisodeOfTVShow();
+        }, 1500);
       }
     }
   };
@@ -1888,6 +1904,7 @@ export function PlayEpisodeDialog({
 
   // Toggle repeat modes with exclusive selection
   const toggleRepeatOne = () => {
+    if (controlsLockedByParty) return;
     const newRepeatOne = !repeatOne;
     setRepeatOne(newRepeatOne);
     
@@ -1903,6 +1920,7 @@ export function PlayEpisodeDialog({
   };
 
   const toggleRepeatSeason = () => {
+    if (controlsLockedByParty) return;
     const newRepeatSeason = !repeatSeason;
     setRepeatSeason(newRepeatSeason);
     
@@ -1918,6 +1936,7 @@ export function PlayEpisodeDialog({
   };
 
   const toggleRepeatTvshow = () => {
+    if (controlsLockedByParty) return;
     const newRepeatTvshow = !repeatTvshow;
     setRepeatTvshow(newRepeatTvshow);
     
@@ -2086,8 +2105,17 @@ export function PlayEpisodeDialog({
       const videoElement = videoRef.current;
       const originalEndedHandler = videoElement.onended;
       
-      // Override the native onended property to ensure it works on first load
+      // Override the native onended property to ensure it works on first load.
+      // Party theater must not short-circuit here — React onEnded → handleVideoEnd
+      // owns playlist advance (avoids double next + wrong TV-show navigation).
       videoElement.onended = (event) => {
+        if (partySync?.enabled) {
+          if (originalEndedHandler && typeof originalEndedHandler === 'function') {
+            return originalEndedHandler.call(videoElement, event);
+          }
+          return;
+        }
+
         // Call our custom handler first
         if (hasNextEpisode) {
           setShowNextEpisodeNotification(true);
@@ -2107,7 +2135,7 @@ export function PlayEpisodeDialog({
         }
       };
     }
-  }, [hasNextEpisode, onNextEpisode]);
+  }, [hasNextEpisode, onNextEpisode, partySync?.enabled]);
   
   // Add an initialization effect when the dialog first opens
   useEffect(() => {
@@ -2161,6 +2189,39 @@ export function PlayEpisodeDialog({
       sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
     }
     
+    // Party theater: advance / loop the room playlist — never hunt the TV series catalog
+    if (isPartyTheater) {
+      if (repeatOne) {
+        video.currentTime = 0;
+        video.play().catch(() => {});
+        setShowLoopNotification(true);
+        setTimeout(() => setShowLoopNotification(false), 2000);
+        return;
+      }
+
+      if (hasNextEpisode) {
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onNextEpisode();
+        }, 1500);
+        return;
+      }
+
+      if (repeatSeason || repeatTvshow) {
+        setShowLoopNotification(true);
+        setTimeout(() => {
+          setShowLoopNotification(false);
+          onFirstEpisodeOfTVShow();
+        }, 2000);
+        return;
+      }
+
+      setIsPlaying(false);
+      onComplete?.();
+      return;
+    }
+
     // Handle based on repeat mode
     if (repeatOne) {
       // Loop current episode
@@ -2194,22 +2255,20 @@ export function PlayEpisodeDialog({
           setShowNextEpisodeNotification(false);
           onNextEpisode();
         }, 1500);
-      } else {
+      } else if (typeof onFindNextAvailableEpisode === 'function') {
         // No more episodes in current season - try to find next available episode in next seasons
-        if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
-          setShowSkippingEpisodesNotification(true);
-          setTimeout(() => {
-            setShowSkippingEpisodesNotification(false);
-            onFindNextAvailableEpisode();
-          }, 1500);
-        } else {
-          // No next seasons or episodes found - loop back to first episode of entire TV show
-          setShowNextEpisodeNotification(true);
-          setTimeout(() => {
-            setShowNextEpisodeNotification(false);
-            onFirstEpisodeOfTVShow();
-          }, 1500);
-        }
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          onFindNextAvailableEpisode();
+        }, 1500);
+      } else {
+        // No next seasons or episodes found - loop back to first episode of entire TV show
+        setShowNextEpisodeNotification(true);
+        setTimeout(() => {
+          setShowNextEpisodeNotification(false);
+          onFirstEpisodeOfTVShow();
+        }, 1500);
       }
     } else {
       // No repeat mode active - try next episode if available, otherwise stop
@@ -2220,19 +2279,17 @@ export function PlayEpisodeDialog({
           setShowNextEpisodeNotification(false);
           onNextEpisode();
         }, 1500);
-      } else {
+      } else if (typeof onFindNextAvailableEpisode === 'function') {
         // No more episodes in current season - try to find next available episode in next seasons
-        if (onFindNextAvailableEpisode && typeof onFindNextAvailableEpisode === 'function') {
-          setShowSkippingEpisodesNotification(true);
-          setTimeout(() => {
-            setShowSkippingEpisodesNotification(false);
-            onFindNextAvailableEpisode();
-          }, 1500);
-        } else {
-          // No next episodes found anywhere - stop playback
-          setIsPlaying(false);
-          onComplete?.();
-        }
+        setShowSkippingEpisodesNotification(true);
+        setTimeout(() => {
+          setShowSkippingEpisodesNotification(false);
+          onFindNextAvailableEpisode();
+        }, 1500);
+      } else {
+        // No next episodes found anywhere - stop playback
+        setIsPlaying(false);
+        onComplete?.();
       }
     }
   };
@@ -2733,9 +2790,10 @@ export function PlayEpisodeDialog({
     loadSeasonEpisodesForMenu(activeSeasonNumber);
   }, [showEpisodesMenu, activeSeasonNumber, loadSeasonEpisodesForMenu]);
 
-  // Mobile: load only the selected season's episodes (not the whole show)
+  // Mobile: load only the selected season's episodes (not the whole show).
+  // Skip in party/embedded — no mobile episode list there (matches desktop content).
   useEffect(() => {
-    if (!isMobile || !dialogOpen || !tvshowSlug) return;
+    if (!isMobile || embedded || !dialogOpen || !tvshowSlug) return;
 
     if (seasonsDataRef.current.length === 0) {
       setSeasonsData(buildSeasonList());
@@ -2756,7 +2814,7 @@ export function PlayEpisodeDialog({
     return () => {
       cancelled = true;
     };
-  }, [isMobile, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
+  }, [isMobile, embedded, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
 
   // Handle click outside episodes menu
   useEffect(() => {
@@ -3021,7 +3079,7 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full p-0 overflow-hidden rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-hidden rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
             : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
@@ -3053,11 +3111,11 @@ export function PlayEpisodeDialog({
           Debug info
         </div>
         
-        <div className={`w-full h-full flex flex-col ${isMobile ? 'overflow-hidden' : ''}`}>
-          {/* Video player area - sticky on mobile when scrolling */}
+        <div className={`w-full h-full flex flex-col ${isMobile && !embedded ? 'overflow-hidden' : ''}`}>
+          {/* Video player area - sticky on mobile when scrolling (regular dialog only; party uses theater sticky) */}
           <div 
             ref={containerRef} 
-            className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
+            className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile && !embedded ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
             tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
@@ -3745,6 +3803,22 @@ export function PlayEpisodeDialog({
                                 onClick={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                               >
+                                <div
+                                  className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setNormalizeVolume(!normalizeVolume);
+                                  }}
+                                  onTouchEnd={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setNormalizeVolume(!normalizeVolume);
+                                  }}
+                                >
+                                  <span className="flex-1 text-sm">Normalize volume</span>
+                                  {normalizeVolume && <Check className="w-4 h-4 text-rose-500" />}
+                                </div>
+                                <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
                                 {audioModeOptions.map((option) => (
                                   <div
                                     key={option.id}
@@ -3927,8 +4001,8 @@ export function PlayEpisodeDialog({
             )}
           </div>
           
-          {/* Mobile scrollable content container */}
-          {isMobile ? (
+          {/* Mobile scrollable content container (regular mode only — party/embedded matches desktop, no episode list) */}
+          {isMobile && !embedded ? (
             <div 
               ref={mobileScrollContainerRef}
               className="flex-1 overflow-y-auto bg-neutral-900"
@@ -4047,7 +4121,8 @@ export function PlayEpisodeDialog({
                   {/* Repeat entire TV show */}
                   <button
                     onClick={toggleRepeatTvshow}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                    disabled={controlsLockedByParty}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       repeatTvshow 
                         ? 'bg-rose-600 text-white' 
                         : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
@@ -4060,7 +4135,8 @@ export function PlayEpisodeDialog({
                   {/* Repeat current season */}
                   <button
                     onClick={toggleRepeatSeason}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                    disabled={controlsLockedByParty}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       repeatSeason 
                         ? 'bg-rose-600 text-white' 
                         : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
@@ -4073,7 +4149,8 @@ export function PlayEpisodeDialog({
                   {/* Repeat one episode */}
                   <button
                     onClick={toggleRepeatOne}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                    disabled={controlsLockedByParty}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       repeatOne 
                         ? 'bg-rose-600 text-white' 
                         : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
@@ -4319,7 +4396,8 @@ export function PlayEpisodeDialog({
                       {/* repeat episode (loop episode) */}
                       <Tooltip text="Repeat current episode" position="bottom">
                         <button
-                          className="focus:outline-none cursor-pointer"
+                          className="focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={controlsLockedByParty}
                           onMouseDown={preventFocusSteal}
                           onClick={() => {
                             toggleRepeatOne();
@@ -4336,7 +4414,8 @@ export function PlayEpisodeDialog({
                       {/* repeat season playlist (loop season) */}
                       <Tooltip text="Repeat current season" position="bottom">
                         <button
-                          className="focus:outline-none cursor-pointer"
+                          className="focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={controlsLockedByParty}
                           onMouseDown={preventFocusSteal}
                           onClick={() => {
                             toggleRepeatSeason();
@@ -4353,7 +4432,8 @@ export function PlayEpisodeDialog({
                       {/* repeat entire tvshow episodes (loop all seasons) */}
                       <Tooltip text="Repeat entire TV show" position="bottom">
                         <button
-                          className="focus:outline-none cursor-pointer"
+                          className="focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={controlsLockedByParty}
                           onMouseDown={preventFocusSteal}
                           onClick={() => {
                             toggleRepeatTvshow();

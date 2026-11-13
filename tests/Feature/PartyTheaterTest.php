@@ -1,9 +1,12 @@
 <?php
 
+use App\Models\Episode;
 use App\Models\Movie;
 use App\Models\PartyQueueItem;
 use App\Models\PartyRoom;
 use App\Models\PartyRoomMember;
+use App\Models\Season;
+use App\Models\Tvshow;
 use App\Models\User;
 
 function createPartyHost(): User
@@ -305,10 +308,14 @@ test('queue add and playback set current item', function () {
             'type' => 'movie',
             'id' => $movie->id,
         ])
-        ->assertOk();
+        ->assertOk()
+        ->assertJsonPath('activity.type', 'queue_add')
+        ->assertJsonPath('activity.by', $host->id)
+        ->assertJsonPath('activity.meta.title', 'Party Movie');
 
     expect(PartyQueueItem::count())->toBe(1);
     expect($room->fresh()->current_queue_item_id)->not->toBeNull();
+    expect($room->fresh()->activity_type)->toBe('queue_add');
 
     $itemId = $room->fresh()->current_queue_item_id;
 
@@ -321,6 +328,90 @@ test('queue add and playback set current item', function () {
         ->assertOk();
 
     expect($room->fresh()->is_playing)->toBeTrue();
+});
+
+test('queue remove and settings activity sync to peers', function () {
+    $host = createPartyHost();
+    $room = createOpenRoom($host, ['host_only_controls' => false]);
+    $member = User::factory()->create();
+
+    PartyRoomMember::create([
+        'party_room_id' => $room->id,
+        'user_id' => $member->id,
+        'role' => 'member',
+        'joined_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    $movieA = Movie::create([
+        'slug' => 'party-a-'.uniqid(),
+        'original_name' => 'Alpha',
+        'title' => 'Alpha',
+        'path' => '/fake/alpha.mp4',
+        'is_free' => true,
+    ]);
+    $movieB = Movie::create([
+        'slug' => 'party-b-'.uniqid(),
+        'original_name' => 'Beta',
+        'title' => 'Beta',
+        'path' => '/fake/beta.mp4',
+        'is_free' => true,
+    ]);
+
+    $this->actingAs($host)
+        ->postJson(route('api.party.queue.add', ['code' => $room->code]), [
+            'type' => 'movie',
+            'id' => $movieA->id,
+        ])
+        ->assertOk();
+
+    $this->actingAs($member)
+        ->postJson(route('api.party.queue.add', ['code' => $room->code]), [
+            'type' => 'movie',
+            'id' => $movieB->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('activity.type', 'queue_add')
+        ->assertJsonPath('activity.by', $member->id);
+
+    $alphaId = PartyQueueItem::where('watchable_id', $movieA->id)->value('id');
+    $betaId = PartyQueueItem::where('watchable_id', $movieB->id)->value('id');
+
+    $this->actingAs($host)
+        ->postJson(route('api.party.playback', ['code' => $room->code]), [
+            'queue_item_id' => $betaId,
+            'is_playing' => true,
+            'position_seconds' => 0,
+        ])
+        ->assertOk()
+        ->assertJsonPath('activity.type', 'now_playing')
+        ->assertJsonPath('activity.meta.title', 'Beta');
+
+    $this->actingAs($member)
+        ->getJson(route('api.party.sync', ['code' => $room->code]))
+        ->assertOk()
+        ->assertJsonPath('snapshot.activity.type', 'now_playing')
+        ->assertJsonPath('snapshot.activity.by', $host->id);
+
+    $this->actingAs($host)
+        ->deleteJson(route('api.party.queue.remove', ['code' => $room->code, 'item' => $alphaId]))
+        ->assertOk()
+        ->assertJsonPath('activity.type', 'queue_remove')
+        ->assertJsonPath('activity.meta.title', 'Alpha');
+
+    $this->actingAs($host)
+        ->patchJson(route('api.party.settings', ['code' => $room->code]), [
+            'allow_chat' => false,
+            'host_only_controls' => true,
+        ])
+        ->assertOk()
+        ->assertJsonPath('activity.type', 'settings')
+        ->assertJsonPath('activity.by', $host->id);
+
+    $this->actingAs($member)
+        ->getJson(route('api.party.sync', ['code' => $room->code]))
+        ->assertOk()
+        ->assertJsonPath('snapshot.activity.type', 'settings');
 });
 
 test('ended room cannot be synced', function () {
@@ -479,4 +570,194 @@ test('lobby marks the viewer as a member so full rooms stay enterable for them',
             'is_member' => true,
             'member_count' => 2,
         ]);
+});
+
+test('episode repeat mode syncs to peers without bumping playback clock', function () {
+    $host = createPartyHost();
+    $room = createOpenRoom($host, [
+        'host_only_controls' => false,
+        'is_playing' => true,
+        'position_seconds' => 42.5,
+        'episode_repeat_mode' => 'tvshow',
+        'playback_updated_at' => now()->subSeconds(30),
+    ]);
+    $member = User::factory()->create();
+
+    PartyRoomMember::create([
+        'party_room_id' => $room->id,
+        'user_id' => $member->id,
+        'role' => 'member',
+        'joined_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    $anchorBefore = $room->playback_updated_at?->toIso8601String();
+
+    $this->actingAs($host)
+        ->postJson(route('api.party.playback', ['code' => $room->code]), [
+            'episode_repeat_mode' => 'one',
+        ])
+        ->assertOk()
+        ->assertJsonPath('playback.episode_repeat_mode', 'one')
+        ->assertJsonPath('playback.episode_repeat_updated_by', $host->id)
+        ->assertJsonPath('playback.position_seconds', 42.5)
+        ->assertJsonPath('playback.is_playing', true);
+
+    $room->refresh();
+    expect($room->episode_repeat_mode)->toBe('one');
+    expect($room->episode_repeat_updated_by)->toBe($host->id);
+    expect($room->episode_repeat_updated_at)->not->toBeNull();
+    expect(optional($room->playback_updated_at)->toIso8601String())->toBe($anchorBefore);
+
+    $this->actingAs($member)
+        ->getJson(route('api.party.sync', ['code' => $room->code]))
+        ->assertOk()
+        ->assertJsonPath('snapshot.playback.episode_repeat_mode', 'one')
+        ->assertJsonPath('snapshot.playback.episode_repeat_updated_by', $host->id);
+
+    $this->actingAs($member)
+        ->postJson(route('api.party.playback', ['code' => $room->code]), [
+            'episode_repeat_mode' => 'season',
+        ])
+        ->assertOk()
+        ->assertJsonPath('playback.episode_repeat_mode', 'season')
+        ->assertJsonPath('playback.episode_repeat_updated_by', $member->id);
+
+    $this->actingAs($host)
+        ->patchJson(route('api.party.settings', ['code' => $room->code]), [
+            'host_only_controls' => true,
+        ])
+        ->assertOk();
+
+    $this->actingAs($member)
+        ->postJson(route('api.party.playback', ['code' => $room->code]), [
+            'episode_repeat_mode' => 'none',
+        ])
+        ->assertUnprocessable();
+
+    expect($room->fresh()->episode_repeat_mode)->toBe('season');
+});
+
+test('party browse lists playable movies and tv shows with seasons and episodes', function () {
+    $host = createPartyHost();
+
+    Movie::create([
+        'slug' => 'browse-movie-'.uniqid(),
+        'original_name' => 'Browse Alpha',
+        'title' => 'Browse Alpha',
+        'path' => '/fake/browse-alpha.mp4',
+        'poster_path' => '/alpha.jpg',
+        'release_date' => '2020-01-01',
+        'is_free' => true,
+        'trailers' => json_encode([
+            ['site' => 'YouTube', 'key' => 'abc123', 'type' => 'Trailer', 'official' => true],
+        ]),
+    ]);
+
+    Movie::create([
+        'slug' => 'unplayable-movie-'.uniqid(),
+        'original_name' => 'Missing File',
+        'title' => 'Missing File',
+        'path' => '',
+        'is_free' => true,
+    ]);
+
+    $tvshow = Tvshow::create([
+        'slug' => 'browse-show-'.uniqid(),
+        'folder_name' => 'Browse Show Folder',
+        'tmdb_id' => random_int(1, 9999999),
+        'name' => 'Browse Show',
+        'original_name' => 'Browse Show',
+        'poster_path' => '/show.jpg',
+        'first_air_date' => '2019-05-01',
+        'is_free' => true,
+        'videos' => [
+            'results' => [
+                ['site' => 'YouTube', 'key' => 'tvtrailer', 'type' => 'Trailer', 'official' => true],
+            ],
+        ],
+    ]);
+
+    $season = Season::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'tvshow_id' => $tvshow->id,
+        'name' => 'Season 1',
+        'season_number' => 1,
+    ]);
+
+    $playable = Episode::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'season_id' => $season->id,
+        'name' => 'Pilot',
+        'episode_number' => 1,
+        'is_in_storage' => '/fake/show/s01e01.mp4',
+        'is_free' => true,
+    ]);
+
+    Episode::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'season_id' => $season->id,
+        'name' => 'Missing',
+        'episode_number' => 2,
+        'is_in_storage' => '0',
+        'is_free' => true,
+    ]);
+
+    $emptyShow = Tvshow::create([
+        'slug' => 'empty-show-'.uniqid(),
+        'folder_name' => 'Empty Show Folder',
+        'tmdb_id' => random_int(1, 9999999),
+        'name' => 'Empty Show',
+        'original_name' => 'Empty Show',
+    ]);
+
+    Season::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'tvshow_id' => $emptyShow->id,
+        'name' => 'Season 1',
+        'season_number' => 1,
+    ]);
+
+    $this->actingAs($host)
+        ->getJson(route('api.party.content.browse', ['type' => 'movies']))
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('type', 'movies')
+        ->assertJsonFragment([
+            'title' => 'Browse Alpha',
+            'has_trailer' => true,
+            'caption' => '2020',
+        ])
+        ->assertJsonMissing([
+            'title' => 'Missing File',
+        ]);
+
+    $this->actingAs($host)
+        ->getJson(route('api.party.content.browse', ['type' => 'tvshows']))
+        ->assertOk()
+        ->assertJsonFragment([
+            'title' => 'Browse Show',
+            'has_trailer' => true,
+            'trailer_key' => 'tvtrailer',
+        ])
+        ->assertJsonMissing([
+            'title' => 'Empty Show',
+        ]);
+
+    $this->actingAs($host)
+        ->getJson(route('api.party.content.tvshow', ['tvshowId' => $tvshow->id]))
+        ->assertOk()
+        ->assertJsonPath('tvshow.title', 'Browse Show')
+        ->assertJsonPath('seasons.0.season_number', 1)
+        ->assertJsonPath('seasons.0.playable_count', 1);
+
+    $this->actingAs($host)
+        ->getJson(route('api.party.content.tvshow.season', [
+            'tvshowId' => $tvshow->id,
+            'seasonNumber' => 1,
+        ]))
+        ->assertOk()
+        ->assertJsonCount(1, 'episodes')
+        ->assertJsonPath('episodes.0.id', $playable->id)
+        ->assertJsonPath('episodes.0.title', 'Pilot');
 });

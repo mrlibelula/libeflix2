@@ -9,6 +9,7 @@ export const AUDIO_MODE_OPTIONS: ReadonlyArray<{ id: AudioMode; label: string }>
 ];
 
 const STORAGE_KEY = 'libeflix.audioMode';
+const NORMALIZE_STORAGE_KEY = 'libeflix.normalizeVolume';
 
 type AudioModePreset = {
   lowShelfHz: number;
@@ -54,6 +55,25 @@ const AUDIO_MODE_PRESETS: Record<Exclude<AudioMode, 'original'>, AudioModePreset
   },
 };
 
+/** Leveling compressor after the dry/wet mix — tame loud sources, lift quiet ones. */
+const NORMALIZE_PRESET = {
+  threshold: -22,
+  knee: 16,
+  ratio: 8,
+  attack: 0.005,
+  release: 0.22,
+  makeupGain: 1.7,
+} as const;
+
+const NORMALIZE_BYPASS = {
+  threshold: 0,
+  knee: 0,
+  ratio: 1,
+  attack: 0.003,
+  release: 0.25,
+  makeupGain: 1,
+} as const;
+
 type GraphNodes = {
   context: AudioContext;
   source: MediaElementAudioSourceNode;
@@ -63,6 +83,9 @@ type GraphNodes = {
   presence: BiquadFilterNode;
   compressor: DynamicsCompressorNode;
   makeup: GainNode;
+  mixGain: GainNode;
+  normalizeCompressor: DynamicsCompressorNode;
+  normalizeMakeup: GainNode;
   element: HTMLVideoElement;
 };
 
@@ -80,6 +103,22 @@ function readStoredAudioMode(): AudioMode {
     return isAudioMode(stored) ? stored : 'original';
   } catch {
     return 'original';
+  }
+}
+
+function readStoredNormalizeVolume(): boolean {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(NORMALIZE_STORAGE_KEY);
+    if (stored === null) {
+      return true;
+    }
+    return stored === 'true';
+  } catch {
+    return true;
   }
 }
 
@@ -115,7 +154,20 @@ function applyPreset(nodes: GraphNodes, mode: AudioMode) {
   wetGain.gain.setTargetAtTime(1, now, 0.02);
 }
 
-function createGraph(element: HTMLVideoElement): GraphNodes | null {
+function applyNormalize(nodes: GraphNodes, enabled: boolean) {
+  const { normalizeCompressor, normalizeMakeup, context } = nodes;
+  const preset = enabled ? NORMALIZE_PRESET : NORMALIZE_BYPASS;
+  const now = context.currentTime;
+
+  normalizeCompressor.threshold.setTargetAtTime(preset.threshold, now, 0.02);
+  normalizeCompressor.knee.setTargetAtTime(preset.knee, now, 0.02);
+  normalizeCompressor.ratio.setTargetAtTime(preset.ratio, now, 0.02);
+  normalizeCompressor.attack.setTargetAtTime(preset.attack, now, 0.02);
+  normalizeCompressor.release.setTargetAtTime(preset.release, now, 0.02);
+  normalizeMakeup.gain.setTargetAtTime(preset.makeupGain, now, 0.02);
+}
+
+function createGraph(element: HTMLVideoElement, normalizeEnabled: boolean): GraphNodes | null {
   const AudioContextCtor =
     window.AudioContext ||
     (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -132,20 +184,36 @@ function createGraph(element: HTMLVideoElement): GraphNodes | null {
   const presence = context.createBiquadFilter();
   const compressor = context.createDynamicsCompressor();
   const makeup = context.createGain();
+  const mixGain = context.createGain();
+  const normalizeCompressor = context.createDynamicsCompressor();
+  const normalizeMakeup = context.createGain();
 
   dryGain.gain.value = 1;
   wetGain.gain.value = 0;
   makeup.gain.value = 1;
+  mixGain.gain.value = 1;
+
+  const initialNormalize = normalizeEnabled ? NORMALIZE_PRESET : NORMALIZE_BYPASS;
+  normalizeCompressor.threshold.value = initialNormalize.threshold;
+  normalizeCompressor.knee.value = initialNormalize.knee;
+  normalizeCompressor.ratio.value = initialNormalize.ratio;
+  normalizeCompressor.attack.value = initialNormalize.attack;
+  normalizeCompressor.release.value = initialNormalize.release;
+  normalizeMakeup.gain.value = initialNormalize.makeupGain;
 
   source.connect(dryGain);
-  dryGain.connect(context.destination);
+  dryGain.connect(mixGain);
 
   source.connect(lowShelf);
   lowShelf.connect(presence);
   presence.connect(compressor);
   compressor.connect(makeup);
   makeup.connect(wetGain);
-  wetGain.connect(context.destination);
+  wetGain.connect(mixGain);
+
+  mixGain.connect(normalizeCompressor);
+  normalizeCompressor.connect(normalizeMakeup);
+  normalizeMakeup.connect(context.destination);
 
   return {
     context,
@@ -156,6 +224,9 @@ function createGraph(element: HTMLVideoElement): GraphNodes | null {
     presence,
     compressor,
     makeup,
+    mixGain,
+    normalizeCompressor,
+    normalizeMakeup,
     element,
   };
 }
@@ -173,10 +244,15 @@ export function useDialogueAudio(
 ) {
   const { sourceKey = '', active = true } = options;
   const [audioMode, setAudioModeState] = useState<AudioMode>(() => readStoredAudioMode());
+  const [normalizeVolume, setNormalizeVolumeState] = useState<boolean>(() =>
+    readStoredNormalizeVolume()
+  );
   const audioModeRef = useRef(audioMode);
+  const normalizeVolumeRef = useRef(normalizeVolume);
   const graphRef = useRef<GraphNodes | null>(null);
 
   audioModeRef.current = audioMode;
+  normalizeVolumeRef.current = normalizeVolume;
 
   const tearDownGraph = useCallback(() => {
     const graph = graphRef.current;
@@ -192,6 +268,9 @@ export function useDialogueAudio(
       graph.presence.disconnect();
       graph.compressor.disconnect();
       graph.makeup.disconnect();
+      graph.mixGain.disconnect();
+      graph.normalizeCompressor.disconnect();
+      graph.normalizeMakeup.disconnect();
     } catch {
       // Nodes may already be disconnected when the element unmounts.
     }
@@ -218,12 +297,13 @@ export function useDialogueAudio(
     }
 
     try {
-      const graph = createGraph(element);
+      const graph = createGraph(element, normalizeVolumeRef.current);
       if (!graph) {
         return null;
       }
       graphRef.current = graph;
       applyPreset(graph, audioModeRef.current);
+      applyNormalize(graph, normalizeVolumeRef.current);
       return graph;
     } catch (error) {
       console.error('Failed to create dialogue audio graph:', error);
@@ -257,6 +337,25 @@ export function useDialogueAudio(
     }
   }, [ensureGraph]);
 
+  const setNormalizeVolume = useCallback((enabled: boolean) => {
+    setNormalizeVolumeState(enabled);
+    normalizeVolumeRef.current = enabled;
+
+    try {
+      window.localStorage.setItem(NORMALIZE_STORAGE_KEY, enabled ? 'true' : 'false');
+    } catch {
+      // Ignore quota / private-mode failures; in-memory preference still works.
+    }
+
+    const graph = graphRef.current ?? ensureGraph();
+    if (graph) {
+      applyNormalize(graph, enabled);
+      if (graph.context.state === 'suspended') {
+        void graph.context.resume().catch(() => undefined);
+      }
+    }
+  }, [ensureGraph]);
+
   // Re-apply the last saved Sound choice when playback becomes active again
   // (new episode/movie dialog, tab return, language remount) and keep tabs in sync.
   useEffect(() => {
@@ -264,25 +363,41 @@ export function useDialogueAudio(
       return;
     }
 
-    const stored = readStoredAudioMode();
-    if (stored !== audioModeRef.current) {
-      setAudioModeState(stored);
-      audioModeRef.current = stored;
+    const storedMode = readStoredAudioMode();
+    if (storedMode !== audioModeRef.current) {
+      setAudioModeState(storedMode);
+      audioModeRef.current = storedMode;
+    }
+
+    const storedNormalize = readStoredNormalizeVolume();
+    if (storedNormalize !== normalizeVolumeRef.current) {
+      setNormalizeVolumeState(storedNormalize);
+      normalizeVolumeRef.current = storedNormalize;
     }
 
     const graph = graphRef.current;
     if (graph) {
       applyPreset(graph, audioModeRef.current);
+      applyNormalize(graph, normalizeVolumeRef.current);
     }
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !isAudioMode(event.newValue)) {
+      if (event.key === STORAGE_KEY && isAudioMode(event.newValue)) {
+        setAudioModeState(event.newValue);
+        audioModeRef.current = event.newValue;
+        if (graphRef.current) {
+          applyPreset(graphRef.current, event.newValue);
+        }
         return;
       }
-      setAudioModeState(event.newValue);
-      audioModeRef.current = event.newValue;
-      if (graphRef.current) {
-        applyPreset(graphRef.current, event.newValue);
+
+      if (event.key === NORMALIZE_STORAGE_KEY && event.newValue !== null) {
+        const enabled = event.newValue === 'true';
+        setNormalizeVolumeState(enabled);
+        normalizeVolumeRef.current = enabled;
+        if (graphRef.current) {
+          applyNormalize(graphRef.current, enabled);
+        }
       }
     };
 
@@ -342,6 +457,7 @@ export function useDialogueAudio(
         }
 
         applyPreset(graph, audioModeRef.current);
+        applyNormalize(graph, normalizeVolumeRef.current);
 
         if (attachedElement !== element) {
           detachPlayListener();
@@ -380,5 +496,7 @@ export function useDialogueAudio(
     setAudioMode,
     audioModeLabel,
     audioModeOptions: AUDIO_MODE_OPTIONS,
+    normalizeVolume,
+    setNormalizeVolume,
   } as const;
 }

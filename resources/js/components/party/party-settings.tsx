@@ -20,9 +20,11 @@ type Props = {
   absoluteMaxMembers: number;
   onSave: (settings: Record<string, unknown>) => Promise<void>;
   onDelete?: () => Promise<void>;
+  /** When true, omit outer card chrome (used inside party side-panel tabs). */
+  embedded?: boolean;
 };
 
-export function PartySettings({ snapshot, absoluteMaxMembers, onSave, onDelete }: Props) {
+export function PartySettings({ snapshot, absoluteMaxMembers, onSave, onDelete, embedded = false }: Props) {
   const [name, setName] = useState(snapshot.room.name);
   const [hostOnly, setHostOnly] = useState(snapshot.room.host_only_controls);
   const [allowChat, setAllowChat] = useState(snapshot.room.allow_chat);
@@ -37,8 +39,18 @@ export function PartySettings({ snapshot, absoluteMaxMembers, onSave, onDelete }
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Theater settings</h3>
+    <div
+      className={
+        embedded
+          ? 'space-y-3'
+          : 'space-y-3 rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent'
+      }
+    >
+      {!embedded && (
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Theater settings
+        </h3>
+      )}
       <div className="space-y-1">
         <Label htmlFor="party-name">Name</Label>
         <Input id="party-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />

@@ -94,6 +94,10 @@ export type PartySnapshot = {
     current_queue_item_id: number | null;
     is_playing: boolean;
     position_seconds: number;
+    /** Shared TV episode loop mode in the theater player */
+    episode_repeat_mode: 'none' | 'one' | 'season' | 'tvshow';
+    episode_repeat_updated_by: number | null;
+    episode_repeat_updated_at: string | null;
     playback_updated_at: string | null;
   };
   current_item: PartyQueueItem | null;
@@ -107,4 +111,11 @@ export type PartySnapshot = {
     can_control: boolean;
     can_access_premium: boolean;
   };
+  /** Latest shared theater action for toast notifications */
+  activity: {
+    type: 'queue_add' | 'queue_remove' | 'now_playing' | 'settings' | string;
+    by: number | null;
+    at: string | null;
+    meta: Record<string, unknown>;
+  } | null;
 };

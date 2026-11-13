@@ -9,6 +9,8 @@ type Props = {
   enabled: boolean;
   localUserId: number;
   onSend: (body: string) => Promise<void>;
+  /** When true, omit the section title (used inside party side-panel tabs). */
+  embedded?: boolean;
 };
 
 const NEAR_BOTTOM_PX = 56;
@@ -53,7 +55,7 @@ function preservePageScroll(run?: () => void) {
   });
 }
 
-export function PartyChat({ messages, enabled, localUserId, onSend }: Props) {
+export function PartyChat({ messages, enabled, localUserId, onSend, embedded = false }: Props) {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [shine, setShine] = useState(false);
@@ -129,7 +131,11 @@ export function PartyChat({ messages, enabled, localUserId, onSend }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Chat</h3>
+      {!embedded && (
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Chat
+        </h3>
+      )}
       {!enabled && <p className="text-xs text-zinc-500">Chat is disabled by the host.</p>}
       <div
         ref={listRef}

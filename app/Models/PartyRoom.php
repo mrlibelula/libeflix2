@@ -35,6 +35,13 @@ class PartyRoom extends Model
         'current_queue_item_id',
         'is_playing',
         'position_seconds',
+        'episode_repeat_mode',
+        'episode_repeat_updated_by',
+        'episode_repeat_updated_at',
+        'activity_type',
+        'activity_by',
+        'activity_at',
+        'activity_meta',
         'playback_updated_at',
     ];
 
@@ -45,6 +52,9 @@ class PartyRoom extends Model
         'is_public' => 'boolean',
         'is_playing' => 'boolean',
         'position_seconds' => 'float',
+        'episode_repeat_updated_at' => 'datetime',
+        'activity_at' => 'datetime',
+        'activity_meta' => 'array',
         'playback_updated_at' => 'datetime',
         'max_members' => 'integer',
     ];

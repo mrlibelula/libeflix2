@@ -31,6 +31,7 @@ class PartyService
                 'is_public' => (bool) ($data['is_public'] ?? true),
                 'is_playing' => false,
                 'position_seconds' => 0,
+                'episode_repeat_mode' => 'tvshow',
                 'playback_updated_at' => now(),
             ]);
 
@@ -372,6 +373,27 @@ class PartyService
             throw ValidationException::withMessages(['settings' => 'Only the host can change theater settings.']);
         }
 
+        $changes = [];
+        if (array_key_exists('name', $data) && (string) $data['name'] !== (string) $room->name) {
+            $changes[] = 'name';
+        }
+        if (array_key_exists('host_only_controls', $data) && (bool) $data['host_only_controls'] !== (bool) $room->host_only_controls) {
+            $changes[] = 'host_only_controls';
+        }
+        if (array_key_exists('allow_chat', $data) && (bool) $data['allow_chat'] !== (bool) $room->allow_chat) {
+            $changes[] = 'allow_chat';
+        }
+        if (array_key_exists('allow_voice', $data) && (bool) $data['allow_voice'] !== (bool) $room->allow_voice) {
+            $changes[] = 'allow_voice';
+        }
+        if (array_key_exists('max_members', $data)
+            && PartyRoom::clampMaxMembers((int) $data['max_members']) !== (int) $room->max_members) {
+            $changes[] = 'max_members';
+        }
+        if (array_key_exists('is_public', $data) && (bool) $data['is_public'] !== (bool) $room->is_public) {
+            $changes[] = 'is_public';
+        }
+
         $room->update([
             'name' => $data['name'] ?? $room->name,
             'host_only_controls' => array_key_exists('host_only_controls', $data)
@@ -391,7 +413,17 @@ class PartyService
                 : $room->is_public,
         ]);
 
-        return $room->fresh();
+        $room = $room->fresh();
+
+        if ($changes !== [] && $room) {
+            $this->recordActivity($room, $user, 'settings', [
+                'changes' => $changes,
+                'name' => $room->name,
+            ]);
+            $room = $room->fresh();
+        }
+
+        return $room;
     }
 
     public function assertCanControl(PartyRoom $room, User $user): void
@@ -436,16 +468,29 @@ class PartyService
             ]);
         }
 
+        $this->recordActivity($room->fresh(), $user, 'queue_add', [
+            'title' => $this->titleForWatchable($watchable),
+            'item_type' => strtolower($type) === 'episode' ? 'episode' : 'movie',
+            'item_id' => $item->id,
+        ]);
+
         return $item->load('watchable', 'addedByUser');
     }
 
-    public function removeQueueItem(PartyRoom $room, User $user, PartyQueueItem $item): void
+    public function removeQueueItem(PartyRoom $room, User $user, PartyQueueItem $item): PartyRoom
     {
         $this->assertCanControl($room, $user);
 
         if ((int) $item->party_room_id !== (int) $room->id) {
             throw ValidationException::withMessages(['queue' => 'Invalid queue item.']);
         }
+
+        $item->loadMissing('watchable');
+        $watchable = $item->watchable;
+        $title = $watchable instanceof Movie || $watchable instanceof Episode
+            ? $this->titleForWatchable($watchable)
+            : 'Title';
+        $itemType = $watchable instanceof Episode ? 'episode' : 'movie';
 
         DB::transaction(function () use ($room, $item) {
             $wasCurrent = (int) $room->current_queue_item_id === (int) $item->id;
@@ -461,15 +506,21 @@ class PartyService
                 ]);
             }
         });
+
+        $room = $room->fresh();
+        $this->recordActivity($room, $user, 'queue_remove', [
+            'title' => $title,
+            'item_type' => $itemType,
+        ]);
+
+        return $room->fresh();
     }
 
     public function updatePlayback(PartyRoom $room, User $user, array $data): PartyRoom
     {
         $this->assertCanControl($room, $user);
 
-        $updates = [
-            'playback_updated_at' => now(),
-        ];
+        $updates = [];
 
         if (array_key_exists('is_playing', $data)) {
             $updates['is_playing'] = (bool) $data['is_playing'];
@@ -482,6 +533,7 @@ class PartyService
             $updates['position_seconds'] = max(0, (float) $data['position_seconds']);
         }
 
+        $nowPlayingItem = null;
         if (! empty($data['queue_item_id'])) {
             $item = $room->queueItems()->where('id', $data['queue_item_id'])->first();
             if (! $item) {
@@ -495,11 +547,48 @@ class PartyService
                 ? (bool) $data['is_playing']
                 : true;
             $item->update(['played_at' => now()]);
+            if ((int) $room->current_queue_item_id !== (int) $item->id) {
+                $nowPlayingItem = $item;
+            }
+        }
+
+        if (array_key_exists('episode_repeat_mode', $data)) {
+            $updates['episode_repeat_mode'] = $data['episode_repeat_mode'];
+            $updates['episode_repeat_updated_by'] = $user->id;
+            $updates['episode_repeat_updated_at'] = now();
+        }
+
+        // Repeat-only updates must not bump playback_updated_at — that would
+        // re-anchor peer clocks and cause a seek jump while playing.
+        $transportChanged = array_key_exists('is_playing', $data)
+            || array_key_exists('position_seconds', $data)
+            || ! empty($data['queue_item_id']);
+
+        if ($transportChanged) {
+            $updates['playback_updated_at'] = now();
+        }
+
+        if ($updates === []) {
+            return $room;
         }
 
         $room->update($updates);
+        $room = $room->fresh();
 
-        return $room->fresh();
+        if ($nowPlayingItem) {
+            $nowPlayingItem->loadMissing('watchable');
+            $watchable = $nowPlayingItem->watchable;
+            if ($watchable instanceof Movie || $watchable instanceof Episode) {
+                $this->recordActivity($room, $user, 'now_playing', [
+                    'title' => $this->titleForWatchable($watchable),
+                    'item_type' => $watchable instanceof Episode ? 'episode' : 'movie',
+                    'item_id' => $nowPlayingItem->id,
+                ]);
+                $room = $room->fresh();
+            }
+        }
+
+        return $room;
     }
 
     public function postChat(PartyRoom $room, User $user, string $body): PartyChatMessage
@@ -621,6 +710,11 @@ class PartyService
                 'current_queue_item_id' => $room->current_queue_item_id,
                 'is_playing' => (bool) $room->is_playing,
                 'position_seconds' => (float) $room->position_seconds,
+                'episode_repeat_mode' => $room->episode_repeat_mode ?: 'tvshow',
+                'episode_repeat_updated_by' => $room->episode_repeat_updated_by
+                    ? (int) $room->episode_repeat_updated_by
+                    : null,
+                'episode_repeat_updated_at' => optional($room->episode_repeat_updated_at)->toIso8601String(),
                 'playback_updated_at' => optional($room->playback_updated_at)->toIso8601String(),
             ],
             'current_item' => $room->currentQueueItem
@@ -656,6 +750,21 @@ class PartyService
                 'can_control' => $room->userCanControl($user),
                 'can_access_premium' => $user->canAccessPremiumContent(),
             ],
+            'activity' => $this->serializeActivity($room),
+        ];
+    }
+
+    public function serializeActivity(PartyRoom $room): ?array
+    {
+        if (! $room->activity_at || ! $room->activity_type) {
+            return null;
+        }
+
+        return [
+            'type' => $room->activity_type,
+            'by' => $room->activity_by ? (int) $room->activity_by : null,
+            'at' => optional($room->activity_at)->toIso8601String(),
+            'meta' => is_array($room->activity_meta) ? $room->activity_meta : [],
         ];
     }
 
@@ -798,5 +907,31 @@ class PartyService
             'episode' => Episode::findOrFail($id),
             default => throw ValidationException::withMessages(['type' => 'Type must be movie or episode.']),
         };
+    }
+
+    private function titleForWatchable(Movie|Episode $watchable): string
+    {
+        if ($watchable instanceof Movie) {
+            return (string) ($watchable->title ?? $watchable->original_name ?? 'Movie');
+        }
+
+        $watchable->loadMissing(['season.tvshow']);
+        $tvshow = $watchable->season?->tvshow;
+        $seasonNumber = $watchable->season?->season_number;
+
+        return trim(($tvshow?->name ? $tvshow->name.' — ' : '').'S'
+            .($seasonNumber ?? '?')
+            .'E'.$watchable->episode_number
+            .' '.$watchable->name);
+    }
+
+    private function recordActivity(PartyRoom $room, User $user, string $type, array $meta = []): void
+    {
+        $room->forceFill([
+            'activity_type' => $type,
+            'activity_by' => $user->id,
+            'activity_at' => now(),
+            'activity_meta' => $meta,
+        ])->save();
     }
 }

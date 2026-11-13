@@ -34,6 +34,8 @@ type PlayMoviePlayerProps = {
   encFilePath: string;
   autoPlay?: boolean;
   onError?: (error: Error) => void;
+  /** Fired when playback reaches the end (e.g. party playlist advance). */
+  onComplete?: () => void;
   className?: string;
   imgBaseUrl?: string;
   /** When set, this player follows / drives a Party Theater room */
@@ -45,6 +47,7 @@ export function PlayMoviePlayer({
   encFilePath,
   autoPlay = false,
   onError,
+  onComplete,
   className = '',
   imgBaseUrl = '',
   partySync = null,
@@ -129,7 +132,14 @@ export function PlayMoviePlayer({
   ]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState('default');
   const [currentEncFilePath, setCurrentEncFilePath] = useState(encFilePath);
-  const { audioMode, setAudioMode, audioModeLabel, audioModeOptions } = useDialogueAudio(videoRef, {
+  const {
+    audioMode,
+    setAudioMode,
+    audioModeLabel,
+    audioModeOptions,
+    normalizeVolume,
+    setNormalizeVolume,
+  } = useDialogueAudio(videoRef, {
     sourceKey: currentEncFilePath,
     active: Boolean(canAccessMovie && currentEncFilePath),
   });
@@ -517,6 +527,8 @@ export function PlayMoviePlayer({
           console.error('Error recording play:', error);
         }
       }
+
+      onComplete?.();
     };
 
     video.addEventListener('play', handlePlay);
@@ -534,7 +546,7 @@ export function PlayMoviePlayer({
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [movie?.id, isAuthenticated, partySync?.enabled]);
+  }, [movie?.id, isAuthenticated, partySync?.enabled, onComplete]);
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (controlsLockedByParty) return;
@@ -1897,6 +1909,17 @@ export function PlayMoviePlayer({
                           style={{ width: '180px' }}
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <div
+                            className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNormalizeVolume(!normalizeVolume);
+                            }}
+                          >
+                            <span className="flex-1 text-sm">Normalize volume</span>
+                            {normalizeVolume && <Check className="w-4 h-4 text-rose-500" />}
+                          </div>
+                          <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
                           {audioModeOptions.map((option) => (
                             <div
                               key={option.id}
