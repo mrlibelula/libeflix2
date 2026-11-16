@@ -3182,12 +3182,13 @@ export function PlayEpisodeDialog({
               // But don't immediately hide controls either
             }}
           >
-            {isLoading ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-y-4">
+            {/* Overlay instead of swapping out the player: unmounting <video> breaks PiP */}
+            {isLoading && (
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-white gap-y-4 bg-black">
                 <LoaderCircle className="h-12 w-12 animate-spin spinner-rose" />
                 <p>Loading episode...</p>
               </div>
-            ) : (
+            )}
               <>
                 {/* Video element */}
                 <div className="w-full h-full bg-white dark:bg-black overflow-hidden">
@@ -4005,7 +4006,6 @@ export function PlayEpisodeDialog({
                   </div>
                 </div>
               </>
-            )}
           </div>
           
           {/* Mobile scrollable content container (regular mode only — party/embedded matches desktop, no episode list) */}
