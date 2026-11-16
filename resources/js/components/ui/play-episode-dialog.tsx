@@ -182,11 +182,6 @@ export function PlayEpisodeDialog({
   const [isHoveringDialog, setIsHoveringDialog] = useState(false);
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
-  /** Remember PiP across episode/audio source remounts so we can exit cleanly then restore */
-  const pipRestorePendingRef = useRef(false);
-  const dialogOpenRef = useRef(dialogOpen);
-  dialogOpenRef.current = dialogOpen;
-
   const partyBridge = usePartyPlaybackBridge({
     videoRef,
     sync: partySync,
@@ -1290,37 +1285,10 @@ export function PlayEpisodeDialog({
 
   const isPartyTheater = Boolean(partySync?.enabled);
 
-  /**
-   * Remounting <video key={encFilePath}> while still in PiP leaves a black PiP window
-   * (audio keeps playing, page + PiP show no frames). Exit PiP first, then restore after load.
-   */
-  const exitPipBeforeSourceChange = async (): Promise<void> => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (document.pictureInPictureElement === video) {
-      pipRestorePendingRef.current = true;
-      sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
-      setIsPipActive(false);
-      try {
-        await document.exitPictureInPicture();
-      } catch {
-        // Browser may already have exited PiP during teardown
-      }
-    }
-  };
-
-  const runAfterPipExit = (action: () => void) => {
-    void (async () => {
-      await exitPipBeforeSourceChange();
-      action();
-    })();
-  };
-
   // Enhanced navigation to previous episode with smart episode finding
   const handlePreviousEpisode = () => {
     if (hasPreviousEpisode) {
-      runAfterPipExit(() => onPreviousEpisode());
+      onPreviousEpisode();
     } else if (isPartyTheater) {
       // Party theater navigates the room playlist only — never hunt TV-show episodes
       return;
@@ -1329,14 +1297,14 @@ export function PlayEpisodeDialog({
       setShowSkippingEpisodesNotification(true);
       setTimeout(() => {
         setShowSkippingEpisodesNotification(false);
-        runAfterPipExit(() => onFindPreviousAvailableEpisode());
+        onFindPreviousAvailableEpisode();
       }, 1500);
     } else if (repeatSeason || repeatTvshow) {
       // Fallback: If no previous episode but repeat mode is enabled, go to last episode
       if (repeatSeason && typeof onLastEpisodeOfSeason === 'function') {
-        runAfterPipExit(() => onLastEpisodeOfSeason());
+        onLastEpisodeOfSeason();
       } else if (repeatTvshow && typeof onLastEpisodeOfTVShow === 'function') {
-        runAfterPipExit(() => onLastEpisodeOfTVShow());
+        onLastEpisodeOfTVShow();
       }
     }
   };
@@ -1344,14 +1312,14 @@ export function PlayEpisodeDialog({
   // Enhanced navigation to next episode with smart episode finding and repeat logic
   const handleNextEpisode = () => {
     if (hasNextEpisode) {
-      runAfterPipExit(() => onNextEpisode());
+      onNextEpisode();
     } else if (isPartyTheater) {
       // Party: wrap playlist when season/show repeat is on; otherwise stay put
       if (repeatSeason || repeatTvshow) {
         setShowLoopNotification(true);
         setTimeout(() => {
           setShowLoopNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfTVShow());
+          onFirstEpisodeOfTVShow();
         }, 1500);
       }
     } else if (typeof onFindNextAvailableEpisode === 'function') {
@@ -1360,7 +1328,7 @@ export function PlayEpisodeDialog({
       setTimeout(() => {
         setShowSkippingEpisodesNotification(false);
         // Try to find next available episode (skipping missing ones)
-        runAfterPipExit(() => onFindNextAvailableEpisode());
+        onFindNextAvailableEpisode();
       }, 1500);
     } else if (repeatSeason || repeatTvshow) {
       // Fallback: No next episode found, handle according to repeat mode
@@ -1369,14 +1337,14 @@ export function PlayEpisodeDialog({
         setShowLoopNotification(true);
         setTimeout(() => {
           setShowLoopNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfSeason());
+          onFirstEpisodeOfSeason();
         }, 1500);
       } else if (repeatTvshow) {
         // Loop back to first episode of entire TV show
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfTVShow());
+          onFirstEpisodeOfTVShow();
         }, 1500);
       }
     }
@@ -2141,12 +2109,10 @@ export function PlayEpisodeDialog({
 
         // Call our custom handler first
         if (hasNextEpisode) {
-          // Exit PiP immediately so remount won't leave a black PiP window
-          void exitPipBeforeSourceChange();
           setShowNextEpisodeNotification(true);
           setTimeout(() => {
             setShowNextEpisodeNotification(false);
-            runAfterPipExit(() => onNextEpisode());
+            onNextEpisode();
           }, 1500);
           
           // Prevent other handlers from firing
@@ -2162,31 +2128,40 @@ export function PlayEpisodeDialog({
     }
   }, [hasNextEpisode, onNextEpisode, partySync?.enabled]);
   
-  // Add an initialization effect when the dialog first opens
+  // Access check on open / episode change.
+  // Do NOT set isAccessChecked(false) while already open — that clears video src and exits PiP.
   useEffect(() => {
-    // This useEffect runs when the dialog opens
-    if (dialogOpen && episode?.encFilePath) {
+    if (!dialogOpen) {
       setIsAccessChecked(false);
-      setShowPremiumNotice(false);
-      setAuthError(null);
-      setError(null);
-      
-      // Check content access before attempting to load video
-      checkContentAccess()
-        .then((hasAccess) => {
-          if (!hasAccess) {
-            setIsLoading(false);
-          }
-        })
-        .catch((error) => {
-          console.error('Access check failed:', error);
-          // Don't set error state for access check failures
-          // Let the video element handle loading errors
-        })
-        .finally(() => {
-          setIsAccessChecked(true);
-        });
+      return;
     }
+
+    if (!episode?.encFilePath) return;
+
+    let cancelled = false;
+    setShowPremiumNotice(false);
+    setAuthError(null);
+    setError(null);
+
+    checkContentAccess()
+      .then((hasAccess) => {
+        if (cancelled) return;
+        if (!hasAccess) {
+          setIsLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Access check failed:', error);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAccessChecked(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [dialogOpen, episode?.name, episode?.encFilePath]);
 
   // Enhanced handleVideoEnd function to handle missing episodes and proper repeat behavior
@@ -2208,17 +2183,6 @@ export function PlayEpisodeDialog({
       sessionStorage.removeItem(endEventKey);
     }, 2000);
     
-    // Exit PiP before any episode remount; restore after the new source is ready
-    const willChangeEpisode = !repeatOne && (
-      hasNextEpisode ||
-      repeatSeason ||
-      repeatTvshow ||
-      typeof onFindNextAvailableEpisode === 'function'
-    );
-    if (willChangeEpisode) {
-      void exitPipBeforeSourceChange();
-    }
-    
     // Party theater: advance / loop the room playlist — never hunt the TV series catalog
     if (isPartyTheater) {
       if (repeatOne) {
@@ -2233,7 +2197,7 @@ export function PlayEpisodeDialog({
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onNextEpisode());
+          onNextEpisode();
         }, 1500);
         return;
       }
@@ -2242,7 +2206,7 @@ export function PlayEpisodeDialog({
         setShowLoopNotification(true);
         setTimeout(() => {
           setShowLoopNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfTVShow());
+          onFirstEpisodeOfTVShow();
         }, 2000);
         return;
       }
@@ -2266,14 +2230,14 @@ export function PlayEpisodeDialog({
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onNextEpisode());
+          onNextEpisode();
         }, 1500);
       } else {
         // No more episodes in current season - loop back to first episode of current season
         setShowLoopNotification(true);
         setTimeout(() => {
           setShowLoopNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfSeason());
+          onFirstEpisodeOfSeason();
         }, 2000);
       }
     } else if (repeatTvshow) {
@@ -2283,21 +2247,21 @@ export function PlayEpisodeDialog({
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onNextEpisode());
+          onNextEpisode();
         }, 1500);
       } else if (typeof onFindNextAvailableEpisode === 'function') {
         // No more episodes in current season - try to find next available episode in next seasons
         setShowSkippingEpisodesNotification(true);
         setTimeout(() => {
           setShowSkippingEpisodesNotification(false);
-          runAfterPipExit(() => onFindNextAvailableEpisode());
+          onFindNextAvailableEpisode();
         }, 1500);
       } else {
         // No next seasons or episodes found - loop back to first episode of entire TV show
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onFirstEpisodeOfTVShow());
+          onFirstEpisodeOfTVShow();
         }, 1500);
       }
     } else {
@@ -2307,14 +2271,14 @@ export function PlayEpisodeDialog({
         setShowNextEpisodeNotification(true);
         setTimeout(() => {
           setShowNextEpisodeNotification(false);
-          runAfterPipExit(() => onNextEpisode());
+          onNextEpisode();
         }, 1500);
       } else if (typeof onFindNextAvailableEpisode === 'function') {
         // No more episodes in current season - try to find next available episode in next seasons
         setShowSkippingEpisodesNotification(true);
         setTimeout(() => {
           setShowSkippingEpisodesNotification(false);
-          runAfterPipExit(() => onFindNextAvailableEpisode());
+          onFindNextAvailableEpisode();
         }, 1500);
       } else {
         // No next episodes found anywhere - stop playback
@@ -2596,34 +2560,34 @@ export function PlayEpisodeDialog({
       ...track,
       selected: track.id === id
     }));
-
-    void (async () => {
-      // Audio switches remount <video> via key={currentEncFilePath}; exit PiP first
-      await exitPipBeforeSourceChange();
-
-      setAudioTracks(updatedTracks);
-      setCurrentAudioTrack(id);
-      setCurrentEncFilePath(selectedTrack.encFilePath);
-      saveAudioPreference(id);
-
-      // Wait for video to load new source, then restore time and play state
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.currentTime = currentTime;
-
-          if (wasPlaying) {
-            videoRef.current.play().catch(err => {
-              console.error('Error resuming playback after language switch:', err);
-            });
-          }
+    
+    setAudioTracks(updatedTracks);
+    
+    // Update current audio track and file path (same <video> element — keeps PiP alive)
+    setCurrentAudioTrack(id);
+    setCurrentEncFilePath(selectedTrack.encFilePath);
+    
+    // Save the user's audio preference
+    saveAudioPreference(id);
+    
+    // Wait for video to load new source, then restore time and play state
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = currentTime;
+        
+        if (wasPlaying) {
+          videoRef.current.play().catch(err => {
+            console.error('Error resuming playback after language switch:', err);
+          });
         }
-      }, 100);
-
-      setTimeout(() => {
-        setShowContextMenu(false);
-        setActiveSection('none');
-      }, 200);
-    })();
+      }
+    }, 100);
+    
+    // Close menu after selection
+    setTimeout(() => {
+      setShowContextMenu(false);
+      setActiveSection('none');
+    }, 200);
   };
 
   // Function to handle sharing the episode
@@ -2648,110 +2612,67 @@ export function PlayEpisodeDialog({
     await share(shareData);
   };
 
-  // Restore PiP after episode/audio source remount once the new video has frames
+  /**
+   * Keep the same <video> element across episode/audio changes so PiP stays open.
+   * Remounting via key= destroys the PiP element (black window). Exit+re-enter fails
+   * because requestPictureInPicture() needs a user gesture. React updates src in place;
+   * we force play after load so PiP keeps painting frames.
+   */
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const currentSubtitleIdRef = useRef(currentSubtitleId);
+  currentSubtitleIdRef.current = currentSubtitleId;
+
   useEffect(() => {
-    if (!dialogOpen) {
-      pipRestorePendingRef.current = false;
-      sessionStorage.removeItem('pipActiveBeforeEpisodeChange');
-      return;
-    }
-
-    if (!isPipSupported) return;
-
-    const shouldRestore =
-      pipRestorePendingRef.current ||
-      sessionStorage.getItem('pipActiveBeforeEpisodeChange') === 'true';
-
-    if (!shouldRestore) return;
+    if (!dialogOpen || !canAccessEpisode || !isAccessChecked || !currentEncFilePath) return;
 
     const video = videoRef.current;
     if (!video) return;
 
-    let cancelled = false;
-    let restoreTimeout: ReturnType<typeof setTimeout> | null = null;
-    let giveUpTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const clearRestoreFlag = () => {
-      pipRestorePendingRef.current = false;
-      sessionStorage.removeItem('pipActiveBeforeEpisodeChange');
-    };
-
-    const restorePip = async () => {
-      if (cancelled || !videoRef.current) return;
-
-      if (document.pictureInPictureElement === videoRef.current) {
-        clearRestoreFlag();
-        setIsPipActive(true);
-        return;
-      }
-
-      try {
-        // Browsers generally require the element to be playing before entering PiP
-        if (videoRef.current.paused) {
-          await videoRef.current.play().catch(() => {});
-        }
-
-        await videoRef.current.requestPictureInPicture();
-        clearRestoreFlag();
-        setIsPipActive(true);
-
-        if (currentSubtitleId !== 'off') {
-          setTimeout(() => {
-            applySubtitleToVideo(currentSubtitleId);
-          }, 200);
-        }
-      } catch (err) {
-        console.log('Failed to restore PiP mode:', err);
-        // Keep the flag so a later ready event / retry can still restore
-      }
-    };
-
-    const scheduleRestore = () => {
-      if (restoreTimeout) clearTimeout(restoreTimeout);
-      // Brief delay so the first decoded frame can paint before PiP grabs the surface
-      restoreTimeout = setTimeout(() => {
-        void restorePip();
-      }, 150);
-    };
-
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      scheduleRestore();
-    } else {
-      video.addEventListener('loadeddata', scheduleRestore);
-      video.addEventListener('playing', scheduleRestore);
+    setIsLoading(true);
+    setProgress(0);
+    setCurrentTime(0);
+    // Episode ended while in PiP leaves isPlaying=false; keep UI/play state in sync for the next ep
+    if (document.pictureInPictureElement === video) {
+      setIsPlaying(true);
+      isPlayingRef.current = true;
     }
 
-    // Don't leave a stale restore flag if the new source never becomes ready
-    giveUpTimeout = setTimeout(() => {
-      if (pipRestorePendingRef.current || sessionStorage.getItem('pipActiveBeforeEpisodeChange') === 'true') {
-        if (document.pictureInPictureElement !== videoRef.current) {
-          clearRestoreFlag();
-        }
+    let settled = false;
+    const onReady = () => {
+      if (settled) return;
+      settled = true;
+
+      const stayInPip = document.pictureInPictureElement === video;
+      // Always resume when in PiP so the floating window doesn't stay on a blank/paused frame
+      if (isPlayingRef.current || stayInPip || !video.paused) {
+        video.play().catch(() => {});
       }
-    }, 8000);
+      setIsLoading(false);
+      setIsPipActive(stayInPip);
+      setIsPlaying(isPlayingRef.current || stayInPip || !video.paused);
 
-    return () => {
-      cancelled = true;
-      if (restoreTimeout) clearTimeout(restoreTimeout);
-      if (giveUpTimeout) clearTimeout(giveUpTimeout);
-      video.removeEventListener('loadeddata', scheduleRestore);
-      video.removeEventListener('playing', scheduleRestore);
-
-      // Source may remount again (e.g. preferred audio after default). Exit PiP and
-      // keep the restore pending so the next element can re-enter cleanly.
-      // Use dialogOpenRef so closing the dialog does not re-arm restore after cleanup.
-      if (
-        dialogOpenRef.current &&
-        document.pictureInPictureElement &&
-        (document.pictureInPictureElement === video ||
-          document.pictureInPictureElement === videoRef.current)
-      ) {
-        pipRestorePendingRef.current = true;
-        sessionStorage.setItem('pipActiveBeforeEpisodeChange', 'true');
-        document.exitPictureInPicture().catch(() => {});
+      const subtitleId = currentSubtitleIdRef.current;
+      if (subtitleId !== 'off') {
+        setTimeout(() => applySubtitleToVideo(subtitleId), 50);
       }
     };
-  }, [currentEncFilePath, dialogOpen, isPipSupported, currentSubtitleId]);
+
+    video.addEventListener('loadeddata', onReady);
+
+    // If the new source is already buffered enough (fast cache / same-tick update)
+    if (
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      (video.currentSrc.includes(encodeURIComponent(currentEncFilePath)) ||
+        video.currentSrc.includes(currentEncFilePath))
+    ) {
+      onReady();
+    }
+
+    return () => {
+      video.removeEventListener('loadeddata', onReady);
+    };
+  }, [currentEncFilePath, dialogOpen, canAccessEpisode, isAccessChecked]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -2954,7 +2875,7 @@ export function PlayEpisodeDialog({
     setShowEpisodesMenu(false);
     setActiveSeasonNumber(null);
     if (onEpisodeSelect) {
-      runAfterPipExit(() => onEpisodeSelect(seasonNumber, episodeNumber));
+      onEpisodeSelect(seasonNumber, episodeNumber);
     }
   };
 
@@ -3286,8 +3207,7 @@ export function PlayEpisodeDialog({
                     <>
                       <video 
                         ref={videoRef}
-                        key={currentEncFilePath}
-                        src={canAccessEpisode && isAccessChecked ? `${route('tvshow.episode.serve', { encFilePath: currentEncFilePath, disk: 'tvshows' })}` : undefined}
+                        src={canAccessEpisode && isAccessChecked && currentEncFilePath ? `${route('tvshow.episode.serve', { encFilePath: currentEncFilePath, disk: 'tvshows' })}` : undefined}
                         className={`w-full h-full ${preserveNativeAspect ? 'object-contain' : 'object-cover'}`}
                         style={{
                           ...(isFullscreen || preserveNativeAspect ? { objectFit: 'contain' } : {}),
@@ -4266,7 +4186,7 @@ export function PlayEpisodeDialog({
                           key={`mobile-${ep.id}`}
                           onClick={() => {
                             if (isAvailable && onEpisodeSelect) {
-                              runAfterPipExit(() => onEpisodeSelect(mobileSeasonNumber, ep.episode_number));
+                              onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
                             }
                           }}
                           className={`flex items-start gap-3 px-4 py-3 ${
