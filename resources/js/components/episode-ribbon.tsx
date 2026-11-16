@@ -3,6 +3,7 @@ import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, St
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { EpisodeCard } from "@/components/ui/episode-card";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+import type { ServerPaginationProps } from "@/types/history";
 
 // Types
 type SortField = 'name' | 'episode_number' | 'season_number' | 'rating' | 'added';
@@ -33,6 +34,8 @@ interface EpisodeRibbonProps {
   showCheckIcon?: boolean;
   /** Override carousel page size (default 30). */
   itemsPerPage?: number;
+  /** Lazy server-side pagination — `episodes` is the current page only. */
+  serverPagination?: ServerPaginationProps;
 }
 
 // Configuration for pagination
@@ -48,11 +51,14 @@ export function EpisodeRibbon({
   onRemoveFromHistory,
   showCheckIcon = false,
   itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
+  serverPagination,
 }: EpisodeRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [clientPage, setClientPage] = useState(1);
+  const isServerPaged = !!serverPagination;
+  const isLoading = serverPagination?.isLoading ?? false;
   
   // Ref for the ribbon container to control scroll position
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
@@ -64,14 +70,16 @@ export function EpisodeRibbon({
     <span className="-mb-[0.1rem]" style={{ fontFamily: 'sans-serif', fontWeight: 'bold', fontSize: '1.2em' }}>S</span>
   );
 
-  // Sort options configuration
-  const sortOptions: SortOption[] = [
-    { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
-    { field: 'season_number', direction: 'asc', icon: SIcon, label: 'Season' },
-    { field: 'episode_number', direction: 'asc', icon: HashIcon, label: 'Episode Number' },
-    { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
-    { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
-  ];
+  // Sort options configuration (hidden in server-pagination mode)
+  const sortOptions: SortOption[] = isServerPaged
+    ? []
+    : [
+        { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
+        { field: 'season_number', direction: 'asc', icon: SIcon, label: 'Season' },
+        { field: 'episode_number', direction: 'asc', icon: HashIcon, label: 'Episode Number' },
+        { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
+        { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
+      ];
 
   // Helper function to get initial sidebar width from cookie
   const getInitialSidebarWidth = () => {
@@ -152,20 +160,23 @@ export function EpisodeRibbon({
     : episodes;
 
   // Determine if we should use pagination
-  const shouldPaginate = processedEpisodes.length > itemsPerPage;
-  
-  // Calculate pagination values
-  const totalPages = shouldPaginate ? Math.ceil(processedEpisodes.length / itemsPerPage) : 1;
-  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
-  const endIndex = shouldPaginate ? startIndex + itemsPerPage : processedEpisodes.length;
-  
-  // Get the currently visible episodes
-  const visibleEpisodes = processedEpisodes.slice(startIndex, endIndex);
+  const currentPage = isServerPaged ? serverPagination.page : clientPage;
+  const totalPages = isServerPaged
+    ? Math.max(1, serverPagination.lastPage)
+    : processedEpisodes.length > itemsPerPage
+      ? Math.ceil(processedEpisodes.length / itemsPerPage)
+      : 1;
+  const shouldPaginate = totalPages > 1;
+  const startIndex = isServerPaged ? 0 : (currentPage - 1) * itemsPerPage;
+  const endIndex = isServerPaged ? processedEpisodes.length : startIndex + itemsPerPage;
+  const visibleEpisodes = isServerPaged ? processedEpisodes : processedEpisodes.slice(startIndex, endIndex);
 
-  // Reset to page 1 when episodes change or sort changes
+  // Reset to page 1 when episodes change or sort changes (client pagination only)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [processedEpisodes.length, currentSort]);
+    if (!isServerPaged) {
+      setClientPage(1);
+    }
+  }, [processedEpisodes.length, currentSort, isServerPaged]);
 
   // Reset ribbon scroll position when page changes
   useEffect(() => {
@@ -216,24 +227,33 @@ export function EpisodeRibbon({
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(prev => prev - 1);
-      restoreFocusToRibbon();
+    if (currentPage <= 1 || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(currentPage - 1);
+    } else {
+      setClientPage(prev => prev - 1);
     }
+    restoreFocusToRibbon();
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(prev => prev + 1);
-      restoreFocusToRibbon();
+    if (currentPage >= totalPages || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(currentPage + 1);
+    } else {
+      setClientPage(prev => prev + 1);
     }
+    restoreFocusToRibbon();
   };
 
   const handlePageJump = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      restoreFocusToRibbon();
+    if (page < 1 || page > totalPages || page === currentPage || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(page);
+    } else {
+      setClientPage(page);
     }
+    restoreFocusToRibbon();
   };
 
   // Helper functions for empty state content
@@ -436,7 +456,7 @@ export function EpisodeRibbon({
                   {/* Previous Button */}
                   <button
                     onClick={handlePreviousPage}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || isLoading}
                     className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
                       currentPage === 1
                         ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
@@ -473,7 +493,7 @@ export function EpisodeRibbon({
                   {/* Next Button */}
                   <button
                     onClick={handleNextPage}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || isLoading}
                     className={`flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-md transition-colors duration-200 ${
                       currentPage === totalPages
                         ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'

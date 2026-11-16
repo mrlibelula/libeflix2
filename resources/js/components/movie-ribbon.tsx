@@ -3,6 +3,7 @@ import { ChevronDownIcon, ArrowUpIcon, ArrowDownIcon, TypeIcon, CalendarIcon, St
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+import type { ServerPaginationProps } from "@/types/history";
 
 // Interface for sidebar state event
 interface SidebarStateDetail {
@@ -23,6 +24,8 @@ interface MovieRibbonProps {
   hideSortOptions?: SortField[];
   /** Override carousel page size (default 30). */
   itemsPerPage?: number;
+  /** Lazy server-side pagination — `movies` is the current page only. */
+  serverPagination?: ServerPaginationProps;
 }
 
 type SortField = 'name' | 'year' | 'rating' | 'added';
@@ -49,11 +52,14 @@ export function MovieRibbon({
   onRemoveFromHistory,
   hideSortOptions = [],
   itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
+  serverPagination,
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [clientPage, setClientPage] = useState(1);
+  const isServerPaged = !!serverPagination;
+  const isLoading = serverPagination?.isLoading ?? false;
   
   // Ref for the ribbon container to control scroll position
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
@@ -68,8 +74,10 @@ export function MovieRibbon({
     { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
   ];
 
-  // Filter out hidden sort options
-  const sortOptions = allSortOptions.filter(option => !hideSortOptions.includes(option.field));
+  // Filter out hidden sort options (disabled entirely in server-pagination mode)
+  const sortOptions = isServerPaged
+    ? []
+    : allSortOptions.filter(option => !hideSortOptions.includes(option.field));
 
   // Helper function to get initial sidebar width from cookie
   const getInitialSidebarWidth = () => {
@@ -163,21 +171,23 @@ export function MovieRibbon({
     ? sortMovies(shuffledMovies, currentSort.field, currentSort.direction)
     : shuffledMovies;
 
-  // Determine if we should use pagination
-  const shouldPaginate = processedMovies.length > itemsPerPage;
-  
-  // Calculate pagination values
-  const totalPages = shouldPaginate ? Math.ceil(processedMovies.length / itemsPerPage) : 1;
-  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
-  const endIndex = shouldPaginate ? startIndex + itemsPerPage : processedMovies.length;
-  
-  // Get the currently visible movies
-  const visibleMovies = processedMovies.slice(startIndex, endIndex);
+  const currentPage = isServerPaged ? serverPagination.page : clientPage;
+  const totalPages = isServerPaged
+    ? Math.max(1, serverPagination.lastPage)
+    : processedMovies.length > itemsPerPage
+      ? Math.ceil(processedMovies.length / itemsPerPage)
+      : 1;
+  const shouldPaginate = totalPages > 1;
+  const startIndex = isServerPaged ? 0 : (currentPage - 1) * itemsPerPage;
+  const endIndex = isServerPaged ? processedMovies.length : startIndex + itemsPerPage;
+  const visibleMovies = isServerPaged ? processedMovies : processedMovies.slice(startIndex, endIndex);
 
-  // Reset to page 1 when movies change or sort changes
+  // Reset to page 1 when movies change or sort changes (client pagination only)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [processedMovies.length, currentSort]);
+    if (!isServerPaged) {
+      setClientPage(1);
+    }
+  }, [processedMovies.length, currentSort, isServerPaged]);
 
   // Reset ribbon scroll position when page changes
   useEffect(() => {
@@ -228,24 +238,33 @@ export function MovieRibbon({
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(prev => prev - 1);
-      restoreFocusToRibbon();
+    if (currentPage <= 1 || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(currentPage - 1);
+    } else {
+      setClientPage(prev => prev - 1);
     }
+    restoreFocusToRibbon();
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(prev => prev + 1);
-      restoreFocusToRibbon();
+    if (currentPage >= totalPages || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(currentPage + 1);
+    } else {
+      setClientPage(prev => prev + 1);
     }
+    restoreFocusToRibbon();
   };
 
   const handlePageJump = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      restoreFocusToRibbon();
+    if (page < 1 || page > totalPages || page === currentPage || isLoading) return;
+    if (isServerPaged) {
+      serverPagination.onPageChange(page);
+    } else {
+      setClientPage(page);
     }
+    restoreFocusToRibbon();
   };
 
   // Helper functions for empty state content
@@ -448,9 +467,9 @@ export function MovieRibbon({
                   {/* Previous Button */}
                   <button
                     onClick={handlePreviousPage}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || isLoading}
                     className={`flex items-center justify-center w-8 h-8 md:w-9_ md:h-9_ rounded-md transition-colors duration-200 ${
-                      currentPage === 1
+                      currentPage === 1 || isLoading
                         ? 'bg-zinc-100_ dark:bg-zinc-800_ text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
                         : 'bg-zinc-100_ dark:bg-zinc-800_ text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
                     }`}
@@ -485,9 +504,9 @@ export function MovieRibbon({
                   {/* Next Button */}
                   <button
                     onClick={handleNextPage}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || isLoading}
                     className={`flex items-center justify-center w-8 h-8 md:w-9_ md:h-9_ rounded-md transition-colors duration-200 ${
-                      currentPage === totalPages
+                      currentPage === totalPages || isLoading
                         ? 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
                         : 'bg-zinc-100_ _dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200_ dark:hover:bg-zinc-700_ hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer'
                     }`}

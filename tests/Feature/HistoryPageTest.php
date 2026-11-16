@@ -56,23 +56,16 @@ test('guests are redirected from history page', function () {
     $this->get(route('history.index'))->assertRedirect(route('login'));
 });
 
-test('authenticated user sees history payload with movies episodes continue and rewatched', function () {
+test('authenticated user sees paginated history payload with movies episodes continue and rewatched', function () {
     $user = User::factory()->create();
     $movieInProgress = createHistoryMovie('Continue Movie');
     $finishedMovie = createHistoryMovie('Finished Movie');
     $episode = createHistoryEpisode('Continue Episode');
     $rewatchedMovie = createHistoryMovie('Rewatched Movie');
 
-    // Continue watching movie (~25%)
     ViewService::updateProgress($movieInProgress, $user, 900, 3600);
-
-    // Finished / completed movie (above view threshold)
     ViewService::updateProgress($finishedMovie, $user, 3000, 3600);
-
-    // Continue watching episode (~40%)
     ViewService::updateProgress($episode, $user, 1000, 2520);
-
-    // Rewatched movie with progress + 2 plays
     ViewService::updateProgress($rewatchedMovie, $user, 3500, 3600);
     ViewService::recordPlay($rewatchedMovie, $user, 3500, 3600);
     ViewService::recordPlay($rewatchedMovie, $user, 3400, 3600);
@@ -86,24 +79,26 @@ test('authenticated user sees history payload with movies episodes continue and 
             ->where('stats.movies', 3)
             ->where('stats.episodes', 1)
             ->where('stats.total_plays', 2)
-            ->has('continueWatching')
-            ->has('historyMovies', 3)
-            ->has('historyEpisodes', 1)
-            ->has('mostRewatched', 1)
-            ->where('mostRewatched.0.id', $rewatchedMovie->id)
-            ->where('mostRewatched.0.plays_count', 2)
-            ->where('mostRewatched.0.history_type', 'movie')
+            ->has('continueWatching.items')
+            ->has('historyMovies.items', 3)
+            ->has('historyEpisodes.items', 1)
+            ->where('historyMovies.total', 3)
+            ->where('historyEpisodes.total', 1)
+            ->where('mostRewatched.total', 1)
+            ->where('mostRewatched.items.0.id', $rewatchedMovie->id)
+            ->where('mostRewatched.items.0.plays_count', 2)
             ->has('imgBaseUrl')
+            ->has('pageSize')
         );
 
     $history = HistoryService::getHistory($user);
 
-    $continueIds = collect($history['continueWatching'])->pluck('id')->all();
+    $continueIds = collect($history['continueWatching']['items'])->pluck('id')->all();
     expect($continueIds)->toContain($movieInProgress->id);
     expect($continueIds)->toContain($episode->id);
     expect($continueIds)->not->toContain($finishedMovie->id);
 
-    $finishedItem = collect($history['movies'])->firstWhere('id', $finishedMovie->id);
+    $finishedItem = collect($history['movies']['items'])->firstWhere('id', $finishedMovie->id);
     expect($finishedItem['completed'])->toBeTrue();
     expect($finishedItem['progress_percentage'])->toBeGreaterThan(70);
 });
@@ -121,7 +116,7 @@ test('resetting progress removes title from history page', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('history')
             ->where('stats.titles', 1)
-            ->has('historyMovies', 1)
+            ->where('historyMovies.total', 1)
         );
 
     $this->actingAs($user)
@@ -139,9 +134,9 @@ test('resetting progress removes title from history page', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('history')
             ->where('stats.titles', 0)
-            ->has('historyMovies', 0)
-            ->has('continueWatching', 0)
-            ->has('mostRewatched', 0)
+            ->where('historyMovies.total', 0)
+            ->where('continueWatching.total', 0)
+            ->where('mostRewatched.total', 0)
         );
 });
 
@@ -159,9 +154,10 @@ test('most rewatched excludes titles with fewer than two plays', function () {
 
     $history = HistoryService::getHistory($user);
 
-    expect($history['mostRewatched'])->toHaveCount(1);
-    expect($history['mostRewatched'][0]['id'])->toBe($twice->id);
-    expect($history['mostRewatched'][0]['plays_count'])->toBe(2);
+    expect($history['mostRewatched']['total'])->toBe(1);
+    expect($history['mostRewatched']['items'])->toHaveCount(1);
+    expect($history['mostRewatched']['items'][0]['id'])->toBe($twice->id);
+    expect($history['mostRewatched']['items'][0]['plays_count'])->toBe(2);
     expect(Play::where('user_id', $user->id)->count())->toBe(3);
 });
 
@@ -171,48 +167,66 @@ test('continue watching excludes completed and near-finished progress', function
     $nearEnd = createHistoryMovie('Near End');
     $done = createHistoryMovie('Done');
 
-    ViewService::updateProgress($mid, $user, 1200, 3600); // 33%
-    ViewService::updateProgress($nearEnd, $user, 3300, 3600); // 91.6%
-    ViewService::updateProgress($done, $user, 3000, 3600); // completed via view threshold
+    ViewService::updateProgress($mid, $user, 1200, 3600);
+    ViewService::updateProgress($nearEnd, $user, 3300, 3600);
+    ViewService::updateProgress($done, $user, 3000, 3600);
 
     $history = HistoryService::getHistory($user);
-    $continueIds = collect($history['continueWatching'])->pluck('id')->all();
+    $continueIds = collect($history['continueWatching']['items'])->pluck('id')->all();
 
     expect($continueIds)->toContain($mid->id);
     expect($continueIds)->not->toContain($nearEnd->id);
     expect($continueIds)->not->toContain($done->id);
 });
 
-test('history sections are capped while stats reflect full totals', function () {
+test('history section API lazy-loads later pages with correct totals', function () {
     $user = User::factory()->create();
+    $perPage = HistoryService::PAGE_SIZE;
+    $totalEpisodes = $perPage + 5;
 
-    $episodeLimit = HistoryService::EPISODES_LIMIT;
-    $continueLimit = HistoryService::CONTINUE_WATCHING_LIMIT;
-
-    // Create more episodes than the continue / episodes caps
-    $totalEpisodes = $episodeLimit + 5;
     for ($i = 0; $i < $totalEpisodes; $i++) {
         $episode = createHistoryEpisode("Episode {$i}");
-        // Stagger last_watched via progress updates (~40% incomplete)
         ViewService::updateProgress($episode, $user, 1000, 2520);
     }
 
-    $history = HistoryService::getHistory($user);
+    $this->actingAs($user);
 
+    $page1 = $this->getJson(route('api.history.section', [
+        'section' => 'episodes',
+        'page' => 1,
+        'per_page' => $perPage,
+    ]));
+
+    $page1->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('total', $totalEpisodes)
+        ->assertJsonPath('page', 1)
+        ->assertJsonPath('last_page', 2)
+        ->assertJsonCount($perPage, 'items');
+
+    $page2 = $this->getJson(route('api.history.section', [
+        'section' => 'episodes',
+        'page' => 2,
+        'per_page' => $perPage,
+    ]));
+
+    $page2->assertOk()
+        ->assertJsonPath('page', 2)
+        ->assertJsonPath('total', $totalEpisodes)
+        ->assertJsonCount(5, 'items');
+
+    $page1Ids = collect($page1->json('items'))->pluck('id')->all();
+    $page2Ids = collect($page2->json('items'))->pluck('id')->all();
+    expect(array_intersect($page1Ids, $page2Ids))->toBe([]);
+
+    $history = HistoryService::getHistory($user, $perPage);
+    expect($history['episodes']['total'])->toBe($totalEpisodes);
+    expect($history['episodes']['items'])->toHaveCount($perPage);
+    expect($history['episodes']['last_page'])->toBe(2);
     expect($history['stats']['episodes'])->toBe($totalEpisodes);
-    expect($history['stats']['titles'])->toBe($totalEpisodes);
-    expect($history['episodes'])->toHaveCount($episodeLimit);
-    expect(count($history['continueWatching']))->toBeLessThanOrEqual($continueLimit);
-    expect(count($history['continueWatching']))->toBe($continueLimit);
+});
 
-    // Slim payloads — no heavy episode JSON dumps
-    expect($history['episodes'][0])->toHaveKeys([
-        'id',
-        'history_type',
-        'name',
-        'progress_percentage',
-        'last_watched_at',
-        'plays_count',
-    ]);
-    expect($history['episodes'][0])->not->toHaveKey('credits');
+test('guests cannot access history section API', function () {
+    $this->getJson(route('api.history.section', ['section' => 'episodes']))
+        ->assertStatus(401);
 });

@@ -83,6 +83,9 @@ Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/credits', [TvshowControlle
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
     Route::get('history', [HistoryController::class, 'index'])->name('history.index');
+    Route::get('api/history/{section}', [HistoryController::class, 'section'])
+        ->whereIn('section', ['continue', 'movies', 'episodes', 'rewatched'])
+        ->name('api.history.section');
 
     // Party Theater (polling sync MVP)
     Route::get('party', [PartyController::class, 'index'])->name('party.index');

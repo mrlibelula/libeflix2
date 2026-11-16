@@ -8,13 +8,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { Clapperboard, PlaySquare, History as HistoryIcon, Repeat2, PlayCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import type { HistoryPagePayload, HistoryStats } from "@/types/history";
 
-type HistoryStats = {
-  titles: number;
-  movies: number;
-  episodes: number;
-  total_plays: number;
-};
+type HistorySection = "continue" | "movies" | "episodes" | "rewatched";
 
 export default function HistoryPage({
   continueWatching,
@@ -23,19 +19,22 @@ export default function HistoryPage({
   mostRewatched,
   stats,
   imgBaseUrl,
+  pageSize = 12,
 }: {
-  continueWatching: HistoryItem[];
-  historyMovies: Array<any>;
-  historyEpisodes: Array<any>;
-  mostRewatched: HistoryItem[];
+  continueWatching: HistoryPagePayload<HistoryItem>;
+  historyMovies: HistoryPagePayload<any>;
+  historyEpisodes: HistoryPagePayload<any>;
+  mostRewatched: HistoryPagePayload<HistoryItem>;
   stats: HistoryStats;
   imgBaseUrl: string;
+  pageSize?: number;
 }) {
-  const [continueList, setContinueList] = useState(continueWatching);
-  const [moviesList, setMoviesList] = useState(historyMovies);
-  const [episodesList, setEpisodesList] = useState(historyEpisodes);
-  const [rewatchedList, setRewatchedList] = useState(mostRewatched);
+  const [continuePage, setContinuePage] = useState(continueWatching);
+  const [moviesPage, setMoviesPage] = useState(historyMovies);
+  const [episodesPage, setEpisodesPage] = useState(historyEpisodes);
+  const [rewatchedPage, setRewatchedPage] = useState(mostRewatched);
   const [statsState, setStatsState] = useState(stats);
+  const [loadingSection, setLoadingSection] = useState<HistorySection | null>(null);
 
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,38 +94,101 @@ export default function HistoryPage({
     requestAnimationFrame(animation);
   };
 
-  const removeItemLocally = useCallback((type: "movie" | "episode", id: number) => {
-    const matches = (item: any) => item.id === id && (item.history_type === type || !item.history_type);
+  const fetchSectionPage = useCallback(
+    async (section: HistorySection, page: number) => {
+      setLoadingSection(section);
+      try {
+        const response = await api.get<{
+          success: boolean;
+          items: any[];
+          total: number;
+          page: number;
+          per_page: number;
+          last_page: number;
+        }>(`/api/history/${section}?page=${page}&per_page=${pageSize}`);
 
-    setContinueList((prev) => prev.filter((item) => !(item.id === id && item.history_type === type)));
-    setRewatchedList((prev) => prev.filter((item) => !(item.id === id && item.history_type === type)));
+        if (!response.ok || !response.data) {
+          throw new Error(response.error || "Failed to load history page");
+        }
+
+        const payload: HistoryPagePayload = {
+          items: response.data.items,
+          total: response.data.total,
+          page: response.data.page,
+          per_page: response.data.per_page,
+          last_page: response.data.last_page,
+        };
+
+        switch (section) {
+          case "continue":
+            setContinuePage(payload);
+            break;
+          case "movies":
+            setMoviesPage(payload);
+            break;
+          case "episodes":
+            setEpisodesPage(payload);
+            break;
+          case "rewatched":
+            setRewatchedPage(payload);
+            break;
+        }
+      } catch (error) {
+        console.error("Error loading history section page:", error);
+      } finally {
+        setLoadingSection(null);
+      }
+    },
+    [pageSize]
+  );
+
+  const removeFromSectionLists = useCallback((type: "movie" | "episode", id: number) => {
+    const filterItems = <T extends { id: number; history_type?: string }>(
+      page: HistoryPagePayload<T>
+    ): HistoryPagePayload<T> => {
+      const nextItems = page.items.filter((item) => {
+        if (item.id !== id) return true;
+        if (item.history_type) return item.history_type !== type;
+        // movies/episodes typed lists may omit history_type
+        return false;
+      });
+
+      if (nextItems.length === page.items.length) {
+        return page;
+      }
+
+      const total = Math.max(0, page.total - 1);
+      return {
+        ...page,
+        items: nextItems,
+        total,
+        last_page: Math.max(1, Math.ceil(total / page.per_page)),
+      };
+    };
+
+    setContinuePage((prev) => filterItems(prev));
+    setRewatchedPage((prev) => filterItems(prev));
 
     if (type === "movie") {
-      setMoviesList((prev) => {
-        const next = prev.filter((item) => item.id !== id);
-        setStatsState((s) => ({
-          ...s,
-          titles: Math.max(0, s.titles - (prev.length !== next.length ? 1 : 0)),
-          movies: next.length,
-        }));
-        return next;
-      });
+      setMoviesPage((prev) => filterItems(prev));
+      setStatsState((s) => ({
+        ...s,
+        titles: Math.max(0, s.titles - 1),
+        movies: Math.max(0, s.movies - 1),
+      }));
     } else {
-      setEpisodesList((prev) => {
-        const next = prev.filter((item) => !matches(item) && item.id !== id);
-        setStatsState((s) => ({
-          ...s,
-          titles: Math.max(0, s.titles - (prev.length !== next.length ? 1 : 0)),
-          episodes: next.length,
-        }));
-        return next;
-      });
+      setEpisodesPage((prev) => filterItems(prev));
+      setStatsState((s) => ({
+        ...s,
+        titles: Math.max(0, s.titles - 1),
+        episodes: Math.max(0, s.episodes - 1),
+      }));
     }
   }, []);
 
   const handleRemoveFromHistory = useCallback(
     async (type: "movie" | "episode", id: number) => {
-      removeItemLocally(type, id);
+      removeFromSectionLists(type, id);
 
       try {
         const response = await api.delete(`/api/views/progress?type=${type}&id=${id}`);
@@ -138,7 +200,7 @@ export default function HistoryPage({
         window.location.reload();
       }
     },
-    [removeItemLocally]
+    [removeFromSectionLists]
   );
 
   const handleMovieRemoveFromHistory = useCallback(
@@ -156,23 +218,14 @@ export default function HistoryPage({
   );
 
   const handleWatchLaterToggle = useCallback((movieId: number, newStatus: boolean) => {
-    setMoviesList((prev) =>
-      prev.map((movie) => (movie.id === movieId ? { ...movie, is_watch_later: newStatus } : movie))
-    );
-    setContinueList((prev) =>
-      prev.map((item) =>
-        item.history_type === "movie" && item.id === movieId
-          ? { ...item, is_watch_later: newStatus }
-          : item
-      )
-    );
-    setRewatchedList((prev) =>
-      prev.map((item) =>
-        item.history_type === "movie" && item.id === movieId
-          ? { ...item, is_watch_later: newStatus }
-          : item
-      )
-    );
+    const updater = (item: any) =>
+      item.id === movieId && (item.history_type === "movie" || !item.history_type)
+        ? { ...item, is_watch_later: newStatus }
+        : item;
+
+    setMoviesPage((prev) => ({ ...prev, items: prev.items.map(updater) }));
+    setContinuePage((prev) => ({ ...prev, items: prev.items.map(updater) }));
+    setRewatchedPage((prev) => ({ ...prev, items: prev.items.map(updater) }));
   }, []);
 
   const handleLikeToggle = useCallback((movieId: number, newStatus: boolean, newCount: number) => {
@@ -181,9 +234,9 @@ export default function HistoryPage({
         ? { ...item, is_liked: newStatus, likes_count: newCount }
         : item;
 
-    setMoviesList((prev) => prev.map(updater));
-    setContinueList((prev) => prev.map(updater));
-    setRewatchedList((prev) => prev.map(updater));
+    setMoviesPage((prev) => ({ ...prev, items: prev.items.map(updater) }));
+    setContinuePage((prev) => ({ ...prev, items: prev.items.map(updater) }));
+    setRewatchedPage((prev) => ({ ...prev, items: prev.items.map(updater) }));
   }, []);
 
   useEffect(() => {
@@ -227,13 +280,9 @@ export default function HistoryPage({
         clearTimeout(restoreFocusTimeoutRef.current);
       }
     };
-  }, [continueList, moviesList, episodesList, rewatchedList]);
+  }, [continuePage, moviesPage, episodesPage, rewatchedPage]);
 
-  const isEmpty =
-    moviesList.length === 0 &&
-    episodesList.length === 0 &&
-    continueList.length === 0 &&
-    rewatchedList.length === 0;
+  const isEmpty = statsState.titles === 0;
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -282,15 +331,22 @@ export default function HistoryPage({
 
         {!isEmpty && (
           <>
-            {continueList.length > 0 && (
+            {continuePage.total > 0 && (
               <div ref={continueRibbonRef}>
                 <HistoryRibbon
-                  items={continueList}
+                  items={continuePage.items}
                   imgBaseUrl={imgBaseUrl}
-                  title={`Continue Watching (${continueList.length})`}
+                  title={`Continue Watching (${continuePage.total})`}
                   ribbonId="history-continue"
                   uniformLandscape
-                  itemsPerPage={12}
+                  serverPagination={{
+                    total: continuePage.total,
+                    page: continuePage.page,
+                    perPage: continuePage.per_page,
+                    lastPage: continuePage.last_page,
+                    isLoading: loadingSection === "continue",
+                    onPageChange: (page) => void fetchSectionPage("continue", page),
+                  }}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}
@@ -298,51 +354,64 @@ export default function HistoryPage({
               </div>
             )}
 
-            {moviesList.length > 0 && (
+            {moviesPage.total > 0 && (
               <div ref={moviesRibbonRef}>
                 <MovieRibbon
-                  movies={moviesList}
+                  movies={moviesPage.items}
                   imgBaseUrl={imgBaseUrl}
-                  title={
-                    statsState.movies > moviesList.length
-                      ? `Recent Movies (${moviesList.length} of ${statsState.movies})`
-                      : `Movies (${moviesList.length})`
-                  }
+                  title={`Movies (${moviesPage.total})`}
                   ribbonId="history-movies"
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}
                   onRemoveFromHistory={handleMovieRemoveFromHistory}
-                  hideSortOptions={["added"]}
-                  itemsPerPage={12}
+                  hideSortOptions={["added", "name", "year", "rating"]}
+                  serverPagination={{
+                    total: moviesPage.total,
+                    page: moviesPage.page,
+                    perPage: moviesPage.per_page,
+                    lastPage: moviesPage.last_page,
+                    isLoading: loadingSection === "movies",
+                    onPageChange: (page) => void fetchSectionPage("movies", page),
+                  }}
                 />
               </div>
             )}
 
-            {episodesList.length > 0 && (
+            {episodesPage.total > 0 && (
               <div ref={episodesRibbonRef}>
                 <EpisodeRibbon
-                  episodes={episodesList}
+                  episodes={episodesPage.items}
                   imgBaseUrl={imgBaseUrl}
-                  title={
-                    statsState.episodes > episodesList.length
-                      ? `Recent Episodes (${episodesList.length} of ${statsState.episodes})`
-                      : `Episodes (${episodesList.length})`
-                  }
+                  title={`Episodes (${episodesPage.total})`}
                   ribbonId="history-episodes"
                   onRemoveFromHistory={handleEpisodeRemoveFromHistory}
-                  itemsPerPage={12}
+                  serverPagination={{
+                    total: episodesPage.total,
+                    page: episodesPage.page,
+                    perPage: episodesPage.per_page,
+                    lastPage: episodesPage.last_page,
+                    isLoading: loadingSection === "episodes",
+                    onPageChange: (page) => void fetchSectionPage("episodes", page),
+                  }}
                 />
               </div>
             )}
 
-            {rewatchedList.length > 0 && (
+            {rewatchedPage.total > 0 && (
               <div ref={rewatchedRibbonRef}>
                 <HistoryRibbon
-                  items={rewatchedList}
+                  items={rewatchedPage.items}
                   imgBaseUrl={imgBaseUrl}
-                  title={`Most Rewatched (${rewatchedList.length})`}
+                  title={`Most Rewatched (${rewatchedPage.total})`}
                   ribbonId="history-rewatched"
-                  itemsPerPage={12}
+                  serverPagination={{
+                    total: rewatchedPage.total,
+                    page: rewatchedPage.page,
+                    perPage: rewatchedPage.per_page,
+                    lastPage: rewatchedPage.last_page,
+                    isLoading: loadingSection === "rewatched",
+                    onPageChange: (page) => void fetchSectionPage("rewatched", page),
+                  }}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}

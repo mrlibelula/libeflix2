@@ -5,6 +5,7 @@ import { MoviePoster } from "@/components/movie-poster";
 import { EpisodeCard } from "@/components/ui/episode-card";
 import { HistoryLandscapeMovieCard } from "@/components/ui/history-landscape-movie-card";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
+import type { ServerPaginationProps } from "@/types/history";
 
 interface SidebarStateDetail {
   state: "expanded" | "collapsed";
@@ -25,8 +26,10 @@ interface HistoryRibbonProps {
   ribbonId?: string;
   /** When true, movies use the same 16:9 tile size as episodes (Continue Watching). */
   uniformLandscape?: boolean;
-  /** Carousel page size — keep small for smoother history browsing. */
+  /** Client-side page size when not using serverPagination. */
   itemsPerPage?: number;
+  /** Lazy server-side pagination — `items` is the current page only. */
+  serverPagination?: ServerPaginationProps;
   onRemoveFromHistory?: (type: "movie" | "episode", id: number) => void;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
@@ -41,12 +44,13 @@ export function HistoryRibbon({
   ribbonId,
   uniformLandscape = false,
   itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
+  serverPagination,
   onRemoveFromHistory,
   onWatchLaterToggle,
   onLikeToggle,
 }: HistoryRibbonProps) {
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [clientPage, setClientPage] = useState(1);
   const [carouselApi, setCarouselApi] = useState<any>(null);
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
 
@@ -78,15 +82,24 @@ export function HistoryRibbon({
     };
   }, []);
 
-  const shouldPaginate = items.length > itemsPerPage;
-  const totalPages = shouldPaginate ? Math.ceil(items.length / itemsPerPage) : 1;
-  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
-  const endIndex = shouldPaginate ? startIndex + itemsPerPage : items.length;
-  const visibleItems = items.slice(startIndex, endIndex);
+  const isServerPaged = !!serverPagination;
+  const currentPage = isServerPaged ? serverPagination.page : clientPage;
+  const totalPages = isServerPaged
+    ? Math.max(1, serverPagination.lastPage)
+    : items.length > itemsPerPage
+      ? Math.ceil(items.length / itemsPerPage)
+      : 1;
+  const shouldPaginate = totalPages > 1;
+  const startIndex = isServerPaged ? 0 : (currentPage - 1) * itemsPerPage;
+  const endIndex = isServerPaged ? items.length : startIndex + itemsPerPage;
+  const visibleItems = isServerPaged ? items : items.slice(startIndex, endIndex);
+  const isLoading = serverPagination?.isLoading ?? false;
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [items.length, itemsPerPage]);
+    if (!isServerPaged) {
+      setClientPage(1);
+    }
+  }, [items.length, itemsPerPage, isServerPaged]);
 
   useEffect(() => {
     if (carouselApi) {
@@ -109,6 +122,18 @@ export function HistoryRibbon({
       }
     }, 100);
   }, []);
+
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage || isLoading) {
+      return;
+    }
+    if (isServerPaged) {
+      serverPagination.onPageChange(page);
+    } else {
+      setClientPage(page);
+    }
+    restoreFocusToRibbon();
+  };
 
   const getVisiblePageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -174,11 +199,14 @@ export function HistoryRibbon({
           />
         ) : (
           <>
-            <div ref={ribbonContainerRef}>
+            <div
+              ref={ribbonContainerRef}
+              className={`transition-opacity duration-200 ${isLoading ? "opacity-50 pointer-events-none" : "opacity-100"}`}
+            >
               <Ribbon align="start" dragFree={true} onApiInitialized={setCarouselApi}>
                 {visibleItems.map((item, index) => {
                   const isPriority = index < 6;
-                  const key = `${item.history_type}-${item.id}`;
+                  const key = `${item.history_type}-${item.id}-${currentPage}`;
 
                   if (item.history_type === "episode") {
                     return (
@@ -239,15 +267,10 @@ export function HistoryRibbon({
                 <div className="flex items-center gap-1 md:gap-2 w-[380px] md:w-[500px] justify-center">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (currentPage > 1) {
-                        setCurrentPage((prev) => prev - 1);
-                        restoreFocusToRibbon();
-                      }
-                    }}
-                    disabled={currentPage === 1}
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1 || isLoading}
                     className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors duration-200 ${
-                      currentPage === 1
+                      currentPage === 1 || isLoading
                         ? "text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                         : "text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
                     }`}
@@ -264,11 +287,10 @@ export function HistoryRibbon({
                         key={index}
                         onClick={() => {
                           if (typeof page === "number") {
-                            setCurrentPage(page);
-                            restoreFocusToRibbon();
+                            goToPage(page);
                           }
                         }}
-                        disabled={page === "..."}
+                        disabled={page === "..." || isLoading}
                         className={`min-w-[2rem] w-8 h-8 rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
                           page === currentPage
                             ? "bg-rose-600 text-white hover:bg-rose-700 cursor-default"
@@ -284,15 +306,10 @@ export function HistoryRibbon({
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (currentPage < totalPages) {
-                        setCurrentPage((prev) => prev + 1);
-                        restoreFocusToRibbon();
-                      }
-                    }}
-                    disabled={currentPage === totalPages}
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages || isLoading}
                     className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors duration-200 ${
-                      currentPage === totalPages
+                      currentPage === totalPages || isLoading
                         ? "text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
                         : "text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
                     }`}
