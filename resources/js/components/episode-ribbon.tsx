@@ -31,11 +31,12 @@ interface EpisodeRibbonProps {
   onEpisodeClick?: (episode: any) => void;
   onRemoveFromHistory?: (episodeId: number) => void;
   showCheckIcon?: boolean;
+  /** Override carousel page size (default 30). */
+  itemsPerPage?: number;
 }
 
 // Configuration for pagination
-const ITEMS_PER_PAGE = 30; // Show 30 items per page
-const PAGINATION_THRESHOLD = 30; // Use pagination if more than 30 items
+const DEFAULT_ITEMS_PER_PAGE = 30;
 
 export function EpisodeRibbon({ 
   episodes, 
@@ -46,6 +47,7 @@ export function EpisodeRibbon({
   onEpisodeClick,
   onRemoveFromHistory,
   showCheckIcon = false,
+  itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
 }: EpisodeRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
@@ -150,12 +152,12 @@ export function EpisodeRibbon({
     : episodes;
 
   // Determine if we should use pagination
-  const shouldPaginate = processedEpisodes.length > PAGINATION_THRESHOLD;
+  const shouldPaginate = processedEpisodes.length > itemsPerPage;
   
   // Calculate pagination values
-  const totalPages = shouldPaginate ? Math.ceil(processedEpisodes.length / ITEMS_PER_PAGE) : 1;
-  const startIndex = shouldPaginate ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
-  const endIndex = shouldPaginate ? startIndex + ITEMS_PER_PAGE : processedEpisodes.length;
+  const totalPages = shouldPaginate ? Math.ceil(processedEpisodes.length / itemsPerPage) : 1;
+  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
+  const endIndex = shouldPaginate ? startIndex + itemsPerPage : processedEpisodes.length;
   
   // Get the currently visible episodes
   const visibleEpisodes = processedEpisodes.slice(startIndex, endIndex);

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { ChevronDownIcon } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EpisodeCard } from "@/components/ui/episode-card";
@@ -25,10 +25,14 @@ interface HistoryRibbonProps {
   ribbonId?: string;
   /** When true, movies use the same 16:9 tile size as episodes (Continue Watching). */
   uniformLandscape?: boolean;
+  /** Carousel page size — keep small for smoother history browsing. */
+  itemsPerPage?: number;
   onRemoveFromHistory?: (type: "movie" | "episode", id: number) => void;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
 }
+
+const DEFAULT_ITEMS_PER_PAGE = 12;
 
 export function HistoryRibbon({
   items,
@@ -36,11 +40,13 @@ export function HistoryRibbon({
   title = "History",
   ribbonId,
   uniformLandscape = false,
+  itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
   onRemoveFromHistory,
   onWatchLaterToggle,
   onLikeToggle,
 }: HistoryRibbonProps) {
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [carouselApi, setCarouselApi] = useState<any>(null);
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
 
@@ -72,11 +78,54 @@ export function HistoryRibbon({
     };
   }, []);
 
+  const shouldPaginate = items.length > itemsPerPage;
+  const totalPages = shouldPaginate ? Math.ceil(items.length / itemsPerPage) : 1;
+  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
+  const endIndex = shouldPaginate ? startIndex + itemsPerPage : items.length;
+  const visibleItems = items.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [items.length, itemsPerPage]);
+
   useEffect(() => {
     if (carouselApi) {
       carouselApi.scrollTo(0);
     }
-  }, [items.length, carouselApi]);
+  }, [currentPage, carouselApi, visibleItems.length]);
+
+  const restoreFocusToRibbon = useCallback(() => {
+    setTimeout(() => {
+      if (ribbonContainerRef.current) {
+        let carouselElement = ribbonContainerRef.current.querySelector('[tabindex="0"]');
+        if (!carouselElement) {
+          carouselElement = ribbonContainerRef.current.querySelector(
+            '[role="region"][aria-roledescription="carousel"]'
+          );
+        }
+        if (carouselElement) {
+          (carouselElement as HTMLElement).focus();
+        }
+      }
+    }, 100);
+  }, []);
+
+  const getVisiblePageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+
+    pages.push(1);
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    if (start > 2) pages.push("...");
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages - 1) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  };
 
   return (
     <div
@@ -94,7 +143,14 @@ export function HistoryRibbon({
           onClick={() => setIsRibbonOpen((open) => !open)}
           className="flex items-center gap-x-2 text-left select-none text-zinc-900 dark:text-zinc-200 text-xl font-semibold z-10 cursor-pointer hover:text-black dark:hover:text-zinc-100 transition-colors duration-200 ease-in-out"
         >
-          <span>{title}</span>
+          <span>
+            {title}
+            {shouldPaginate && (
+              <span className="text-sm font-normal ml-2 text-zinc-600 dark:text-zinc-400">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+          </span>
           <ChevronDownIcon
             className={`w-5 h-5 text-zinc-500 transition-transform duration-200 ${
               isRibbonOpen ? "rotate-0" : "-rotate-90"
@@ -117,36 +173,55 @@ export function HistoryRibbon({
             icon="clapper"
           />
         ) : (
-          <div ref={ribbonContainerRef}>
-            <Ribbon align="start" dragFree={true} onApiInitialized={setCarouselApi}>
-              {items.map((item, index) => {
-                const isPriority = index < 8;
-                const key = `${item.history_type}-${item.id}`;
+          <>
+            <div ref={ribbonContainerRef}>
+              <Ribbon align="start" dragFree={true} onApiInitialized={setCarouselApi}>
+                {visibleItems.map((item, index) => {
+                  const isPriority = index < 6;
+                  const key = `${item.history_type}-${item.id}`;
 
-                if (item.history_type === "episode") {
+                  if (item.history_type === "episode") {
+                    return (
+                      <RibbonItem key={key}>
+                        <EpisodeCard
+                          episode={item as any}
+                          imgBaseUrl={imgBaseUrl}
+                          isPriority={isPriority}
+                          onRemoveFromHistory={
+                            onRemoveFromHistory
+                              ? (episodeId) => onRemoveFromHistory("episode", episodeId)
+                              : undefined
+                          }
+                        />
+                      </RibbonItem>
+                    );
+                  }
+
+                  if (uniformLandscape) {
+                    return (
+                      <RibbonItem key={key}>
+                        <HistoryLandscapeMovieCard
+                          movie={item as any}
+                          imgBaseUrl={imgBaseUrl}
+                          isPriority={isPriority}
+                          onRemoveFromHistory={
+                            onRemoveFromHistory
+                              ? (movieId) => onRemoveFromHistory("movie", movieId)
+                              : undefined
+                          }
+                        />
+                      </RibbonItem>
+                    );
+                  }
+
                   return (
                     <RibbonItem key={key}>
-                      <EpisodeCard
-                        episode={item as any}
-                        imgBaseUrl={imgBaseUrl}
-                        isPriority={isPriority}
-                        onRemoveFromHistory={
-                          onRemoveFromHistory
-                            ? (episodeId) => onRemoveFromHistory("episode", episodeId)
-                            : undefined
-                        }
-                      />
-                    </RibbonItem>
-                  );
-                }
-
-                if (uniformLandscape) {
-                  return (
-                    <RibbonItem key={key}>
-                      <HistoryLandscapeMovieCard
+                      <MoviePoster
                         movie={item as any}
                         imgBaseUrl={imgBaseUrl}
                         isPriority={isPriority}
+                        onWatchLaterToggle={onWatchLaterToggle}
+                        onLikeToggle={onLikeToggle}
                         onRemoveFromHistory={
                           onRemoveFromHistory
                             ? (movieId) => onRemoveFromHistory("movie", movieId)
@@ -155,27 +230,81 @@ export function HistoryRibbon({
                       />
                     </RibbonItem>
                   );
-                }
+                })}
+              </Ribbon>
+            </div>
 
-                return (
-                  <RibbonItem key={key}>
-                    <MoviePoster
-                      movie={item as any}
-                      imgBaseUrl={imgBaseUrl}
-                      isPriority={isPriority}
-                      onWatchLaterToggle={onWatchLaterToggle}
-                      onLikeToggle={onLikeToggle}
-                      onRemoveFromHistory={
-                        onRemoveFromHistory
-                          ? (movieId) => onRemoveFromHistory("movie", movieId)
-                          : undefined
+            {shouldPaginate && (
+              <div className="flex items-center justify-center mt-4 md:mt-6 pb-2">
+                <div className="flex items-center gap-1 md:gap-2 w-[380px] md:w-[500px] justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPage > 1) {
+                        setCurrentPage((prev) => prev - 1);
+                        restoreFocusToRibbon();
                       }
-                    />
-                  </RibbonItem>
-                );
-              })}
-            </Ribbon>
-          </div>
+                    }}
+                    disabled={currentPage === 1}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors duration-200 ${
+                      currentPage === 1
+                        ? "text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
+                        : "text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+                    }`}
+                    title="Previous page"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeftIcon className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center justify-center gap-1 flex-1 min-w-0">
+                    {getVisiblePageNumbers().map((page, index) => (
+                      <button
+                        type="button"
+                        key={index}
+                        onClick={() => {
+                          if (typeof page === "number") {
+                            setCurrentPage(page);
+                            restoreFocusToRibbon();
+                          }
+                        }}
+                        disabled={page === "..."}
+                        className={`min-w-[2rem] w-8 h-8 rounded-md text-xs md:text-sm font-medium transition-colors duration-200 ${
+                          page === currentPage
+                            ? "bg-rose-600 text-white hover:bg-rose-700 cursor-default"
+                            : page === "..."
+                              ? "bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default"
+                              : "text-zinc-700 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPage < totalPages) {
+                        setCurrentPage((prev) => prev + 1);
+                        restoreFocusToRibbon();
+                      }
+                    }}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors duration-200 ${
+                      currentPage === totalPages
+                        ? "text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
+                        : "text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+                    }`}
+                    title="Next page"
+                    aria-label="Next page"
+                  >
+                    <ChevronRightIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

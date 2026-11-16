@@ -290,6 +290,7 @@ export default function HistoryPage({
                   title={`Continue Watching (${continueList.length})`}
                   ribbonId="history-continue"
                   uniformLandscape
+                  itemsPerPage={12}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}
@@ -302,12 +303,17 @@ export default function HistoryPage({
                 <MovieRibbon
                   movies={moviesList}
                   imgBaseUrl={imgBaseUrl}
-                  title={`Movies (${moviesList.length})`}
+                  title={
+                    statsState.movies > moviesList.length
+                      ? `Recent Movies (${moviesList.length} of ${statsState.movies})`
+                      : `Movies (${moviesList.length})`
+                  }
                   ribbonId="history-movies"
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}
                   onRemoveFromHistory={handleMovieRemoveFromHistory}
                   hideSortOptions={["added"]}
+                  itemsPerPage={12}
                 />
               </div>
             )}
@@ -317,9 +323,14 @@ export default function HistoryPage({
                 <EpisodeRibbon
                   episodes={episodesList}
                   imgBaseUrl={imgBaseUrl}
-                  title={`Episodes (${episodesList.length})`}
+                  title={
+                    statsState.episodes > episodesList.length
+                      ? `Recent Episodes (${episodesList.length} of ${statsState.episodes})`
+                      : `Episodes (${episodesList.length})`
+                  }
                   ribbonId="history-episodes"
                   onRemoveFromHistory={handleEpisodeRemoveFromHistory}
+                  itemsPerPage={12}
                 />
               </div>
             )}
@@ -331,6 +342,7 @@ export default function HistoryPage({
                   imgBaseUrl={imgBaseUrl}
                   title={`Most Rewatched (${rewatchedList.length})`}
                   ribbonId="history-rewatched"
+                  itemsPerPage={12}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}

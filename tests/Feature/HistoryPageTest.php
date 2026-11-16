@@ -182,3 +182,37 @@ test('continue watching excludes completed and near-finished progress', function
     expect($continueIds)->not->toContain($nearEnd->id);
     expect($continueIds)->not->toContain($done->id);
 });
+
+test('history sections are capped while stats reflect full totals', function () {
+    $user = User::factory()->create();
+
+    $episodeLimit = HistoryService::EPISODES_LIMIT;
+    $continueLimit = HistoryService::CONTINUE_WATCHING_LIMIT;
+
+    // Create more episodes than the continue / episodes caps
+    $totalEpisodes = $episodeLimit + 5;
+    for ($i = 0; $i < $totalEpisodes; $i++) {
+        $episode = createHistoryEpisode("Episode {$i}");
+        // Stagger last_watched via progress updates (~40% incomplete)
+        ViewService::updateProgress($episode, $user, 1000, 2520);
+    }
+
+    $history = HistoryService::getHistory($user);
+
+    expect($history['stats']['episodes'])->toBe($totalEpisodes);
+    expect($history['stats']['titles'])->toBe($totalEpisodes);
+    expect($history['episodes'])->toHaveCount($episodeLimit);
+    expect(count($history['continueWatching']))->toBeLessThanOrEqual($continueLimit);
+    expect(count($history['continueWatching']))->toBe($continueLimit);
+
+    // Slim payloads — no heavy episode JSON dumps
+    expect($history['episodes'][0])->toHaveKeys([
+        'id',
+        'history_type',
+        'name',
+        'progress_percentage',
+        'last_watched_at',
+        'plays_count',
+    ]);
+    expect($history['episodes'][0])->not->toHaveKey('credits');
+});

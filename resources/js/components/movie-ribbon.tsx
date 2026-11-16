@@ -21,6 +21,8 @@ interface MovieRibbonProps {
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
   onRemoveFromHistory?: (movieId: number) => void;
   hideSortOptions?: SortField[];
+  /** Override carousel page size (default 30). */
+  itemsPerPage?: number;
 }
 
 type SortField = 'name' | 'year' | 'rating' | 'added';
@@ -34,8 +36,7 @@ interface SortOption {
 }
 
 // Configuration for pagination
-const ITEMS_PER_PAGE = 30; // Show 30 items per page
-const PAGINATION_THRESHOLD = 30; // Use pagination if more than 30 items
+const DEFAULT_ITEMS_PER_PAGE = 30;
 
 export function MovieRibbon({ 
   movies, 
@@ -47,6 +48,7 @@ export function MovieRibbon({
   onLikeToggle,
   onRemoveFromHistory,
   hideSortOptions = [],
+  itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
@@ -162,12 +164,12 @@ export function MovieRibbon({
     : shuffledMovies;
 
   // Determine if we should use pagination
-  const shouldPaginate = processedMovies.length > PAGINATION_THRESHOLD;
+  const shouldPaginate = processedMovies.length > itemsPerPage;
   
   // Calculate pagination values
-  const totalPages = shouldPaginate ? Math.ceil(processedMovies.length / ITEMS_PER_PAGE) : 1;
-  const startIndex = shouldPaginate ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
-  const endIndex = shouldPaginate ? startIndex + ITEMS_PER_PAGE : processedMovies.length;
+  const totalPages = shouldPaginate ? Math.ceil(processedMovies.length / itemsPerPage) : 1;
+  const startIndex = shouldPaginate ? (currentPage - 1) * itemsPerPage : 0;
+  const endIndex = shouldPaginate ? startIndex + itemsPerPage : processedMovies.length;
   
   // Get the currently visible movies
   const visibleMovies = processedMovies.slice(startIndex, endIndex);
