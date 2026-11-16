@@ -2085,48 +2085,12 @@ export function PlayEpisodeDialog({
     }
   }, [currentSubtitleId, subtitleTracks]);
 
-  // Add a specific hook to initialize the video properly on first render
-  const videoElementRef = useRef<boolean>(false);
+  // Episode end advance is handled only by handleVideoEnd (React onEnded + timeupdate backup).
+  // The <video> element persists across episodes, so any handler captured once would go stale.
+  const endHandledForSourceRef = useRef<string | null>(null);
   useEffect(() => {
-    // Only run once when the video element is first rendered
-    if (videoRef.current && !videoElementRef.current) {
-      videoElementRef.current = true;
-      
-      // Create a reference to the original ended event handler
-      const videoElement = videoRef.current;
-      const originalEndedHandler = videoElement.onended;
-      
-      // Override the native onended property to ensure it works on first load.
-      // Party theater must not short-circuit here — React onEnded → handleVideoEnd
-      // owns playlist advance (avoids double next + wrong TV-show navigation).
-      videoElement.onended = (event) => {
-        if (partySync?.enabled) {
-          if (originalEndedHandler && typeof originalEndedHandler === 'function') {
-            return originalEndedHandler.call(videoElement, event);
-          }
-          return;
-        }
-
-        // Call our custom handler first
-        if (hasNextEpisode) {
-          setShowNextEpisodeNotification(true);
-          setTimeout(() => {
-            setShowNextEpisodeNotification(false);
-            onNextEpisode();
-          }, 1500);
-          
-          // Prevent other handlers from firing
-          event.stopPropagation();
-          return false;
-        }
-        
-        // Otherwise, let the original handler run if it exists
-        if (originalEndedHandler && typeof originalEndedHandler === 'function') {
-          return originalEndedHandler.call(videoElement, event);
-        }
-      };
-    }
-  }, [hasNextEpisode, onNextEpisode, partySync?.enabled]);
+    endHandledForSourceRef.current = null;
+  }, [currentEncFilePath]);
   
   // Access check on open / episode change.
   // Do NOT set isAccessChecked(false) while already open — that clears video src and exits PiP.
@@ -2166,22 +2130,19 @@ export function PlayEpisodeDialog({
 
   // Enhanced handleVideoEnd function to handle missing episodes and proper repeat behavior
   const handleVideoEnd = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    // Prevent duplicate firing
     const video = e.currentTarget;
-    
-    // Create a unique key for this specific video end event
-    const endEventKey = `video_end_${episode.id}_${new Date().getTime()}`;
-    
-    // Check if we've already handled this specific end event
-    if (sessionStorage.getItem(endEventKey)) {
+
+    // onEnded and the timeupdate backup both call this, possibly several times per source
+    if (endHandledForSourceRef.current === currentEncFilePath) {
       return;
     }
-    
-    // Set a flag to prevent duplicate handling (expires after 2 seconds)
-    sessionStorage.setItem(endEventKey, 'true');
-    setTimeout(() => {
-      sessionStorage.removeItem(endEventKey);
-    }, 2000);
+    endHandledForSourceRef.current = currentEncFilePath;
+    if (repeatOne) {
+      // Same source keeps playing, so allow the next end to be handled again
+      setTimeout(() => {
+        endHandledForSourceRef.current = null;
+      }, 1000);
+    }
     
     // Party theater: advance / loop the room playlist — never hunt the TV series catalog
     if (isPartyTheater) {

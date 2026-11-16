@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Code2, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv, Handshake, Search, Clapperboard } from 'lucide-react';
+import { BookOpen, Clock, Folder, Music, Video, History, TrendingUp, ListFilter, SlidersHorizontal, Gamepad2, LayoutDashboard, Film, LogIn, UserPlus, Home, Tv, Handshake, Search, Clapperboard } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import AppLogo from './app-logo';
 
@@ -35,6 +35,11 @@ const mainNavItems: NavItem[] = [
         icon: Clock,
     },
     {
+        title: 'History',
+        href: '/history',
+        icon: History,
+    },
+    {
         title: 'Popular/Top',
         href: '/popular-top',
         icon: TrendingUp,
@@ -49,47 +54,22 @@ const mainNavItems: NavItem[] = [
         href: '/search',
         icon: Search,
     },
-    // {
-    //     title: 'Top',
-    //     href: '/top',
-    //     icon: ListFilter,
-    // },
-    // {
-    //     title: 'Vintage Games',
-    //     href: '/vintage-games',
-    //     icon: Gamepad2,
-    // },
-    // {
-    //     title: 'Music',
-    //     href: '/music',
-    //     icon: Music,
-    // },
-    // {
-    //     title: 'History',
-    //     href: '/history',
-    //     icon: History,
-    // },
-    // {
-    //     title: 'Control Panel',
-    //     href: '/cpanel',
-    //     icon: SlidersHorizontal,
-    // },
 ];
 
 const footerNavItems: NavItem[] = [
     {
         title: 'Libe.dev',
         href: 'https://libe.dev',
-        icon: Code2,
+        iconSrc: '/images/libesoft.io_inv.png',
     },
-    // {
-    //     title: 'Repository',
-    //     href: 'https://github.com/laravel/react-starter-kit',
-    //     icon: Folder,
-    // },
+    {
+        title: 'Repository',
+        href: 'https://github.com/mrlibelula/libeflix2',
+        icon: Folder,
+    },
     {
         title: 'Documentation',
-        href: 'https://libe.dev/blog/how-i-built-a-netflix-clone-a-deep-dive-into-libeflix',
+        href: 'https://libe.dev/blog/the-hard-part-of-a-netflix-clone-content-security',
         icon: BookOpen,
     },
 ];

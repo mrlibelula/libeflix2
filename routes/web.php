@@ -8,6 +8,7 @@ use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EpisodeController;
 use App\Http\Controllers\GenreController;
+use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\PopularTopController;
 use App\Http\Controllers\SeasonController;
@@ -81,6 +82,7 @@ Route::get('api/tvshows/{slug}/seasons/{seasonNumber}/credits', [TvshowControlle
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('watch-later', [MovieController::class, 'watchLater'])->name('watch-later.index');
+    Route::get('history', [HistoryController::class, 'index'])->name('history.index');
 
     // Party Theater (polling sync MVP)
     Route::get('party', [PartyController::class, 'index'])->name('party.index');

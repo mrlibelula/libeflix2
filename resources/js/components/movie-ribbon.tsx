@@ -19,6 +19,7 @@ interface MovieRibbonProps {
   onMovieClick?: (movie: any) => void;
   onWatchLaterToggle?: (movieId: number, newStatus: boolean) => void;
   onLikeToggle?: (movieId: number, newStatus: boolean, newCount: number) => void;
+  onRemoveFromHistory?: (movieId: number) => void;
   hideSortOptions?: SortField[];
 }
 
@@ -44,6 +45,7 @@ export function MovieRibbon({
   onMovieClick,
   onWatchLaterToggle,
   onLikeToggle,
+  onRemoveFromHistory,
   hideSortOptions = [],
 }: MovieRibbonProps) {
 
@@ -428,6 +430,7 @@ export function MovieRibbon({
                       onWatchLaterToggle={onWatchLaterToggle}
                       onLikeToggle={onLikeToggle}
                       onMovieClick={onMovieClick}
+                      onRemoveFromHistory={onRemoveFromHistory}
                     />
                   </RibbonItem>
                 );

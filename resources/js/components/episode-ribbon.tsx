@@ -29,6 +29,7 @@ interface EpisodeRibbonProps {
   ribbonId?: string;
   onWatchLaterToggle?: (episodeId: number, newStatus: boolean) => void;
   onEpisodeClick?: (episode: any) => void;
+  onRemoveFromHistory?: (episodeId: number) => void;
   showCheckIcon?: boolean;
 }
 
@@ -43,6 +44,7 @@ export function EpisodeRibbon({
   ribbonId,
   onWatchLaterToggle,
   onEpisodeClick,
+  onRemoveFromHistory,
   showCheckIcon = false,
 }: EpisodeRibbonProps) {
 
@@ -415,6 +417,7 @@ export function EpisodeRibbon({
                         isPriority={isPriority}
                         onWatchLaterToggle={onWatchLaterToggle}
                         onEpisodeClick={onEpisodeClick}
+                        onRemoveFromHistory={onRemoveFromHistory}
                         showCheckIcon={showCheckIcon}
                       />
                     </RibbonItem>
