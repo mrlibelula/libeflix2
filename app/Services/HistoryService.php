@@ -29,6 +29,22 @@ class HistoryService
 
     public const SECTIONS = ['continue', 'movies', 'episodes', 'rewatched'];
 
+    /** @var array<string, list<string>> */
+    public const SORT_FIELDS = [
+        'continue' => ['watched', 'name', 'progress'],
+        'movies' => ['watched', 'name', 'year', 'rating'],
+        'episodes' => ['watched', 'name', 'season', 'episode'],
+        'rewatched' => ['plays', 'watched', 'name'],
+    ];
+
+    /** @var array<string, string> */
+    public const DEFAULT_SORT = [
+        'continue' => 'watched',
+        'movies' => 'watched',
+        'episodes' => 'watched',
+        'rewatched' => 'plays',
+    ];
+
     /**
      * Initial History page payload: stats + first page of each section.
      *
@@ -59,24 +75,30 @@ class HistoryService
      *     total: int,
      *     page: int,
      *     per_page: int,
-     *     last_page: int
+     *     last_page: int,
+     *     sort: string,
+     *     direction: string
      * }
      */
     public static function paginateSection(
         User $user,
         string $section,
         int $page = 1,
-        int $perPage = self::PAGE_SIZE
+        int $perPage = self::PAGE_SIZE,
+        ?string $sort = null,
+        ?string $direction = null
     ): array {
-        if (!in_array($section, self::SECTIONS, true)) {
+        if (! in_array($section, self::SECTIONS, true)) {
             throw new InvalidArgumentException("Invalid history section: {$section}");
         }
+
+        [$sort, $direction] = self::normalizeSort($section, $sort, $direction);
 
         $page = max(1, $page);
         $perPage = max(1, min(48, $perPage));
 
         if ($section === 'rewatched') {
-            return self::paginateRewatched($user, $page, $perPage);
+            return self::paginateRewatched($user, $page, $perPage, $sort, $direction);
         }
 
         $query = match ($section) {
@@ -90,10 +112,12 @@ class HistoryService
         $lastPage = max(1, (int) ceil($total / $perPage));
         $page = min($page, $lastPage);
 
+        $ordered = clone $query;
+        self::applyProgressSort($ordered, $section, $sort, $direction);
+
         /** @var EloquentCollection<int, WatchProgress> $rows */
-        $rows = (clone $query)
+        $rows = $ordered
             ->with('watchable')
-            ->orderByDesc('last_watched_at')
             ->forPage($page, $perPage)
             ->get();
 
@@ -107,7 +131,27 @@ class HistoryService
             'page' => $page,
             'per_page' => $perPage,
             'last_page' => $lastPage,
+            'sort' => $sort,
+            'direction' => $direction,
         ];
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    public static function normalizeSort(string $section, ?string $sort, ?string $direction): array
+    {
+        $allowed = self::SORT_FIELDS[$section] ?? ['watched'];
+        $default = self::DEFAULT_SORT[$section] ?? $allowed[0];
+        $sort = in_array($sort, $allowed, true) ? $sort : $default;
+
+        if ($direction === null) {
+            $direction = in_array($sort, ['name', 'season', 'episode'], true) ? 'asc' : 'desc';
+        } else {
+            $direction = strtolower($direction) === 'asc' ? 'asc' : 'desc';
+        }
+
+        return [$sort, $direction];
     }
 
     /**
@@ -157,21 +201,98 @@ class HistoryService
     protected static function continueWatchingQuery(User $user): Builder
     {
         return WatchProgress::query()
-            ->where('user_id', $user->id)
-            ->whereIn('watchable_type', [Movie::class, Episode::class])
-            ->where('completed', false)
-            ->where('progress_percentage', '<', self::CONTINUE_WATCHING_MAX_PERCENTAGE)
+            ->where('watch_progress.user_id', $user->id)
+            ->whereIn('watch_progress.watchable_type', [Movie::class, Episode::class])
+            ->where('watch_progress.completed', false)
+            ->where('watch_progress.progress_percentage', '<', self::CONTINUE_WATCHING_MAX_PERCENTAGE)
             ->where(function ($query) {
-                $query->where('current_time', '>', 0)
-                    ->orWhere('progress_percentage', '>', 0);
+                $query->where('watch_progress.current_time', '>', 0)
+                    ->orWhere('watch_progress.progress_percentage', '>', 0);
             });
     }
 
     protected static function progressByTypeQuery(User $user, string $type): Builder
     {
         return WatchProgress::query()
-            ->where('user_id', $user->id)
-            ->where('watchable_type', $type);
+            ->where('watch_progress.user_id', $user->id)
+            ->where('watch_progress.watchable_type', $type);
+    }
+
+    /**
+     * Apply ORDER BY (and joins when needed) for progress-backed sections.
+     */
+    protected static function applyProgressSort(Builder $query, string $section, string $sort, string $direction): void
+    {
+        $dir = $direction === 'asc' ? 'asc' : 'desc';
+
+        if ($sort === 'watched') {
+            $query->orderBy('watch_progress.last_watched_at', $dir)
+                ->orderBy('watch_progress.id', $dir);
+
+            return;
+        }
+
+        if ($sort === 'progress') {
+            $query->orderBy('watch_progress.progress_percentage', $dir)
+                ->orderByDesc('watch_progress.last_watched_at');
+
+            return;
+        }
+
+        if ($section === 'movies') {
+            $query->leftJoin('movies', function ($join) {
+                $join->on('watch_progress.watchable_id', '=', 'movies.id')
+                    ->where('watch_progress.watchable_type', '=', Movie::class);
+            })->select('watch_progress.*');
+
+            match ($sort) {
+                'name' => $query->orderBy('movies.title', $dir),
+                'year' => $query->orderBy('movies.release_date', $dir),
+                'rating' => $query->orderBy('movies.vote_average', $dir),
+                default => $query->orderBy('watch_progress.last_watched_at', 'desc'),
+            };
+
+            $query->orderByDesc('watch_progress.last_watched_at');
+
+            return;
+        }
+
+        if ($section === 'episodes') {
+            $query->leftJoin('episodes', function ($join) {
+                $join->on('watch_progress.watchable_id', '=', 'episodes.id')
+                    ->where('watch_progress.watchable_type', '=', Episode::class);
+            })->select('watch_progress.*');
+
+            match ($sort) {
+                'name' => $query->orderBy('episodes.name', $dir),
+                'season' => $query->orderBy('episodes.season_number', $dir)
+                    ->orderBy('episodes.episode_number', $dir),
+                'episode' => $query->orderBy('episodes.episode_number', $dir)
+                    ->orderBy('episodes.season_number', $dir),
+                default => $query->orderBy('watch_progress.last_watched_at', 'desc'),
+            };
+
+            $query->orderByDesc('watch_progress.last_watched_at');
+
+            return;
+        }
+
+        // Continue Watching — mixed movie + episode titles
+        $query->leftJoin('movies', function ($join) {
+            $join->on('watch_progress.watchable_id', '=', 'movies.id')
+                ->where('watch_progress.watchable_type', '=', Movie::class);
+        })->leftJoin('episodes', function ($join) {
+            $join->on('watch_progress.watchable_id', '=', 'episodes.id')
+                ->where('watch_progress.watchable_type', '=', Episode::class);
+        })->select('watch_progress.*');
+
+        if ($sort === 'name') {
+            $query->orderByRaw('COALESCE(movies.title, episodes.name) '.$dir);
+        } else {
+            $query->orderBy('watch_progress.last_watched_at', 'desc');
+        }
+
+        $query->orderByDesc('watch_progress.last_watched_at');
     }
 
     /**
@@ -180,11 +301,18 @@ class HistoryService
      *     total: int,
      *     page: int,
      *     per_page: int,
-     *     last_page: int
+     *     last_page: int,
+     *     sort: string,
+     *     direction: string
      * }
      */
-    protected static function paginateRewatched(User $user, int $page, int $perPage): array
-    {
+    protected static function paginateRewatched(
+        User $user,
+        int $page,
+        int $perPage,
+        string $sort = 'plays',
+        string $direction = 'desc'
+    ): array {
         $grouped = Play::query()
             ->where('user_id', $user->id)
             ->whereIn('playable_type', [Movie::class, Episode::class])
@@ -199,13 +327,41 @@ class HistoryService
         $lastPage = max(1, (int) ceil($total / $perPage));
         $page = min(max(1, $page), $lastPage);
 
-        $meta = Play::query()
-            ->where('user_id', $user->id)
-            ->whereIn('playable_type', [Movie::class, Episode::class])
-            ->selectRaw('playable_type, playable_id, COUNT(*) as plays_count')
-            ->groupBy('playable_type', 'playable_id')
-            ->havingRaw('COUNT(*) >= ?', [self::MIN_REWATCH_PLAYS])
-            ->orderByDesc('plays_count')
+        $dir = $direction === 'asc' ? 'asc' : 'desc';
+
+        $metaQuery = Play::query()
+            ->where('plays.user_id', $user->id)
+            ->whereIn('plays.playable_type', [Movie::class, Episode::class])
+            ->selectRaw('plays.playable_type, plays.playable_id, COUNT(*) as plays_count')
+            ->groupBy('plays.playable_type', 'plays.playable_id')
+            ->havingRaw('COUNT(*) >= ?', [self::MIN_REWATCH_PLAYS]);
+
+        if ($sort === 'name') {
+            $metaQuery
+                ->leftJoin('movies', function ($join) {
+                    $join->on('plays.playable_id', '=', 'movies.id')
+                        ->where('plays.playable_type', '=', Movie::class);
+                })
+                ->leftJoin('episodes', function ($join) {
+                    $join->on('plays.playable_id', '=', 'episodes.id')
+                        ->where('plays.playable_type', '=', Episode::class);
+                })
+                ->orderByRaw('COALESCE(MAX(movies.title), MAX(episodes.name)) '.$dir)
+                ->orderByDesc('plays_count');
+        } elseif ($sort === 'watched') {
+            $metaQuery
+                ->leftJoin('watch_progress', function ($join) use ($user) {
+                    $join->on('plays.playable_id', '=', 'watch_progress.watchable_id')
+                        ->on('plays.playable_type', '=', 'watch_progress.watchable_type')
+                        ->where('watch_progress.user_id', '=', $user->id);
+                })
+                ->orderByRaw('MAX(watch_progress.last_watched_at) '.$dir)
+                ->orderByDesc('plays_count');
+        } else {
+            $metaQuery->orderBy('plays_count', $dir);
+        }
+
+        $meta = $metaQuery
             ->forPage($page, $perPage)
             ->get()
             ->map(fn ($row) => [
@@ -220,10 +376,10 @@ class HistoryService
 
         $items = [];
         foreach ($meta as $entry) {
-            $key = $entry['type'] . ':' . $entry['id'];
+            $key = $entry['type'].':'.$entry['id'];
             $progress = $progressMap->get($key);
 
-            if (!$progress instanceof WatchProgress || !$progress->watchable instanceof Model) {
+            if (! $progress instanceof WatchProgress || ! $progress->watchable instanceof Model) {
                 continue;
             }
 
@@ -246,6 +402,8 @@ class HistoryService
             'page' => $page,
             'per_page' => $perPage,
             'last_page' => $lastPage,
+            'sort' => $sort,
+            'direction' => $direction,
         ];
     }
 
@@ -266,13 +424,13 @@ class HistoryService
             ->where('user_id', $user->id)
             ->with('watchable')
             ->where(function ($q) use ($movieIds, $episodeIds) {
-                if (!empty($movieIds)) {
+                if (! empty($movieIds)) {
                     $q->orWhere(function ($inner) use ($movieIds) {
                         $inner->where('watchable_type', Movie::class)
                             ->whereIn('watchable_id', $movieIds);
                     });
                 }
-                if (!empty($episodeIds)) {
+                if (! empty($episodeIds)) {
                     $q->orWhere(function ($inner) use ($episodeIds) {
                         $inner->where('watchable_type', Episode::class)
                             ->whereIn('watchable_id', $episodeIds);
@@ -283,7 +441,7 @@ class HistoryService
         return $query->get()->keyBy(function (WatchProgress $progress) {
             $type = $progress->watchable_type === Movie::class ? 'movie' : 'episode';
 
-            return $type . ':' . $progress->watchable_id;
+            return $type.':'.$progress->watchable_id;
         });
     }
 
@@ -334,7 +492,7 @@ class HistoryService
 
         foreach ($extra as $row) {
             $type = $row->playable_type === Movie::class ? 'movie' : 'episode';
-            $map[$type . ':' . $row->playable_id] = (int) $row->plays_count;
+            $map[$type.':'.$row->playable_id] = (int) $row->plays_count;
         }
 
         return $map;
@@ -382,7 +540,7 @@ class HistoryService
         foreach ($rows as $progress) {
             $watchable = $progress->watchable;
 
-            if (!$watchable instanceof Model) {
+            if (! $watchable instanceof Model) {
                 continue;
             }
 
@@ -391,7 +549,7 @@ class HistoryService
                 continue;
             }
 
-            $playsCount = (int) ($playCountMap[$type . ':' . $watchable->id] ?? 0);
+            $playsCount = (int) ($playCountMap[$type.':'.$watchable->id] ?? 0);
             $items[] = self::serializeHistoryItem($watchable, $progress, $type, $playsCount);
         }
 

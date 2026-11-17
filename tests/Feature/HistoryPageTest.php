@@ -14,8 +14,8 @@ use Inertia\Testing\AssertableInertia as Assert;
 function createHistoryMovie(string $title = 'History Movie'): Movie
 {
     return Movie::create([
-        'slug' => 'history-movie-' . uniqid(),
-        'original_name' => $title . ' Original',
+        'slug' => 'history-movie-'.uniqid(),
+        'original_name' => $title.' Original',
         'title' => $title,
         'path' => '/path/to/history/movie.mp4',
         'runtime' => 120,
@@ -27,7 +27,7 @@ function createHistoryMovie(string $title = 'History Movie'): Movie
 function createHistoryEpisode(string $name = 'History Episode'): Episode
 {
     $tvshow = Tvshow::create([
-        'slug' => 'history-tvshow-' . uniqid(),
+        'slug' => 'history-tvshow-'.uniqid(),
         'folder_name' => 'History Tvshow Folder',
         'tmdb_id' => random_int(1, 9999999),
         'name' => 'History Tvshow',
@@ -229,4 +229,102 @@ test('history section API lazy-loads later pages with correct totals', function 
 test('guests cannot access history section API', function () {
     $this->getJson(route('api.history.section', ['section' => 'episodes']))
         ->assertStatus(401);
+});
+
+test('history section API sorts movies by name ascending', function () {
+    $user = User::factory()->create();
+    $bravo = createHistoryMovie('Bravo');
+    $alpha = createHistoryMovie('Alpha');
+    $charlie = createHistoryMovie('Charlie');
+
+    ViewService::updateProgress($bravo, $user, 600, 3600);
+    ViewService::updateProgress($alpha, $user, 600, 3600);
+    ViewService::updateProgress($charlie, $user, 600, 3600);
+
+    $this->actingAs($user);
+
+    $response = $this->getJson(route('api.history.section', [
+        'section' => 'movies',
+        'sort' => 'name',
+        'direction' => 'asc',
+    ]));
+
+    $response->assertOk()
+        ->assertJsonPath('sort', 'name')
+        ->assertJsonPath('direction', 'asc');
+
+    $titles = collect($response->json('items'))->pluck('title')->all();
+    expect($titles)->toBe(['Alpha', 'Bravo', 'Charlie']);
+});
+
+test('history section API sorts continue watching by progress descending', function () {
+    $user = User::factory()->create();
+    $low = createHistoryMovie('Low Progress');
+    $high = createHistoryMovie('High Progress');
+
+    ViewService::updateProgress($low, $user, 360, 3600); // 10%
+    ViewService::updateProgress($high, $user, 1800, 3600); // 50%
+
+    $this->actingAs($user);
+
+    $response = $this->getJson(route('api.history.section', [
+        'section' => 'continue',
+        'sort' => 'progress',
+        'direction' => 'desc',
+    ]));
+
+    $response->assertOk()
+        ->assertJsonPath('sort', 'progress')
+        ->assertJsonPath('direction', 'desc');
+
+    $ids = collect($response->json('items'))->pluck('id')->all();
+    expect($ids[0])->toBe($high->id);
+    expect($ids[1])->toBe($low->id);
+});
+
+test('history section API sorts rewatched by plays ascending', function () {
+    $user = User::factory()->create();
+    $twice = createHistoryMovie('Twice');
+    $thrice = createHistoryMovie('Thrice');
+
+    ViewService::updateProgress($twice, $user, 3500, 3600);
+    ViewService::recordPlay($twice, $user, 3500, 3600);
+    ViewService::recordPlay($twice, $user, 3400, 3600);
+
+    ViewService::updateProgress($thrice, $user, 3500, 3600);
+    ViewService::recordPlay($thrice, $user, 3500, 3600);
+    ViewService::recordPlay($thrice, $user, 3400, 3600);
+    ViewService::recordPlay($thrice, $user, 3300, 3600);
+
+    $this->actingAs($user);
+
+    $response = $this->getJson(route('api.history.section', [
+        'section' => 'rewatched',
+        'sort' => 'plays',
+        'direction' => 'asc',
+    ]));
+
+    $response->assertOk()
+        ->assertJsonPath('sort', 'plays')
+        ->assertJsonPath('direction', 'asc');
+
+    $items = collect($response->json('items'));
+    expect($items->pluck('id')->all())->toBe([$twice->id, $thrice->id]);
+    expect($items->pluck('plays_count')->all())->toBe([2, 3]);
+});
+
+test('history section API rejects unknown sort by falling back to default', function () {
+    $user = User::factory()->create();
+    $movie = createHistoryMovie('Fallback Sort');
+    ViewService::updateProgress($movie, $user, 600, 3600);
+
+    $this->actingAs($user)
+        ->getJson(route('api.history.section', [
+            'section' => 'movies',
+            'sort' => 'not-a-real-field',
+            'direction' => 'asc',
+        ]))
+        ->assertOk()
+        ->assertJsonPath('sort', 'watched')
+        ->assertJsonPath('direction', 'asc');
 });

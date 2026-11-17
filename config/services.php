@@ -41,4 +41,12 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'opensubtitles' => [
+        'api_key' => env('OPENSUBTITLES_API_KEY'),
+        'username' => env('OPENSUBTITLES_USERNAME'),
+        'password' => env('OPENSUBTITLES_PASSWORD'),
+        'user_agent' => env('OPENSUBTITLES_USER_AGENT', 'Libeflix v1.0'),
+        'base_url' => env('OPENSUBTITLES_BASE_URL', 'https://api.opensubtitles.com/api/v1'),
+    ],
+
 ];

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminMovieImportController;
+use App\Http\Controllers\AdminSubtitleController;
 use App\Http\Controllers\AdminTvshowImportController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CommentController;
@@ -312,6 +313,23 @@ Route::middleware(['auth', 'role_or_permission:admin|manage movies'])->prefix('a
         Route::get('search', [AdminTvshowImportController::class, 'search'])->name('search');
         Route::post('metadata', [AdminTvshowImportController::class, 'storeMetadata'])->name('metadata');
         Route::post('run', [AdminTvshowImportController::class, 'run'])->name('run');
+    });
+
+    Route::get('subtitles', [AdminSubtitleController::class, 'index'])->name('subtitles');
+
+    Route::prefix('api/subtitles')->name('api.subtitles.')->group(function () {
+        Route::get('languages', [AdminSubtitleController::class, 'languages'])->name('languages');
+        Route::get('quota', [AdminSubtitleController::class, 'quota'])->name('quota');
+        Route::get('titles', [AdminSubtitleController::class, 'titles'])->name('titles');
+        Route::post('preview', [AdminSubtitleController::class, 'preview'])->name('preview');
+        Route::get('tvshows/{tvshowId}/episodes', [AdminSubtitleController::class, 'episodes'])->whereNumber('tvshowId')->name('tvshow.episodes');
+        Route::post('tvshows/{tvshowId}/seasons/{seasonId}/autofill', [AdminSubtitleController::class, 'autofill'])->whereNumber(['tvshowId', 'seasonId'])->name('autofill');
+        Route::get('{type}/{id}/online', [AdminSubtitleController::class, 'online'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->name('online');
+        Route::post('{type}/{id}/online/download', [AdminSubtitleController::class, 'download'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->name('online.download');
+        Route::get('{type}/{id}/video', [AdminSubtitleController::class, 'video'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->name('video');
+        Route::get('{type}/{id}', [AdminSubtitleController::class, 'show'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->name('show');
+        Route::post('{type}/{id}', [AdminSubtitleController::class, 'store'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->name('store');
+        Route::delete('{type}/{id}/{lang}', [AdminSubtitleController::class, 'destroy'])->whereIn('type', ['movie', 'episode'])->whereNumber('id')->where('lang', '[A-Za-z]{2}')->name('destroy');
     });
 });
 

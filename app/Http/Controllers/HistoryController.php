@@ -40,16 +40,27 @@ class HistoryController extends Controller
         $validated = $request->validate([
             'page' => 'sometimes|integer|min:1',
             'per_page' => 'sometimes|integer|min:1|max:48',
+            'sort' => 'sometimes|string|max:32',
+            'direction' => 'sometimes|string|in:asc,desc',
         ]);
 
-        if (!in_array($section, HistoryService::SECTIONS, true)) {
+        if (! in_array($section, HistoryService::SECTIONS, true)) {
             return response()->json(['error' => 'Invalid section'], 404);
         }
 
         $page = (int) ($validated['page'] ?? 1);
         $perPage = (int) ($validated['per_page'] ?? HistoryService::PAGE_SIZE);
+        $sort = $validated['sort'] ?? null;
+        $direction = $validated['direction'] ?? null;
 
-        $result = HistoryService::paginateSection($user, $section, $page, $perPage);
+        $result = HistoryService::paginateSection(
+            $user,
+            $section,
+            $page,
+            $perPage,
+            $sort,
+            $direction
+        );
 
         return response()->json([
             'success' => true,

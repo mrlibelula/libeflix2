@@ -446,7 +446,7 @@ class EpisodeService
      * @param string $videoFilePath
      * @return array
      */
-    private static function findSubtitleFiles($storage, string $searchPath, string $videoFilePath): array
+    public static function findSubtitleFiles($storage, string $searchPath, string $videoFilePath): array
     {
         $subtitles = [];
         $files = $storage->files($searchPath);

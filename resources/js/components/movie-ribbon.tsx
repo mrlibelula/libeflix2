@@ -56,10 +56,14 @@ export function MovieRibbon({
 }: MovieRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
-  const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
+  const [clientSort, setClientSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
   const [clientPage, setClientPage] = useState(1);
   const isServerPaged = !!serverPagination;
+  const isServerSorted = isServerPaged && !!serverPagination.onSortChange;
   const isLoading = serverPagination?.isLoading ?? false;
+  const currentSort = isServerSorted
+    ? (serverPagination.sort as { field: SortField; direction: SortDirection } | null | undefined) ?? null
+    : clientSort;
   
   // Ref for the ribbon container to control scroll position
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
@@ -74,8 +78,8 @@ export function MovieRibbon({
     { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
   ];
 
-  // Filter out hidden sort options (disabled entirely in server-pagination mode)
-  const sortOptions = isServerPaged
+  // Hide client sort when server-paged without an onSortChange handler
+  const sortOptions = (isServerPaged && !isServerSorted)
     ? []
     : allSortOptions.filter(option => !hideSortOptions.includes(option.field));
 
@@ -166,8 +170,9 @@ export function MovieRibbon({
     });
   };
 
-  // Get sorted or base movies (shuffled for "Now Streaming", original for others)
-  const processedMovies = currentSort 
+  // Get sorted or base movies (shuffled for "Now Streaming", original for others).
+  // Server-sorted pages arrive already ordered — skip client re-sort.
+  const processedMovies = !isServerSorted && currentSort
     ? sortMovies(shuffledMovies, currentSort.field, currentSort.direction)
     : shuffledMovies;
 
@@ -223,14 +228,17 @@ export function MovieRibbon({
   };
 
   const handleSortToggle = (field: SortField) => {
-    if (currentSort?.field === field) {
-      // Toggle direction if same field
-      const newDirection = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      setCurrentSort({ field, direction: newDirection });
+    const nextSort = currentSort?.field === field
+      ? { field, direction: (currentSort.direction === 'asc' ? 'desc' : 'asc') as SortDirection }
+      : {
+          field,
+          direction: (sortOptions.find(opt => opt.field === field)?.direction || 'asc') as SortDirection,
+        };
+
+    if (isServerSorted) {
+      serverPagination.onSortChange?.(nextSort);
     } else {
-      // Set new field with default direction
-      const defaultDirection = sortOptions.find(opt => opt.field === field)?.direction || 'asc';
-      setCurrentSort({ field, direction: defaultDirection });
+      setClientSort(nextSort);
     }
     
     // Restore focus to ribbon after sorting

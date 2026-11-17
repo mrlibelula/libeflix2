@@ -54,10 +54,14 @@ class Episode extends Model
             return [];
         }
         
-        // Decode JSON string if needed
+        // Decode JSON string if needed. Older admin saves double-encoded because
+        // the array cast was combined with json_encode(); unwrap that once.
         $subtitles = is_string($value) ? json_decode($value, true) : $value;
-        
-        if (!is_array($subtitles)) {
+        if (is_string($subtitles)) {
+            $subtitles = json_decode($subtitles, true);
+        }
+
+        if (! is_array($subtitles)) {
             return [];
         }
         

@@ -32,6 +32,7 @@ interface EpisodeRibbonProps {
   onEpisodeClick?: (episode: any) => void;
   onRemoveFromHistory?: (episodeId: number) => void;
   showCheckIcon?: boolean;
+  hideSortOptions?: SortField[];
   /** Override carousel page size (default 30). */
   itemsPerPage?: number;
   /** Lazy server-side pagination — `episodes` is the current page only. */
@@ -50,15 +51,20 @@ export function EpisodeRibbon({
   onEpisodeClick,
   onRemoveFromHistory,
   showCheckIcon = false,
+  hideSortOptions = [],
   itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
   serverPagination,
 }: EpisodeRibbonProps) {
 
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
-  const [currentSort, setCurrentSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
+  const [clientSort, setClientSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
   const [clientPage, setClientPage] = useState(1);
   const isServerPaged = !!serverPagination;
+  const isServerSorted = isServerPaged && !!serverPagination.onSortChange;
   const isLoading = serverPagination?.isLoading ?? false;
+  const currentSort = isServerSorted
+    ? (serverPagination.sort as { field: SortField; direction: SortDirection } | null | undefined) ?? null
+    : clientSort;
   
   // Ref for the ribbon container to control scroll position
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
@@ -70,16 +76,17 @@ export function EpisodeRibbon({
     <span className="-mb-[0.1rem]" style={{ fontFamily: 'sans-serif', fontWeight: 'bold', fontSize: '1.2em' }}>S</span>
   );
 
-  // Sort options configuration (hidden in server-pagination mode)
-  const sortOptions: SortOption[] = isServerPaged
+  // Sort options (hidden when server-paged without onSortChange)
+  const allSortOptions: SortOption[] = [
+    { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
+    { field: 'season_number', direction: 'asc', icon: SIcon, label: 'Season' },
+    { field: 'episode_number', direction: 'asc', icon: HashIcon, label: 'Episode Number' },
+    { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
+    { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
+  ];
+  const sortOptions: SortOption[] = (isServerPaged && !isServerSorted)
     ? []
-    : [
-        { field: 'added', direction: 'desc', icon: ClockIcon, label: 'Added' },
-        { field: 'season_number', direction: 'asc', icon: SIcon, label: 'Season' },
-        { field: 'episode_number', direction: 'asc', icon: HashIcon, label: 'Episode Number' },
-        { field: 'name', direction: 'asc', icon: TypeIcon, label: 'Name' },
-        { field: 'rating', direction: 'desc', icon: StarIcon, label: 'Rating' },
-      ];
+    : allSortOptions.filter((option) => !hideSortOptions.includes(option.field));
 
   // Helper function to get initial sidebar width from cookie
   const getInitialSidebarWidth = () => {
@@ -154,8 +161,8 @@ export function EpisodeRibbon({
     });
   };
 
-  // Get sorted or base episodes
-  const processedEpisodes = currentSort 
+  // Get sorted or base episodes (server-sorted pages arrive already ordered)
+  const processedEpisodes = !isServerSorted && currentSort
     ? sortEpisodes(episodes, currentSort.field, currentSort.direction)
     : episodes;
 
@@ -212,14 +219,17 @@ export function EpisodeRibbon({
   };
 
   const handleSortToggle = (field: SortField) => {
-    if (currentSort?.field === field) {
-      // Toggle direction if same field
-      const newDirection = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      setCurrentSort({ field, direction: newDirection });
+    const nextSort = currentSort?.field === field
+      ? { field, direction: (currentSort.direction === 'asc' ? 'desc' : 'asc') as SortDirection }
+      : {
+          field,
+          direction: (sortOptions.find(opt => opt.field === field)?.direction || 'asc') as SortDirection,
+        };
+
+    if (isServerSorted) {
+      serverPagination.onSortChange?.(nextSort);
     } else {
-      // Set new field with default direction
-      const defaultDirection = sortOptions.find(opt => opt.field === field)?.direction || 'asc';
-      setCurrentSort({ field, direction: defaultDirection });
+      setClientSort(nextSort);
     }
     
     // Restore focus to ribbon after sorting

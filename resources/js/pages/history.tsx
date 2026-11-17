@@ -8,9 +8,56 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { Clapperboard, PlaySquare, History as HistoryIcon, Repeat2, PlayCircle } from "lucide-react";
 import { api } from "@/lib/api";
-import type { HistoryPagePayload, HistoryStats } from "@/types/history";
+import type { HistoryPagePayload, HistorySortState, HistoryStats } from "@/types/history";
 
 type HistorySection = "continue" | "movies" | "episodes" | "rewatched";
+
+type SectionSorts = Record<HistorySection, HistorySortState>;
+
+const DEFAULT_SORTS: SectionSorts = {
+  continue: { field: "watched", direction: "desc" },
+  movies: { field: "watched", direction: "desc" },
+  episodes: { field: "watched", direction: "desc" },
+  rewatched: { field: "plays", direction: "desc" },
+};
+
+/** Map MovieRibbon field names to history API sort keys. */
+function toMovieApiSort(field: string): string {
+  return field === "added" ? "watched" : field;
+}
+
+/** Map EpisodeRibbon field names to history API sort keys. */
+function toEpisodeApiSort(field: string): string {
+  switch (field) {
+    case "added":
+      return "watched";
+    case "season_number":
+      return "season";
+    case "episode_number":
+      return "episode";
+    default:
+      return field;
+  }
+}
+
+/** Map API sort keys back to MovieRibbon field names. */
+function toMovieUiSort(field: string): string {
+  return field === "watched" ? "added" : field;
+}
+
+/** Map API sort keys back to EpisodeRibbon field names. */
+function toEpisodeUiSort(field: string): string {
+  switch (field) {
+    case "watched":
+      return "added";
+    case "season":
+      return "season_number";
+    case "episode":
+      return "episode_number";
+    default:
+      return field;
+  }
+}
 
 export default function HistoryPage({
   continueWatching,
@@ -35,6 +82,7 @@ export default function HistoryPage({
   const [rewatchedPage, setRewatchedPage] = useState(mostRewatched);
   const [statsState, setStatsState] = useState(stats);
   const [loadingSection, setLoadingSection] = useState<HistorySection | null>(null);
+  const [sorts, setSorts] = useState<SectionSorts>(DEFAULT_SORTS);
 
   const lastFocusedRibbonRef = useRef<string | null>(null);
   const restoreFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,9 +143,17 @@ export default function HistoryPage({
   };
 
   const fetchSectionPage = useCallback(
-    async (section: HistorySection, page: number) => {
+    async (section: HistorySection, page: number, sortOverride?: HistorySortState) => {
+      const sort = sortOverride ?? sorts[section];
       setLoadingSection(section);
       try {
+        const params = new URLSearchParams({
+          page: String(page),
+          per_page: String(pageSize),
+          sort: sort.field,
+          direction: sort.direction,
+        });
+
         const response = await api.get<{
           success: boolean;
           items: any[];
@@ -105,7 +161,9 @@ export default function HistoryPage({
           page: number;
           per_page: number;
           last_page: number;
-        }>(`/api/history/${section}?page=${page}&per_page=${pageSize}`);
+          sort?: string;
+          direction?: "asc" | "desc";
+        }>(`/api/history/${section}?${params.toString()}`);
 
         if (!response.ok || !response.data) {
           throw new Error(response.error || "Failed to load history page");
@@ -117,7 +175,16 @@ export default function HistoryPage({
           page: response.data.page,
           per_page: response.data.per_page,
           last_page: response.data.last_page,
+          sort: response.data.sort,
+          direction: response.data.direction,
         };
+
+        if (response.data.sort && response.data.direction) {
+          setSorts((prev) => ({
+            ...prev,
+            [section]: { field: response.data!.sort!, direction: response.data!.direction! },
+          }));
+        }
 
         switch (section) {
           case "continue":
@@ -139,7 +206,22 @@ export default function HistoryPage({
         setLoadingSection(null);
       }
     },
-    [pageSize]
+    [pageSize, sorts]
+  );
+
+  const handleSectionSortChange = useCallback(
+    (section: HistorySection, uiSort: HistorySortState) => {
+      let apiSort = uiSort;
+      if (section === "movies") {
+        apiSort = { field: toMovieApiSort(uiSort.field), direction: uiSort.direction };
+      } else if (section === "episodes") {
+        apiSort = { field: toEpisodeApiSort(uiSort.field), direction: uiSort.direction };
+      }
+
+      setSorts((prev) => ({ ...prev, [section]: apiSort }));
+      void fetchSectionPage(section, 1, apiSort);
+    },
+    [fetchSectionPage]
   );
 
   const removeFromSectionLists = useCallback((type: "movie" | "episode", id: number) => {
@@ -291,6 +373,15 @@ export default function HistoryPage({
     },
   ];
 
+  const moviesUiSort: HistorySortState = {
+    field: toMovieUiSort(sorts.movies.field),
+    direction: sorts.movies.direction,
+  };
+  const episodesUiSort: HistorySortState = {
+    field: toEpisodeUiSort(sorts.episodes.field),
+    direction: sorts.episodes.direction,
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Watch History" />
@@ -339,6 +430,7 @@ export default function HistoryPage({
                   title={`Continue Watching (${continuePage.total})`}
                   ribbonId="history-continue"
                   uniformLandscape
+                  sortFields={["watched", "progress", "name"]}
                   serverPagination={{
                     total: continuePage.total,
                     page: continuePage.page,
@@ -346,6 +438,8 @@ export default function HistoryPage({
                     lastPage: continuePage.last_page,
                     isLoading: loadingSection === "continue",
                     onPageChange: (page) => void fetchSectionPage("continue", page),
+                    sort: sorts.continue,
+                    onSortChange: (sort) => handleSectionSortChange("continue", sort),
                   }}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}
@@ -364,7 +458,6 @@ export default function HistoryPage({
                   onWatchLaterToggle={handleWatchLaterToggle}
                   onLikeToggle={handleLikeToggle}
                   onRemoveFromHistory={handleMovieRemoveFromHistory}
-                  hideSortOptions={["added", "name", "year", "rating"]}
                   serverPagination={{
                     total: moviesPage.total,
                     page: moviesPage.page,
@@ -372,6 +465,8 @@ export default function HistoryPage({
                     lastPage: moviesPage.last_page,
                     isLoading: loadingSection === "movies",
                     onPageChange: (page) => void fetchSectionPage("movies", page),
+                    sort: moviesUiSort,
+                    onSortChange: (sort) => handleSectionSortChange("movies", sort),
                   }}
                 />
               </div>
@@ -385,6 +480,7 @@ export default function HistoryPage({
                   title={`Episodes (${episodesPage.total})`}
                   ribbonId="history-episodes"
                   onRemoveFromHistory={handleEpisodeRemoveFromHistory}
+                  hideSortOptions={["rating"]}
                   serverPagination={{
                     total: episodesPage.total,
                     page: episodesPage.page,
@@ -392,6 +488,8 @@ export default function HistoryPage({
                     lastPage: episodesPage.last_page,
                     isLoading: loadingSection === "episodes",
                     onPageChange: (page) => void fetchSectionPage("episodes", page),
+                    sort: episodesUiSort,
+                    onSortChange: (sort) => handleSectionSortChange("episodes", sort),
                   }}
                 />
               </div>
@@ -404,6 +502,7 @@ export default function HistoryPage({
                   imgBaseUrl={imgBaseUrl}
                   title={`Most Rewatched (${rewatchedPage.total})`}
                   ribbonId="history-rewatched"
+                  sortFields={["plays", "watched", "name"]}
                   serverPagination={{
                     total: rewatchedPage.total,
                     page: rewatchedPage.page,
@@ -411,6 +510,8 @@ export default function HistoryPage({
                     lastPage: rewatchedPage.last_page,
                     isLoading: loadingSection === "rewatched",
                     onPageChange: (page) => void fetchSectionPage("rewatched", page),
+                    sort: sorts.rewatched,
+                    onSortChange: (sort) => handleSectionSortChange("rewatched", sort),
                   }}
                   onRemoveFromHistory={handleRemoveFromHistory}
                   onWatchLaterToggle={handleWatchLaterToggle}

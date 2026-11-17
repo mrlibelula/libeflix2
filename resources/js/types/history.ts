@@ -11,6 +11,13 @@ export type HistoryPagePayload<T = any> = {
   page: number;
   per_page: number;
   last_page: number;
+  sort?: string;
+  direction?: "asc" | "desc";
+};
+
+export type HistorySortState = {
+  field: string;
+  direction: "asc" | "desc";
 };
 
 export type ServerPaginationProps = {
@@ -20,4 +27,7 @@ export type ServerPaginationProps = {
   lastPage: number;
   isLoading?: boolean;
   onPageChange: (page: number) => void;
+  /** Controlled server-side sort (when set with onSortChange, client sort is skipped). */
+  sort?: HistorySortState | null;
+  onSortChange?: (sort: HistorySortState) => void;
 };

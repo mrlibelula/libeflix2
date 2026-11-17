@@ -1,11 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  ClockIcon,
+  TypeIcon,
+  PercentIcon,
+  Repeat2Icon,
+} from "lucide-react";
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon";
 import { MoviePoster } from "@/components/movie-poster";
 import { EpisodeCard } from "@/components/ui/episode-card";
 import { HistoryLandscapeMovieCard } from "@/components/ui/history-landscape-movie-card";
 import { EmptyRibbonState } from "@/components/ui/empty-ribbon-state";
-import type { ServerPaginationProps } from "@/types/history";
+import type { HistorySortState, ServerPaginationProps } from "@/types/history";
 
 interface SidebarStateDetail {
   state: "expanded" | "collapsed";
@@ -19,6 +29,16 @@ export type HistoryItem = {
   [key: string]: any;
 };
 
+type HistorySortField = "watched" | "name" | "progress" | "plays";
+type SortDirection = "asc" | "desc";
+
+interface SortOption {
+  field: HistorySortField;
+  direction: SortDirection;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}
+
 interface HistoryRibbonProps {
   items: HistoryItem[];
   imgBaseUrl: string;
@@ -26,6 +46,8 @@ interface HistoryRibbonProps {
   ribbonId?: string;
   /** When true, movies use the same 16:9 tile size as episodes (Continue Watching). */
   uniformLandscape?: boolean;
+  /** Which sort buttons to show (defaults to watched + name). */
+  sortFields?: HistorySortField[];
   /** Client-side page size when not using serverPagination. */
   itemsPerPage?: number;
   /** Lazy server-side pagination — `items` is the current page only. */
@@ -37,12 +59,20 @@ interface HistoryRibbonProps {
 
 const DEFAULT_ITEMS_PER_PAGE = 12;
 
+const ALL_SORT_OPTIONS: SortOption[] = [
+  { field: "watched", direction: "desc", icon: ClockIcon, label: "Watched" },
+  { field: "plays", direction: "desc", icon: Repeat2Icon, label: "Plays" },
+  { field: "progress", direction: "desc", icon: PercentIcon, label: "Progress" },
+  { field: "name", direction: "asc", icon: TypeIcon, label: "Name" },
+];
+
 export function HistoryRibbon({
   items,
   imgBaseUrl,
   title = "History",
   ribbonId,
   uniformLandscape = false,
+  sortFields = ["watched", "name"],
   itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
   serverPagination,
   onRemoveFromHistory,
@@ -51,6 +81,7 @@ export function HistoryRibbon({
 }: HistoryRibbonProps) {
   const [isRibbonOpen, setIsRibbonOpen] = useState(true);
   const [clientPage, setClientPage] = useState(1);
+  const [clientSort, setClientSort] = useState<HistorySortState | null>(null);
   const [carouselApi, setCarouselApi] = useState<any>(null);
   const ribbonContainerRef = useRef<HTMLDivElement>(null);
 
@@ -83,6 +114,8 @@ export function HistoryRibbon({
   }, []);
 
   const isServerPaged = !!serverPagination;
+  const isServerSorted = isServerPaged && !!serverPagination.onSortChange;
+  const currentSort = isServerSorted ? serverPagination.sort ?? null : clientSort;
   const currentPage = isServerPaged ? serverPagination.page : clientPage;
   const totalPages = isServerPaged
     ? Math.max(1, serverPagination.lastPage)
@@ -92,14 +125,55 @@ export function HistoryRibbon({
   const shouldPaginate = totalPages > 1;
   const startIndex = isServerPaged ? 0 : (currentPage - 1) * itemsPerPage;
   const endIndex = isServerPaged ? items.length : startIndex + itemsPerPage;
-  const visibleItems = isServerPaged ? items : items.slice(startIndex, endIndex);
   const isLoading = serverPagination?.isLoading ?? false;
+
+  const sortOptions = ALL_SORT_OPTIONS.filter((option) => sortFields.includes(option.field));
+
+  const sortItems = (itemsToSort: HistoryItem[], field: string, direction: SortDirection) => {
+    return [...itemsToSort].sort((a, b) => {
+      let aValue: string | number = 0;
+      let bValue: string | number = 0;
+
+      switch (field) {
+        case "name":
+          aValue = (a.title || a.name || a.tvshow?.name || "").toLowerCase();
+          bValue = (b.title || b.name || b.tvshow?.name || "").toLowerCase();
+          break;
+        case "progress":
+          aValue = a.progress_percentage || 0;
+          bValue = b.progress_percentage || 0;
+          break;
+        case "plays":
+          aValue = a.plays_count || 0;
+          bValue = b.plays_count || 0;
+          break;
+        case "watched":
+        default:
+          aValue = a.last_watched_at ? new Date(a.last_watched_at).getTime() : 0;
+          bValue = b.last_watched_at ? new Date(b.last_watched_at).getTime() : 0;
+          break;
+      }
+
+      if (direction === "asc") {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      }
+      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+    });
+  };
+
+  const processedItems =
+    !isServerSorted && currentSort
+      ? sortItems(items, currentSort.field, currentSort.direction)
+      : items;
+  const visibleItems = isServerPaged
+    ? processedItems
+    : processedItems.slice(startIndex, endIndex);
 
   useEffect(() => {
     if (!isServerPaged) {
       setClientPage(1);
     }
-  }, [items.length, itemsPerPage, isServerPaged]);
+  }, [items.length, itemsPerPage, isServerPaged, clientSort]);
 
   useEffect(() => {
     if (carouselApi) {
@@ -122,6 +196,23 @@ export function HistoryRibbon({
       }
     }, 100);
   }, []);
+
+  const handleSortToggle = (field: HistorySortField) => {
+    const nextSort: HistorySortState =
+      currentSort?.field === field
+        ? { field, direction: currentSort.direction === "asc" ? "desc" : "asc" }
+        : {
+            field,
+            direction: sortOptions.find((opt) => opt.field === field)?.direction || "asc",
+          };
+
+    if (isServerSorted) {
+      serverPagination.onSortChange?.(nextSort);
+    } else {
+      setClientSort(nextSort);
+    }
+    restoreFocusToRibbon();
+  };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages || page === currentPage || isLoading) {
@@ -150,6 +241,13 @@ export function HistoryRibbon({
     if (end < totalPages - 1) pages.push("...");
     pages.push(totalPages);
     return pages;
+  };
+
+  const getCurrentSortDirection = (field: HistorySortField) => {
+    if (currentSort?.field === field) {
+      return currentSort.direction;
+    }
+    return null;
   };
 
   return (
@@ -182,6 +280,38 @@ export function HistoryRibbon({
             }`}
           />
         </button>
+
+        {items.length > 0 && sortOptions.length > 0 && (
+          <div className="flex items-center gap-1">
+            {sortOptions.map((option) => {
+              const isActive = getCurrentSortDirection(option.field) !== null;
+              const direction = getCurrentSortDirection(option.field);
+
+              return (
+                <button
+                  key={option.field}
+                  type="button"
+                  onClick={() => handleSortToggle(option.field)}
+                  disabled={isLoading}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md transition-colors duration-200 text-sm font-medium cursor-pointer ${
+                    isActive
+                      ? "text-rose-700 dark:text-rose-300"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
+                  title={`Sort by ${option.label}${isActive ? ` (${direction === "asc" ? "ascending" : "descending"})` : ""}`}
+                >
+                  <option.icon className="w-4 h-4" />
+                  {isActive &&
+                    (direction === "asc" ? (
+                      <ArrowUpIcon className="w-3 h-3" />
+                    ) : (
+                      <ArrowDownIcon className="w-3 h-3" />
+                    ))}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div
