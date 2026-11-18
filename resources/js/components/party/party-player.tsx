@@ -83,16 +83,27 @@ export function PartyPlayer({
     );
   }
 
-  const partySync: PartyPlayerSync = {
-    enabled: true,
-    canControl,
-    isPlaying: playback.is_playing,
-    positionSeconds: playback.position_seconds,
-    playbackUpdatedAt: playback.playback_updated_at,
-    onTransport,
-    // Only the host anchors position — prevents dual-heartbeat seek fights
-    onPositionHeartbeat: isHost ? onPositionHeartbeat : undefined,
-  };
+  const partySync: PartyPlayerSync = useMemo(
+    () => ({
+      enabled: true,
+      canControl,
+      isPlaying: playback.is_playing,
+      positionSeconds: playback.position_seconds,
+      playbackUpdatedAt: playback.playback_updated_at,
+      onTransport,
+      // Only the host anchors position — prevents dual-heartbeat seek fights
+      onPositionHeartbeat: isHost ? onPositionHeartbeat : undefined,
+    }),
+    [
+      canControl,
+      isHost,
+      onPositionHeartbeat,
+      onTransport,
+      playback.is_playing,
+      playback.playback_updated_at,
+      playback.position_seconds,
+    ]
+  );
 
   const hostNotice =
     showHostNotice && !canControl ? (

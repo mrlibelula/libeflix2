@@ -68,14 +68,25 @@ export function usePartySync({ code, initialSnapshot, onVoiceSignals }: Options)
   const mergeSnapshot = useCallback((next: PartySnapshot) => {
     setSnapshot((prev) => {
       const holding = Date.now() < holdPlaybackUntil.current;
+      const nextItem = holding
+        ? prev.playback.current_queue_item_id === next.playback.current_queue_item_id
+          ? prev.current_item
+          : next.current_item
+        : next.current_item;
+
+      // Keep the same object when the queue item hasn't changed — players key effects off
+      // episode/movie identity, and poll churn was re-toggling subtitle tracks (visible blink).
+      const sameCurrentItem =
+        !!prev.current_item &&
+        !!nextItem &&
+        prev.current_item.id === nextItem.id &&
+        prev.current_item.enc_file_path === nextItem.enc_file_path &&
+        prev.current_item.can_play === nextItem.can_play;
+
       return {
         ...next,
         playback: holding ? prev.playback : next.playback,
-        current_item: holding
-          ? prev.playback.current_queue_item_id === next.playback.current_queue_item_id
-            ? prev.current_item
-            : next.current_item
-          : next.current_item,
+        current_item: sameCurrentItem ? prev.current_item : nextItem,
         chat: prev.chat,
         voice_signals: [],
       };

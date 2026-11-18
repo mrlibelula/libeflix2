@@ -177,7 +177,20 @@ export function PlayMoviePlayer({
     }
   }, [canAccessMovie, encFilePath]);
 
-  // Initialize subtitle tracks when movie changes
+  // Stable key so party snapshot object refreshes don't re-init subtitles
+  const movieSubtitleKey =
+    movie?.subtitles && Array.isArray(movie.subtitles)
+      ? movie.subtitles
+          .map((subtitle: any) => {
+            const code = subtitle?.languageCode || subtitle?.language_code;
+            const path = subtitle?.encPath || subtitle?.encFilePath;
+            return code && path ? `${String(code).toUpperCase()}:${path}` : '';
+          })
+          .filter(Boolean)
+          .join('|')
+      : '';
+
+  // Initialize subtitle tracks when movie / available tracks change — not on party poll object churn
   useEffect(() => {
     if (movie && movie.subtitles && Array.isArray(movie.subtitles)) {
       try {
@@ -250,7 +263,7 @@ export function PlayMoviePlayer({
       setCurrentSubtitleId('off');
       setHasSubtitles(false);
     }
-  }, [movie, userPreferredSubtitleId, currentSubtitleId]);
+  }, [movie?.id, movieSubtitleKey, userPreferredSubtitleId]);
 
   // Initialize audio tracks when movie changes (for language-specific video files)
   useEffect(() => {
@@ -291,7 +304,7 @@ export function PlayMoviePlayer({
       // No additional language files, just show default
       setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: encFilePath }]);
     }
-  }, [movie, encFilePath]);
+  }, [movie?.id, movie?.original_language_name, encFilePath]);
 
   const handleError = (err: Error) => {
     setError(err);
@@ -1193,23 +1206,26 @@ export function PlayMoviePlayer({
     }
   };
 
-  const applySubtitleToVideo = (subtitleId: string) => {
+  // Apply subtitle track mode. Skip hide→show when already correct to avoid party-mode cue blink.
+  const applySubtitleToVideo = (subtitleId: string, options?: { force?: boolean }) => {
     if (!videoRef.current) return;
     
     const video = videoRef.current;
-    
-    // First, hide all subtitle tracks
-    for (let i = 0; i < video.textTracks.length; i++) {
-      video.textTracks[i].mode = 'hidden';
-    }
-    
+    const force = Boolean(options?.force);
+    const tracks = video.textTracks;
+
     if (subtitleId === 'off') {
+      for (let i = 0; i < tracks.length; i++) {
+        if (tracks[i].mode !== 'disabled') {
+          tracks[i].mode = 'disabled';
+        }
+      }
       return;
     }
     
     // Find the matching track by language code
     const normalizedSubtitleId = subtitleId.toUpperCase();
-    const textTrackIndex = Array.from(video.textTracks).findIndex(
+    const textTrackIndex = Array.from(tracks).findIndex(
       track => {
         const trackLang = (track.language || '').toUpperCase();
         const trackLabel = (track.label || '').toUpperCase();
@@ -1217,16 +1233,24 @@ export function PlayMoviePlayer({
       }
     );
     
-    if (textTrackIndex !== -1) {
-      // Apply the subtitle with a small delay to ensure it's loaded
-      setTimeout(() => {
-        if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
-          videoRef.current.textTracks[textTrackIndex].mode = 'showing';
-          // console.log('Subtitle applied:', subtitleId, 'Track index:', textTrackIndex);
+    if (textTrackIndex === -1) {
+      console.warn('Subtitle track not found:', subtitleId, 'Available tracks:', tracks.length);
+      return;
+    }
+
+    const targetTrack = tracks[textTrackIndex];
+
+    if (!force && targetTrack.mode === 'showing') {
+      for (let i = 0; i < tracks.length; i++) {
+        if (i !== textTrackIndex && tracks[i].mode !== 'disabled') {
+          tracks[i].mode = 'disabled';
         }
-      }, 100);
-    } else {
-      console.warn('Subtitle track not found:', subtitleId, 'Available tracks:', video.textTracks.length);
+      }
+      return;
+    }
+
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].mode = i === textTrackIndex ? 'showing' : 'disabled';
     }
   };
 
@@ -1624,7 +1648,7 @@ export function PlayMoviePlayer({
           {/* Video controls overlay */}
           <div 
             ref={controlsRef}
-            className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end pointer-events-none ${
+            className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-between pointer-events-none ${
               (controlsVisible && canAccessMovie) ? 'opacity-100' : 'opacity-0'
             }`}
             onMouseEnter={() => {
@@ -1653,7 +1677,15 @@ export function PlayMoviePlayer({
             }}
           >
             
+            <div className="absolute top-0 left-0 right-0 h-9 sm:h-10 light-gradient-video-top dark:dark-gradient-video-top z-10 pointer-events-none" />
             <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10 pointer-events-none" />
+
+            {/* Title header — thin top ribbon */}
+            <div className="relative z-30 px-3 py-1.5 text-neutral-900 dark:text-neutral-100 pointer-events-none">
+              <h2 className="text-xs sm:text-sm font-medium leading-tight truncate">
+                {movie?.title || movie?.name || 'Movie'}
+              </h2>
+            </div>
 
             <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
               <div className="mb-3 relative">

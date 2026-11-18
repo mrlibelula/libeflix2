@@ -20,6 +20,7 @@ import { EpisodesApi } from "@/services/episodes-api";
 import axios from 'axios';
 import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
+import { useMenuTouchTap } from '@/hooks/use-menu-touch-tap';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -209,6 +210,7 @@ export function PlayEpisodeDialog({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio' | 'sound'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const { onMenuTouchStart, onMenuTouchEnd } = useMenuTouchTap();
 
   // Seasons & Episodes menu state — season list is cheap; episodes load per season on demand
   const [showEpisodesMenu, setShowEpisodesMenu] = useState(false);
@@ -379,7 +381,7 @@ export function PlayEpisodeDialog({
     }
   }, [dialogOpen, buildSeasonList]);
 
-  // Fetch user's audio preference when episode or tvshow changes
+  // Fetch user's audio preference when tvshow changes (not on every episode object refresh)
   useEffect(() => {
     const fetchAudioPreference = async () => {
       if (!isAuthenticated || !tvshowId) {
@@ -397,9 +399,9 @@ export function PlayEpisodeDialog({
     };
 
     fetchAudioPreference();
-  }, [episode, tvshowId, isAuthenticated]);
+  }, [tvshowId, isAuthenticated]);
 
-  // Fetch user's subtitle preference when episode or tvshow changes
+  // Fetch user's subtitle preference when tvshow changes (not on every episode object refresh)
   useEffect(() => {
     const fetchSubtitlePreference = async () => {
       if (!isAuthenticated || !tvshowId) {
@@ -417,9 +419,9 @@ export function PlayEpisodeDialog({
     };
 
     fetchSubtitlePreference();
-  }, [episode, tvshowId, isAuthenticated]);
+  }, [tvshowId, isAuthenticated]);
 
-  // Initialize audio tracks when episode changes (for language-specific video files)
+  // Initialize audio tracks when episode identity changes (party polls must not re-run this)
   useEffect(() => {
     if (episode) {
       // Update currentEncFilePath when episode changes
@@ -479,9 +481,9 @@ export function PlayEpisodeDialog({
         setAudioTracks([{ id: 'default', label: 'Original', selected: true, encFilePath: episode.encFilePath }]);
       }
     }
-  }, [episode, userPreferredAudio]);
+  }, [episode?.id, episode?.encFilePath, userPreferredAudio]);
   
-  // Initialize episode states when episode changes
+  // Initialize episode states when episode identity changes
   useEffect(() => {
     if (episode) {
       setIsLiked(episode.is_liked || false);
@@ -493,7 +495,7 @@ export function PlayEpisodeDialog({
         setIsWatchLater(episode.is_watch_later || false);
       }
     }
-  }, [episode, externalWatchLaterState]);
+  }, [episode?.id, episode?.is_liked, episode?.likes_count, episode?.views_count, episode?.plays_count, episode?.is_watch_later, externalWatchLaterState]);
 
   // Handle loading state when access changes
   useEffect(() => {
@@ -542,13 +544,23 @@ export function PlayEpisodeDialog({
     };
   }, [isPlaying, dialogOpen, canAccessEpisode]);
 
-  // Initialize subtitle tracks when episode changes
+  // Stable key so party snapshot object refreshes don't re-init subtitles
+  const episodeSubtitleKey =
+    episode?.subtitles && Array.isArray(episode.subtitles)
+      ? episode.subtitles
+          .map((subtitle: any) =>
+            subtitle?.language_code && subtitle?.encFilePath
+              ? `${String(subtitle.language_code).toUpperCase()}:${subtitle.encFilePath}`
+              : ''
+          )
+          .filter(Boolean)
+          .join('|')
+      : '';
+
+  // Initialize subtitle tracks when episode / available tracks change — not on party poll object churn
   useEffect(() => {
     if (episode && episode.subtitles && Array.isArray(episode.subtitles)) {
       try {
-        // Get previous selected subtitle ID to handle transitions
-        const previouslySelectedId = currentSubtitleId;
-        
         // Map the subtitles from the episode to our format
         const subtitleOptions = [
           { id: 'off', label: 'Off', selected: true }, // Start with 'Off' selected by default
@@ -630,7 +642,7 @@ export function PlayEpisodeDialog({
       setCurrentSubtitleId('off');
       setHasSubtitles(false);
     }
-  }, [episode, userPreferredSubtitleId, currentSubtitleId]);
+  }, [episode?.id, episodeSubtitleKey, userPreferredSubtitleId]);
 
   // Custom handler to handle manual closing via the X button
   const handleClose = () => {
@@ -1044,7 +1056,7 @@ export function PlayEpisodeDialog({
         // Re-apply subtitles after entering PiP
         if (currentSubtitleId && currentSubtitleId !== 'off') {
           setTimeout(() => {
-            applySubtitleToVideo(currentSubtitleId);
+            applySubtitleToVideo(currentSubtitleId, { force: true });
           }, 100);
         }
       }
@@ -2082,7 +2094,8 @@ export function PlayEpisodeDialog({
   // Only run this effect when the episode changes or dialog state changes, NOT when subtitle preferences change
   }, [episode?.encFilePath, dialogOpen, autoPlay, isAccessChecked]);
 
-  // Separate effect to handle subtitle changes without restarting the video
+  // Separate effect to handle subtitle selection changes without restarting the video.
+  // Depend only on currentSubtitleId — subtitleTracks array identity churn must not re-toggle tracks.
   useEffect(() => {
     // Only apply subtitle changes if video is already playing (not during initial load)
     if (videoRef.current && videoRef.current.readyState >= 3 && currentSubtitleId !== 'off') {
@@ -2096,7 +2109,7 @@ export function PlayEpisodeDialog({
         applySubtitleToVideo(currentSubtitleId);
       }
     }
-  }, [currentSubtitleId, subtitleTracks]);
+  }, [currentSubtitleId]);
 
   // Episode end advance is handled only by handleVideoEnd (React onEnded + timeupdate backup).
   // The <video> element persists across episodes, so any handler captured once would go stale.
@@ -2283,7 +2296,7 @@ export function PlayEpisodeDialog({
           
           // Make sure subtitles are applied before entering PiP
           if (currentSubtitleId && currentSubtitleId !== 'off') {
-            applySubtitleToVideo(currentSubtitleId);
+            applySubtitleToVideo(currentSubtitleId, { force: true });
           }
           
           // Set up PiP options with subtitles
@@ -2300,7 +2313,7 @@ export function PlayEpisodeDialog({
               // Re-apply subtitles after entering PiP in Chrome
               if (currentSubtitleId && currentSubtitleId !== 'off') {
                 setTimeout(() => {
-                  applySubtitleToVideo(currentSubtitleId);
+                  applySubtitleToVideo(currentSubtitleId, { force: true });
                 }, 100);
               }
             } catch (error: unknown) {
@@ -2316,7 +2329,7 @@ export function PlayEpisodeDialog({
             // Force re-apply subtitles after entering PiP
             if (currentSubtitleId && currentSubtitleId !== 'off') {
               setTimeout(() => {
-                applySubtitleToVideo(currentSubtitleId);
+                applySubtitleToVideo(currentSubtitleId, { force: true });
               }, 100);
             }
           } catch (error: unknown) {
@@ -2345,7 +2358,7 @@ export function PlayEpisodeDialog({
       // For modern Chrome (94+) and Safari (16.1+), subtitle tracks set to 'showing'
       // should automatically appear in PiP
       setTimeout(() => {
-        applySubtitleToVideo(currentSubtitleId);
+        applySubtitleToVideo(currentSubtitleId, { force: true });
         
         // Add PiP subtitle event listener if browser supports it
         if ('pictureInPictureWindow' in window) {
@@ -2355,7 +2368,7 @@ export function PlayEpisodeDialog({
             // @ts-ignore - Modern API
             pipWindow.addEventListener('resize', () => {
               // Re-apply subtitles when PiP window resizes
-              applySubtitleToVideo(currentSubtitleId);
+              applySubtitleToVideo(currentSubtitleId, { force: true });
             });
           } catch (err) {
             
@@ -2373,65 +2386,68 @@ export function PlayEpisodeDialog({
     handleError(new Error(`Failed to handle Picture-in-Picture: ${errorMessage}`));
   };
 
-  // Enhance the applySubtitleToVideo function to be more robust
-  const applySubtitleToVideo = (subtitleId: string) => {
+  // Apply subtitle track mode. Avoid disabled/hidden→showing toggles when already correct —
+  // that flash is what made party-mode cues look like they blink on every text change.
+  const applySubtitleToVideo = (subtitleId: string, options?: { force?: boolean }) => {
     if (!videoRef.current) return;
     
     try {
-      // Store current playback position and playing state
-      const currentTime = videoRef.current.currentTime;
-      const wasPlaying = !videoRef.current.paused;
-      
+      const force = Boolean(options?.force);
       // Normalize the subtitle ID for case-insensitive comparison
       const normalizedSubtitleId = subtitleId !== 'off' ? subtitleId.toUpperCase() : 'off';
-      
-      // Disable all tracks first
-      Array.from(videoRef.current.textTracks).forEach((track) => {
-        track.mode = 'disabled';
-      });
-      
-      // Enable the selected track if it's not "off"
-      if (normalizedSubtitleId !== 'off') {
-        // Find the track index with case-insensitive comparison
-        const subtitleIndex = subtitleTracks.findIndex(
-          track => track.id.toUpperCase() === normalizedSubtitleId
-        );
-        
-        // Only proceed if we found a valid subtitle in our tracks list (not "off")
-        if (subtitleIndex > 0) { // Index 0 is "Off", so must be > 0
-          // Calculate the actual track index in the video's textTracks collection
-          const textTrackIndex = subtitleIndex - 1; // -1 because "Off" isn't in textTracks
-          
-          // Verify the calculated index is valid before trying to use it
-          if (textTrackIndex >= 0 && videoRef.current.textTracks.length > textTrackIndex) {
-            // Force a brief hidden->showing transition which can help trigger visibility in PiP mode
-            videoRef.current.textTracks[textTrackIndex].mode = 'hidden';
-            
-            // Short timeout before showing to ensure the track mode change is processed
-            setTimeout(() => {
-              if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
-                videoRef.current.textTracks[textTrackIndex].mode = 'showing';
-                
-                // For PiP mode in some browsers, we need an additional force-show
-                if (document.pictureInPictureElement === videoRef.current) {
-                  // Some browsers need multiple attempts to show subtitles in PiP
-                  setTimeout(() => {
-                    if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
-                      // Re-apply showing mode after a brief delay
-                      videoRef.current.textTracks[textTrackIndex].mode = 'showing';
-                    }
-                  }, 200);
-                }
-              }
-            }, 50);
-          } else {
-            // Log a more helpful error message for diagnosis
-            console.warn(`Cannot apply subtitle: calculated textTrack index (${textTrackIndex}) is invalid or out of range. Available tracks: ${videoRef.current.textTracks.length}`);
+      const tracks = videoRef.current.textTracks;
+
+      if (normalizedSubtitleId === 'off') {
+        Array.from(tracks).forEach((track) => {
+          if (track.mode !== 'disabled') {
+            track.mode = 'disabled';
           }
-        } else {
-          // Log when the requested subtitle ID isn't found in our tracks
-          console.warn(`Subtitle ID "${normalizedSubtitleId}" not found in available subtitle tracks. Available IDs: ${subtitleTracks.map(t => t.id).join(', ')}`);
-        }
+        });
+        return;
+      }
+
+      // Find the track index with case-insensitive comparison
+      const subtitleIndex = subtitleTracks.findIndex(
+        track => track.id.toUpperCase() === normalizedSubtitleId
+      );
+
+      // Only proceed if we found a valid subtitle in our tracks list (not "off")
+      if (subtitleIndex <= 0) {
+        console.warn(`Subtitle ID "${normalizedSubtitleId}" not found in available subtitle tracks. Available IDs: ${subtitleTracks.map(t => t.id).join(', ')}`);
+        return;
+      }
+
+      // Calculate the actual track index in the video's textTracks collection
+      const textTrackIndex = subtitleIndex - 1; // -1 because "Off" isn't in textTracks
+
+      if (textTrackIndex < 0 || textTrackIndex >= tracks.length) {
+        console.warn(`Cannot apply subtitle: calculated textTrack index (${textTrackIndex}) is invalid or out of range. Available tracks: ${tracks.length}`);
+        return;
+      }
+
+      const targetTrack = tracks[textTrackIndex];
+
+      // Already showing — leave cues alone (party polls used to re-toggle this and blink)
+      if (!force && targetTrack.mode === 'showing') {
+        Array.from(tracks).forEach((track, index) => {
+          if (index !== textTrackIndex && track.mode !== 'disabled') {
+            track.mode = 'disabled';
+          }
+        });
+        return;
+      }
+
+      Array.from(tracks).forEach((track, index) => {
+        track.mode = index === textTrackIndex ? 'showing' : 'disabled';
+      });
+
+      // PiP sometimes needs an explicit re-assert without going through hidden first
+      if (force && document.pictureInPictureElement === videoRef.current) {
+        setTimeout(() => {
+          if (videoRef.current && videoRef.current.textTracks.length > textTrackIndex) {
+            videoRef.current.textTracks[textTrackIndex].mode = 'showing';
+          }
+        }, 200);
       }
     } catch (err) {
       console.error('Error applying subtitle to video:', err);
@@ -3413,7 +3429,7 @@ export function PlayEpisodeDialog({
                 {/* Video controls overlay */}
                 <div 
                   ref={controlsRef}
-                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-end pointer-events-none ${
+                  className={`absolute inset-0 bottom-[-0.1rem] bg-gradient-to-t_ from-[#fafafa] dark:from-[#171717] via-transparent to-transparent transition-opacity duration-300 flex flex-col justify-between pointer-events-none ${
                     (controlsVisible && canAccessEpisode) ? 'opacity-100' : 'opacity-0'
                   }`}
                   onMouseEnter={() => {
@@ -3444,7 +3460,15 @@ export function PlayEpisodeDialog({
                   }}
                 >
                   
+                  <div className="absolute top-0 left-0 right-0 h-9 sm:h-10 light-gradient-video-top dark:dark-gradient-video-top z-10 pointer-events-none" />
                   <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10 pointer-events-none" />
+
+                  {/* Title header — thin top ribbon */}
+                  <div className="relative z-30 px-3 py-1.5 text-neutral-900 dark:text-neutral-100 pointer-events-none">
+                    <h2 className="text-xs sm:text-sm font-medium leading-tight truncate">
+                      {tvshowName} / S{episode.season_number} / E{episode.episode_number} / {episode.name}
+                    </h2>
+                  </div>
 
                   <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
                     <div className="mb-3 relative">
@@ -3647,10 +3671,11 @@ export function PlayEpisodeDialog({
                                     e.stopPropagation();
                                     setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
                                   }}
+                                  onTouchStart={onMenuTouchStart}
                                   onTouchEnd={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
+                                    onMenuTouchEnd(e, () => {
+                                      setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
+                                    });
                                   }}
                                 >
                                   <span className="text-sm font-medium">Subtitles</span>
@@ -3676,10 +3701,11 @@ export function PlayEpisodeDialog({
                                     e.stopPropagation();
                                     setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
                                   }}
+                                  onTouchStart={onMenuTouchStart}
                                   onTouchEnd={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
+                                    onMenuTouchEnd(e, () => {
+                                      setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
+                                    });
                                   }}
                                 >
                                   <span className="text-sm font-medium">Audio</span>
@@ -3703,10 +3729,11 @@ export function PlayEpisodeDialog({
                                   e.stopPropagation();
                                   setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
                                 }}
+                                onTouchStart={onMenuTouchStart}
                                 onTouchEnd={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
+                                  onMenuTouchEnd(e, () => {
+                                    setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
+                                  });
                                 }}
                               >
                                 <span className="text-sm font-medium">Sound</span>
@@ -3723,7 +3750,7 @@ export function PlayEpisodeDialog({
                             {activeSection === 'subtitles' && (
                               <div 
                                 className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                                style={{ width: '180px' }}
+                                style={{ width: '180px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
                                 onClick={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                               >
@@ -3735,10 +3762,9 @@ export function PlayEpisodeDialog({
                                       e.stopPropagation();
                                       handleSelectSubtitle(track.id);
                                     }}
+                                    onTouchStart={onMenuTouchStart}
                                     onTouchEnd={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      handleSelectSubtitle(track.id);
+                                      onMenuTouchEnd(e, () => handleSelectSubtitle(track.id));
                                     }}
                                   >
                                     <span className="flex-1 text-sm">{track.label}</span>
@@ -3752,7 +3778,7 @@ export function PlayEpisodeDialog({
                             {activeSection === 'audio' && (
                               <div 
                                 className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                                style={{ width: '180px' }}
+                                style={{ width: '180px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
                                 onClick={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                               >
@@ -3764,10 +3790,9 @@ export function PlayEpisodeDialog({
                                       e.stopPropagation();
                                       handleSelectAudio(track.id);
                                     }}
+                                    onTouchStart={onMenuTouchStart}
                                     onTouchEnd={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      handleSelectAudio(track.id);
+                                      onMenuTouchEnd(e, () => handleSelectAudio(track.id));
                                     }}
                                   >
                                     <span className="flex-1 text-sm">{track.label}</span>
@@ -3791,10 +3816,9 @@ export function PlayEpisodeDialog({
                                     e.stopPropagation();
                                     setNormalizeVolume(!normalizeVolume);
                                   }}
+                                  onTouchStart={onMenuTouchStart}
                                   onTouchEnd={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setNormalizeVolume(!normalizeVolume);
+                                    onMenuTouchEnd(e, () => setNormalizeVolume(!normalizeVolume));
                                   }}
                                 >
                                   <span className="flex-1 text-sm">Normalize volume</span>
@@ -3809,10 +3833,9 @@ export function PlayEpisodeDialog({
                                       e.stopPropagation();
                                       setAudioMode(option.id);
                                     }}
+                                    onTouchStart={onMenuTouchStart}
                                     onTouchEnd={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      setAudioMode(option.id);
+                                      onMenuTouchEnd(e, () => setAudioMode(option.id));
                                     }}
                                   >
                                     <span className="flex-1 text-sm">{option.label}</span>
@@ -3837,7 +3860,7 @@ export function PlayEpisodeDialog({
                             {seasonsData.length > 0 ? (
                               <>
                                 {/* Main menu items — season list only; episodes load on demand */}
-                                <div className="py-1 overflow-y-auto" style={{ maxHeight: 'min(350px, 50vh)' }}>
+                                <div className="py-1 overflow-y-auto overscroll-contain" style={{ maxHeight: 'min(350px, 50vh)', touchAction: 'pan-y' }}>
                                   {seasonsData.map((season) => {
                                     const currentSeasonEpisodeCount = season.loaded
                                       ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
@@ -3857,10 +3880,11 @@ export function PlayEpisodeDialog({
                                           e.stopPropagation();
                                           setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
                                         }}
+                                        onTouchStart={onMenuTouchStart}
                                         onTouchEnd={(e) => {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
+                                          onMenuTouchEnd(e, () => {
+                                            setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
+                                          });
                                         }}
                                       >
                                         <span className="text-sm font-medium">Season {season.season_number}</span>
@@ -3879,8 +3903,8 @@ export function PlayEpisodeDialog({
                                 {/* Episodes submenu — loads when a season is hovered/selected */}
                                 {activeSeasonNumber !== null && seasonsData.find(s => s.season_number === activeSeasonNumber) && (
                                   <div 
-                                    className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                                    style={{ width: '260px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto' }}
+                                    className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1 overscroll-contain"
+                                    style={{ width: '260px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
                                     onClick={(e) => e.stopPropagation()}
                                     onTouchStart={(e) => e.stopPropagation()}
                                   >
@@ -3908,10 +3932,11 @@ export function PlayEpisodeDialog({
                                             e.stopPropagation();
                                             if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
                                           }}
+                                          onTouchStart={onMenuTouchStart}
                                           onTouchEnd={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
+                                            onMenuTouchEnd(e, () => {
+                                              if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
+                                            });
                                           }}
                                         >
                                           <div className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${
