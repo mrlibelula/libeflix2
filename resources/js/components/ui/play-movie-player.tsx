@@ -454,11 +454,8 @@ export function PlayMoviePlayer({
     };
   }, []);
 
-  // Track watch progress and send to API periodically (skipped in party theaters)
+  // Track watch progress and send to API periodically (including party theaters → history)
   useEffect(() => {
-    if (partySync?.enabled) {
-      return;
-    }
     // Wait until loading finishes so <video> is mounted and videoRef is set
     if (!movie?.id || !isAuthenticated || isLoading || !videoRef.current) {
       return;
@@ -560,7 +557,7 @@ export function PlayMoviePlayer({
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [movie?.id, isAuthenticated, isLoading, partySync?.enabled, onComplete]);
+  }, [movie?.id, isAuthenticated, isLoading, onComplete]);
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (controlsLockedByParty) return;

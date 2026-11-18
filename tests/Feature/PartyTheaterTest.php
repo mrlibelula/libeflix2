@@ -8,6 +8,8 @@ use App\Models\PartyRoomMember;
 use App\Models\Season;
 use App\Models\Tvshow;
 use App\Models\User;
+use App\Models\WatchProgress;
+use App\Services\HistoryService;
 
 function createPartyHost(): User
 {
@@ -760,4 +762,111 @@ test('party browse lists playable movies and tv shows with seasons and episodes'
         ->assertJsonCount(1, 'episodes')
         ->assertJsonPath('episodes.0.id', $playable->id)
         ->assertJsonPath('episodes.0.title', 'Pilot');
+});
+
+test('party theater progress registers movies and episodes in personal history', function () {
+    $host = createPartyHost();
+    $member = User::factory()->create();
+    $room = createOpenRoom($host);
+
+    PartyRoomMember::create([
+        'party_room_id' => $room->id,
+        'user_id' => $member->id,
+        'role' => 'member',
+        'joined_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    $movie = Movie::create([
+        'slug' => 'party-history-movie-'.uniqid(),
+        'original_name' => 'Party History Movie',
+        'title' => 'Party History Movie',
+        'path' => '/fake/party-history.mp4',
+        'runtime' => 120,
+        'is_free' => true,
+    ]);
+
+    $tvshow = Tvshow::create([
+        'slug' => 'party-history-show-'.uniqid(),
+        'folder_name' => 'Party History Show',
+        'tmdb_id' => random_int(1, 9999999),
+        'name' => 'Party History Show',
+        'original_name' => 'Party History Show',
+    ]);
+
+    $season = Season::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'tvshow_id' => $tvshow->id,
+        'name' => 'Season 1',
+        'season_number' => 1,
+    ]);
+
+    $episode = Episode::create([
+        'tmdb_id' => random_int(1, 9999999),
+        'season_id' => $season->id,
+        'name' => 'Party History Episode',
+        'episode_number' => 1,
+        'season_number' => 1,
+        'runtime' => 42,
+        'is_in_storage' => '1',
+        'is_free' => true,
+    ]);
+
+    $this->actingAs($host)
+        ->postJson(route('api.party.queue.add', ['code' => $room->code]), [
+            'type' => 'movie',
+            'id' => $movie->id,
+        ])
+        ->assertOk();
+
+    $this->actingAs($host)
+        ->postJson(route('api.party.playback', ['code' => $room->code]), [
+            'queue_item_id' => $room->fresh()->current_queue_item_id,
+            'is_playing' => true,
+            'position_seconds' => 90,
+        ])
+        ->assertOk();
+
+    // Client players post personal progress while synced in the theater (movies + episodes).
+    $this->actingAs($host)
+        ->postJson(route('api.views.progress.update'), [
+            'type' => 'movie',
+            'id' => $movie->id,
+            'current_time' => 90,
+            'duration' => 7200,
+        ])
+        ->assertOk();
+
+    $this->actingAs($member)
+        ->postJson(route('api.views.progress.update'), [
+            'type' => 'movie',
+            'id' => $movie->id,
+            'current_time' => 90,
+            'duration' => 7200,
+        ])
+        ->assertOk();
+
+    $this->actingAs($member)
+        ->postJson(route('api.views.progress.update'), [
+            'type' => 'episode',
+            'id' => $episode->id,
+            'current_time' => 600,
+            'duration' => 2520,
+        ])
+        ->assertOk();
+
+    expect(WatchProgress::where('user_id', $host->id)->where('watchable_type', Movie::class)->count())->toBe(1);
+    expect(WatchProgress::where('user_id', $member->id)->count())->toBe(2);
+
+    $hostHistory = HistoryService::getHistory($host);
+    expect($hostHistory['continueWatching']['total'])->toBe(1);
+    expect($hostHistory['continueWatching']['items'][0]['id'])->toBe($movie->id);
+    expect($hostHistory['movies']['total'])->toBe(1);
+
+    $memberHistory = HistoryService::getHistory($member);
+    expect($memberHistory['continueWatching']['total'])->toBe(2);
+    expect($memberHistory['movies']['total'])->toBe(1);
+    expect($memberHistory['episodes']['total'])->toBe(1);
+    expect(collect($memberHistory['movies']['items'])->pluck('id')->all())->toContain($movie->id);
+    expect(collect($memberHistory['episodes']['items'])->pluck('id')->all())->toContain($episode->id);
 });
