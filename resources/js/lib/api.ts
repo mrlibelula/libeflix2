@@ -78,8 +78,6 @@ class ApiClient {
 
     // If we get a 419 (CSRF mismatch), try to refresh the token and retry once
     if (response.status === 419) {
-      console.log('CSRF token mismatch, refreshing token and retrying...');
-      
       const newToken = await this.fetchNewCSRFToken();
       if (newToken) {
         // Retry with the new token

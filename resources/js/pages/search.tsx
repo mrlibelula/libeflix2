@@ -385,18 +385,13 @@ export default function Search() {
   const trackSearchClickWithData = async (resultType: 'movie' | 'tvshow' | 'episode' | 'season', resultData: any, query: string, timestamp: string) => {
 
     if (!timestamp || !query) {
-      console.error('❌ Missing timestamp or query:', { 
-        timestamp, 
-        query 
-      });
       return;
     }
 
     try {
       if (resultType === 'movie') {
-        console.log('🎬 Tracking movie click');
         // Track movie click and cleanup tvshow search record
-        const requests = [
+        await Promise.all([
           api.post('/api/movies/search/track-click', {
             query: query,
             movie_id: resultData.id,
@@ -405,14 +400,10 @@ export default function Search() {
           }),
           // Remove the unused tvshow search record
           api.delete(`/api/tvshows/search/cleanup?query=${encodeURIComponent(query)}&timestamp=${timestamp}`)
-        ];
-        
-        const results = await Promise.all(requests);
-        console.log('✅ Movie tracking completed:', results);
+        ]);
       } else {
-        
         // Track tvshow/episode/season click and cleanup movie search record
-        const requests = [
+        await Promise.all([
           api.post('/api/tvshows/search/track-click', {
             query: query,
             result_type: resultType,
@@ -421,17 +412,10 @@ export default function Search() {
           }),
           // Remove the unused movie search record
           api.delete(`/api/movies/search/cleanup?query=${encodeURIComponent(query)}&timestamp=${timestamp}`)
-        ];
-        
-        const results = await Promise.all(requests);
+        ]);
       }
     } catch (error) {
-      console.error('❌ Failed to track search click:', error);
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
-        console.error('📋 Error response:', axiosError.response?.data);
-        console.error('📊 Error status:', axiosError.response?.status);
-      }
+      console.error('Failed to track search click:', error);
     }
   };
 
@@ -466,8 +450,6 @@ export default function Search() {
   };
 
   const handleDirectSeasonClick = async (season: any) => {
-    console.log('🎯 Direct season click handler called', { season, query: searchState.query, timestamp: searchTimestampRef.current });
-    
     if (!searchState.query || !searchTimestampRef.current) {
       // Use a more modern notification system if available, like Sonner
       // toast.error('Missing search context. Please search again.');

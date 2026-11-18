@@ -212,34 +212,18 @@ export function TvshowSearch({ onClose }: TvshowSearchProps) {
     // Use the timestamp for the current query, fallback to general timestamp
     const relevantTimestamp = resultTimestamps.get(query) || searchTimestamp;
     if (!relevantTimestamp) {
-      console.warn('No search timestamp available for click tracking');
       return;
     }
-    
-    console.log('Tracking TV show search click:', {
-      query: query,
-      result_type: result.type,
-      result_id: result.id,
-      result_name: result.name,
-      search_timestamp: relevantTimestamp,
-    });
-    
+
     try {
-      const response = await axios.post('/api/tvshows/search/track-click', {
+      await axios.post('/api/tvshows/search/track-click', {
         query: query,
         result_type: result.type,
         result_data: result, // Send the full result object
         search_timestamp: relevantTimestamp,
       });
-      
-      console.log('Click tracking response:', response.data);
     } catch (error) {
       console.error('Failed to track search click:', error);
-      // Log additional details for debugging
-      if (axios.isAxiosError(error)) {
-        console.error('Response data:', error.response?.data);
-        console.error('Response status:', error.response?.status);
-      }
     }
   };
 
