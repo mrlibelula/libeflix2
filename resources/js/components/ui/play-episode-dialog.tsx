@@ -3088,7 +3088,7 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-hidden rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-visible rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
             : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
@@ -3115,17 +3115,27 @@ export function PlayEpisodeDialog({
         }}
         onKeyDown={handleDialogKeyDown}
       >
+        {/* Always present for Radix a11y — mobile / embedded paths omit the visible header title */}
+        <DialogTitle className="sr-only">
+          {tvshowName}: {episode.name}
+        </DialogTitle>
         {/* Debug information - hidden but useful for debugging */}
         <div className="sr-only" id="debug-info" data-repeat-one={repeatOne.toString()} data-repeat-season={repeatSeason.toString()} data-repeat-tvshow={repeatTvshow.toString()} data-has-next-episode={hasNextEpisode.toString()} data-episode-name={episode.name} data-episode-number={episode.episode_number} data-season-number={episode.season_number}>
           Debug info
         </div>
         
         <div className={`w-full h-full flex flex-col ${isMobile && !embedded ? 'overflow-hidden' : ''}`}>
-          {/* Video player area - sticky on mobile when scrolling (regular dialog only; party uses theater sticky) */}
+          {/* Video only sticks — episode meta below scrolls away (party embedded + regular mobile) */}
           <div 
             ref={containerRef}
             data-player-root="true"
-            className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile && !embedded ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
+            className={`relative w-full overflow-hidden bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${
+              embedded
+                ? 'sticky top-0 z-30 flex-shrink-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] lg:relative lg:z-auto lg:shadow-none'
+                : isMobile
+                  ? 'sticky top-0 z-40 flex-shrink-0'
+                  : ''
+            }`}
             tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
@@ -4235,12 +4245,12 @@ export function PlayEpisodeDialog({
               </div>
             </div>
           ) : (
-            /* Desktop Episode details */
-            <div className="p-6">
-              <DialogHeader>
-                <DialogTitle>
+            /* Desktop / party-embedded episode details (not sticky — scrolls under the video) */
+            <div className={`p-6 ${embedded ? 'px-3 py-4 sm:p-6' : ''}`}>
+              <DialogHeader className="text-left">
+                <div className="text-lg leading-none font-semibold">
                   <div className="sm:flex justify-between items-start w-full">
-                    <div>
+                    <div className="min-w-0 text-left">
                       <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
                         {tvshowName}
                       </div>
@@ -4425,20 +4435,20 @@ export function PlayEpisodeDialog({
                       </Tooltip>
                     </div>
                   </div>
-                </DialogTitle>
-                <DialogDescription>
-                  <span className="sm:flex justify-start items-center gap-x-2 w-full">
-                      <span>Season {episode.season_number}</span><span> · </span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span> · </span><span>{episode.runtime}m</span></>}
+                </div>
+                <DialogDescription className="text-left">
+                  <span className="flex flex-wrap justify-start items-center gap-x-2 w-full text-left">
+                      <span>Season {episode.season_number}</span><span aria-hidden>·</span><span>Episode {episode.episode_number}</span>{episode.runtime && episode.runtime > 0 && <><span aria-hidden>·</span><span>{episode.runtime}m</span></>}
                       {/* Views count - always show, even when 0 */}
                       <>
-                        <span> · </span>
+                        <span aria-hidden>·</span>
                         <span>
                           {viewsCount || 0} {(viewsCount || 0) === 1 ? 'view' : 'views'}
                         </span>
                       </>
                       {/* Plays count - always show, even when 0 */}
                       <>
-                        <span> · </span>
+                        <span aria-hidden>·</span>
                         <span>
                           {playsCount || 0} {(playsCount || 0) === 1 ? 'play' : 'plays'}
                         </span>
@@ -4446,7 +4456,7 @@ export function PlayEpisodeDialog({
                       {/* Likes count - only show when there is at least 1 like */}
                       {likesCount > 0 && (
                         <>
-                          <span> · </span>
+                          <span aria-hidden>·</span>
                           <span>{likesCount} {likesCount === 1 ? 'like' : 'likes'}</span>
                         </>
                       )}

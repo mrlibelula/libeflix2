@@ -225,13 +225,11 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
           {voice.error && <p className="px-3 text-sm text-amber-400 sm:px-0">{voice.error}</p>}
 
           {/*
-            Mobile: sticky video is a sibling of the side panel inside one tall column so it
-            stays pinned while queue/search scrolls underneath (same idea as movie.tsx).
-            Sticky wraps only the video — host notice scrolls away with the page.
-            Player is full-bleed on mobile (no horizontal padding); side panel keeps gutter.
+            Mobile: PartyPlayer sticks the video surface only (episode meta scrolls away).
+            Full-bleed player on mobile; side panel keeps gutter.
           */}
           <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:items-start">
-            <div className="sticky top-0 z-30 min-w-0 w-full max-w-full bg-black shadow-[0_8px_24px_rgba(0,0,0,0.35)] lg:relative lg:z-auto lg:shadow-none">
+            <div className="min-w-0 w-full max-w-full">
               <PartyPlayer
                 item={snapshot.current_item}
                 queue={snapshot.queue}
