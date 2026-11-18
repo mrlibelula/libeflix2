@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Copy, LogOut, Mic, MicOff } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
@@ -7,6 +7,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { PartyInviteDialog } from '@/components/party/party-invite-dialog';
 import { PartyPlayer } from '@/components/party/party-player';
 import { PartySidePanel } from '@/components/party/party-side-panel';
+import { PARTY_COMPACT_QUERY, useMediaQuery } from '@/hooks/use-media-query';
 import { usePartySync } from '@/hooks/use-party-sync';
 import { usePartyVoice } from '@/hooks/use-party-voice';
 import { usePartyReadyToast } from '@/hooks/use-party-ready-toast';
@@ -14,9 +15,6 @@ import { usePartyEpisodeRepeatToast } from '@/hooks/use-party-episode-repeat-toa
 import { usePartyActivityToast } from '@/hooks/use-party-activity-toast';
 import type { PartySnapshot, PartyVoiceSignal } from '@/types/party';
 import type { BreadcrumbItem } from '@/types';
-
-/** Matches Tailwind's `lg` breakpoint — below it the theater uses the pinned-video layout. */
-const COMPACT_QUERY = '(max-width: 1023.98px)';
 
 type Props = {
   code: string;
@@ -30,17 +28,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [detailsEl, setDetailsEl] = useState<HTMLDivElement | null>(null);
-  const [isCompact, setIsCompact] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(COMPACT_QUERY).matches
-  );
-
-  useEffect(() => {
-    const mql = window.matchMedia(COMPACT_QUERY);
-    const onChange = () => setIsCompact(mql.matches);
-    onChange();
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
-  }, []);
+  const isCompact = useMediaQuery(PARTY_COMPACT_QUERY);
 
   const {
     snapshot,
@@ -118,7 +106,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
   }, [snapshot.room.allow_voice, voice.error, voice.micOn]);
 
   const headerMeta = (
-    <span className="inline-flex min-w-0 max-w-[40%] items-center gap-1.5 overflow-hidden text-xs text-zinc-500 sm:max-w-[55%] md:max-w-none dark:text-zinc-400">
+    <span className="hidden min-w-0 max-w-[40%] items-center sm:inline-flex gap-1.5 overflow-hidden text-xs text-zinc-500 sm:max-w-[55%] md:max-w-none dark:text-zinc-400">
       <span className="shrink-0 text-zinc-400 dark:text-zinc-600" aria-hidden>
         ·
       </span>

@@ -80,7 +80,7 @@ export function PartySidePanel({
   return (
     <div className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-3 overflow-x-hidden sm:gap-4">
       {/* Always-visible playlist section — Search/Browse scrolls underneath */}
-      <section className="flex h-[min(58vh,36rem)] min-h-64 min-w-0 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
+      <section className="flex min-w-0 flex-col overflow-hidden rounded-xl lg:h-[min(58vh,36rem)] lg:min-h-64 border border-zinc-200 bg-white/80 p-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-transparent">
         <PartyQueue
           queue={snapshot.queue}
           currentId={snapshot.playback.current_queue_item_id}
@@ -117,7 +117,7 @@ export function PartySidePanel({
           <TabsContent
             value="settings"
             className={cn(
-              'm-0 min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 outline-none',
+              'm-0 min-h-0 flex-1 p-3 outline-none lg:overflow-y-auto lg:overscroll-contain',
               'data-[state=inactive]:hidden'
             )}
           >

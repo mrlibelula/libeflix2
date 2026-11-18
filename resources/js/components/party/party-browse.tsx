@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowLeft, ChevronsLeft, ChevronsRight, Clapperboard, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clapperboard, LoaderCircle, Plus } from 'lucide-react';
 import { TrailerModal } from '@/components/trailer-modal';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { Tooltip } from '@/components/ui/tooltip';
+import { PARTY_COMPACT_QUERY, useMediaQuery } from '@/hooks/use-media-query';
 
 const BROWSE_PER_PAGE = 24;
 /** How many neighbor pages to warm ahead of the current page */
@@ -45,6 +46,8 @@ function cacheKey(kind: BrowseKind, page: number): string {
 
 function preloadPosters(items: BrowseItem[]) {
   if (typeof window === 'undefined') return;
+  // Compact (mobile) browse is text-only — don't spend bandwidth on posters
+  if (window.matchMedia(PARTY_COMPACT_QUERY).matches) return;
   for (const item of items) {
     if (!item.poster) continue;
     const img = new Image();
@@ -77,6 +80,7 @@ type Props = {
 };
 
 export function PartyBrowse({ onAdd }: Props) {
+  const compact = useMediaQuery(PARTY_COMPACT_QUERY);
   const [kind, setKind] = useState<BrowseKind>('movies');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<BrowseItem[]>([]);
@@ -104,8 +108,12 @@ export function PartyBrowse({ onAdd }: Props) {
 
   const scrollResultsToTop = useCallback(() => {
     const el = resultsScrollRef.current;
-    if (el) {
+    if (!el) return;
+    if (el.scrollHeight > el.clientHeight) {
       el.scrollTop = 0;
+    } else {
+      // Mobile: results don't scroll internally — bring the grid top into view in the room scroller
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }, []);
 
@@ -317,7 +325,7 @@ export function PartyBrowse({ onAdd }: Props) {
       </div>
 
       {selectedShow ? (
-        <div className="min-h-0 min-w-0 max-w-full flex-1 space-y-2 overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+        <div className="min-h-0 min-w-0 max-w-full flex-1 space-y-2 overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain">
           <div className="flex min-w-0 items-center gap-2">
             <Button type="button" size="icon" variant="ghost" className="size-7" onClick={backToGrid}>
               <ArrowLeft className="size-3.5" />
@@ -381,20 +389,26 @@ export function PartyBrowse({ onAdd }: Props) {
                     className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-800"
                     onClick={() => void addItem('episode', episode.id)}
                   >
-                    <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
-                      {episode.poster ? (
-                        <LazyImage
-                          src={episode.poster}
-                          alt={episode.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
+                    {!compact && (
+                      <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
+                        {episode.poster ? (
+                          <LazyImage
+                            src={episode.poster}
+                            alt={episode.title}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{episode.title}</span>
                       <span className="block truncate text-xs text-zinc-500">{episode.subtitle}</span>
                     </span>
-                    <Plus className="size-3.5 shrink-0 text-zinc-500" />
+                    {busy ? (
+                      <LoaderCircle className="size-3.5 shrink-0 animate-spin text-zinc-500" />
+                    ) : (
+                      <Plus className="size-3.5 shrink-0 text-zinc-500" />
+                    )}
                   </button>
                 </li>
               );
@@ -405,93 +419,152 @@ export function PartyBrowse({ onAdd }: Props) {
         <>
           <div
             ref={resultsScrollRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+            className="min-h-0 flex-1 lg:overflow-y-auto lg:overscroll-contain"
           >
             {loading && items.length === 0 && <p className="text-xs text-zinc-500">Loading…</p>}
             {!loading && items.length === 0 && (
               <p className="text-xs text-zinc-500">No playable titles yet.</p>
             )}
 
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {items.map((item) => {
-                const busy = addingId === `movie-${item.id}`;
-                return (
-                  <div key={`${item.type}-${item.id}`} className="group min-w-0">
-                    <button
-                      type="button"
-                      disabled={item.type === 'movie' && busy}
-                      className="block w-full overflow-hidden rounded-md bg-zinc-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-800"
-                      onClick={() => {
-                        if (item.type === 'movie') {
-                          void addItem('movie', item.id);
-                        } else {
-                          void openShow(item);
-                        }
-                      }}
-                    >
-                      <div className="aspect-[2/3] w-full">
-                        {item.poster ? (
-                          <LazyImage
-                            src={item.poster}
-                            alt={item.title}
-                            className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-zinc-500">
-                            No art
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                    <div className="mt-1 flex items-start gap-0.5">
-                      <Tooltip
-                        text={item.title}
-                        onlyWhenTruncated
-                        delayMs={400}
-                        position="top"
-                        triggerClassName="min-w-0 flex-1"
+            {compact ? (
+              <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+                {items.map((item) => {
+                  const busy = addingId === `movie-${item.id}`;
+                  const isMovie = item.type === 'movie';
+                  return (
+                    <li key={`${item.type}-${item.id}`} className="flex items-center">
+                      <button
+                        type="button"
+                        disabled={isMovie && busy}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left active:bg-zinc-100 disabled:opacity-60 dark:active:bg-zinc-800"
+                        onClick={() => {
+                          if (isMovie) {
+                            void addItem('movie', item.id);
+                          } else {
+                            void openShow(item);
+                          }
+                        }}
                       >
-                        <button
-                          type="button"
-                          className="w-full text-left"
-                          onClick={() => {
-                            if (item.type === 'movie') {
-                              void addItem('movie', item.id);
-                            } else {
-                              void openShow(item);
-                            }
-                          }}
-                        >
-                          <span className="line-clamp-2 break-words text-[11px] font-medium leading-tight text-zinc-800 dark:text-zinc-100">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                             {item.title}
                           </span>
                           {item.caption && (
-                            <span className="block truncate text-[10px] text-zinc-500">{item.caption}</span>
+                            <span className="block truncate text-xs text-zinc-500">{item.caption}</span>
                           )}
-                        </button>
-                      </Tooltip>
+                        </span>
+                        {isMovie ? (
+                          busy ? (
+                            <LoaderCircle className="size-4 shrink-0 animate-spin text-zinc-500" />
+                          ) : (
+                            <Plus className="size-4 shrink-0 text-zinc-500" />
+                          )
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-zinc-500" />
+                        )}
+                      </button>
                       {item.has_trailer && (
                         <button
                           type="button"
-                          className="mt-0.5 shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                          className="shrink-0 self-stretch border-l border-zinc-200 px-3 text-zinc-500 active:bg-zinc-100 dark:border-zinc-800 dark:active:bg-zinc-800"
                           aria-label={`Trailers for ${item.title}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (item.type === 'movie') {
+                          onClick={() => {
+                            if (isMovie) {
                               setMovieTrailer({ id: item.id, title: item.title });
                             } else if (item.trailer_key) {
                               setYoutubeTrailer({ title: item.title, key: item.trailer_key });
                             }
                           }}
                         >
-                          <Clapperboard className="size-3" />
+                          <Clapperboard className="size-4" />
                         </button>
                       )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {items.map((item) => {
+                  const busy = addingId === `movie-${item.id}`;
+                  return (
+                    <div key={`${item.type}-${item.id}`} className="group min-w-0">
+                      <button
+                        type="button"
+                        disabled={item.type === 'movie' && busy}
+                        className="block w-full overflow-hidden rounded-md bg-zinc-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-800"
+                        onClick={() => {
+                          if (item.type === 'movie') {
+                            void addItem('movie', item.id);
+                          } else {
+                            void openShow(item);
+                          }
+                        }}
+                      >
+                        <div className="aspect-[2/3] w-full">
+                          {item.poster ? (
+                            <LazyImage
+                              src={item.poster}
+                              alt={item.title}
+                              className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-zinc-500">
+                              No art
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      <div className="mt-1 flex items-start gap-0.5">
+                        <Tooltip
+                          text={item.title}
+                          onlyWhenTruncated
+                          delayMs={400}
+                          position="top"
+                          triggerClassName="min-w-0 flex-1"
+                        >
+                          <button
+                            type="button"
+                            className="w-full text-left"
+                            onClick={() => {
+                              if (item.type === 'movie') {
+                                void addItem('movie', item.id);
+                              } else {
+                                void openShow(item);
+                              }
+                            }}
+                          >
+                            <span className="line-clamp-2 break-words text-[11px] font-medium leading-tight text-zinc-800 dark:text-zinc-100">
+                              {item.title}
+                            </span>
+                            {item.caption && (
+                              <span className="block truncate text-[10px] text-zinc-500">{item.caption}</span>
+                            )}
+                          </button>
+                        </Tooltip>
+                        {item.has_trailer && (
+                          <button
+                            type="button"
+                            className="mt-0.5 shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                            aria-label={`Trailers for ${item.title}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.type === 'movie') {
+                                setMovieTrailer({ id: item.id, title: item.title });
+                              } else if (item.trailer_key) {
+                                setYoutubeTrailer({ title: item.title, key: item.trailer_key });
+                              }
+                            }}
+                          >
+                            <Clapperboard className="size-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {(page > 1 || hasMore || totalPages > 1) && (

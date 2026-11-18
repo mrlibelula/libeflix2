@@ -141,7 +141,7 @@ export function PartyChat({ messages, enabled, localUserId, onSend, embedded = f
         ref={listRef}
         onScroll={onListScroll}
         className={cn(
-          'min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain rounded border border-zinc-200 bg-white/50 p-2 transition-[border-color,box-shadow] duration-500 dark:border-zinc-800 dark:bg-transparent',
+          'min-h-0 flex-1 space-y-2 overflow-y-auto rounded lg:overscroll-contain border border-zinc-200 bg-white/50 p-2 transition-[border-color,box-shadow] duration-500 dark:border-zinc-800 dark:bg-transparent',
           shine && 'party-chat-shine border-sky-400/60 shadow-[0_0_22px_-6px_rgba(56,189,248,0.55)]'
         )}
       >
