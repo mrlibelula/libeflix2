@@ -1681,7 +1681,7 @@ export function PlayMoviePlayer({
             <div className="absolute inset-0 light-gradient-video dark:dark-gradient-video z-10 pointer-events-none" />
 
             {/* Title header — thin top ribbon */}
-            <div className="relative z-30 px-3 py-1.5 text-neutral-900 dark:text-neutral-100 pointer-events-none">
+            <div className="relative z-30 px-3 py-1.5 mt-0.5 sm:mt-1 text-neutral-900 dark:text-neutral-100 pointer-events-none">
               <h2 className="text-xs sm:text-sm font-medium leading-tight truncate">
                 {movie?.title || movie?.name || 'Movie'}
               </h2>
