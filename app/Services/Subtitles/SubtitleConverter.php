@@ -62,15 +62,36 @@ class SubtitleConverter
     }
 
     /**
+     * True when the raw subtitle already contains a Libeflix branding cue
+     * (plain text "libeflix" after tag strip), matching strip/dedup rules.
+     */
+    public function hasBranding(string $raw): bool
+    {
+        $decoded = $this->decodeToUtf8($raw);
+        $parsed = $this->parseText($decoded['text']);
+
+        foreach ($parsed['cues'] as $cue) {
+            if ($this->isBrandingCueText($cue['text'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isBrandingCueText(string $text): bool
+    {
+        return strtolower(trim(strip_tags($text))) === 'libeflix';
+    }
+
+    /**
      * @param  array<int, array{start: int, end: int, text: string}>  $cues
      * @return array<int, array{start: int, end: int, text: string}>
      */
     public function stripBrandingCues(array $cues): array
     {
         return array_values(array_filter($cues, function (array $cue) {
-            $plain = strtolower(trim(strip_tags($cue['text'])));
-
-            return $plain !== 'libeflix';
+            return ! $this->isBrandingCueText($cue['text']);
         }));
     }
 

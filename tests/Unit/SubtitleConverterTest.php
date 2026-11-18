@@ -38,7 +38,9 @@ test('prepends a libeflix branding cue and does not duplicate it on re-import', 
     expect($first['vtt'])->toContain('00:00:01.250 --> 00:00:10.500')
         ->and($first['vtt'])->toContain('<i>Libeflix</i>')
         ->and(substr_count($first['vtt'], '<i>Libeflix</i>'))->toBe(1)
-        ->and($first['cues'][0]['text'])->toBe('Hello there');
+        ->and($first['cues'][0]['text'])->toBe('Hello there')
+        ->and($converter->hasBranding(sampleSrt()))->toBeFalse()
+        ->and($converter->hasBranding($first['vtt']))->toBeTrue();
 
     $second = $converter->convert($first['vtt']);
 
