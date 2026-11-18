@@ -22,7 +22,7 @@ export function NavFooter({
                             >
                                 <a href={item.href} target="_blank" rel="noopener noreferrer">
                                     {item.iconSrc ? (
-                                        <img src={item.iconSrc} alt="" className="h-5 w-5 rounded object-contain" />
+                                        <img src={item.iconSrc} alt="" className="h-5 w-5 object-contain" />
                                     ) : (
                                         item.icon && <Icon iconNode={item.icon} className="h-5 w-5" />
                                     )}
