@@ -103,6 +103,34 @@ test('authenticated user sees paginated history payload with movies episodes con
     expect($finishedItem['progress_percentage'])->toBeGreaterThan(70);
 });
 
+test('a few seconds of movie progress counts toward history movies and continue watching', function () {
+    $user = User::factory()->create();
+    $movie = createHistoryMovie('Brief Watch');
+
+    // Any saved progress (even a few seconds) should appear in Movies — no completion threshold.
+    $this->actingAs($user)
+        ->postJson(route('api.views.progress.update'), [
+            'type' => 'movie',
+            'id' => $movie->id,
+            'current_time' => 5,
+            'duration' => 3600,
+        ])
+        ->assertOk();
+
+    $stats = HistoryService::getStats($user);
+    expect($stats['titles'])->toBe(1);
+    expect($stats['movies'])->toBe(1);
+    expect($stats['episodes'])->toBe(0);
+    expect($stats['total_plays'])->toBe(0);
+
+    $history = HistoryService::getHistory($user);
+    expect($history['movies']['total'])->toBe(1);
+    expect($history['movies']['items'][0]['id'])->toBe($movie->id);
+    expect($history['movies']['items'][0]['current_time'])->toBe(5);
+    expect($history['continueWatching']['total'])->toBe(1);
+    expect($history['continueWatching']['items'][0]['id'])->toBe($movie->id);
+});
+
 test('resetting progress removes title from history page', function () {
     $user = User::factory()->create();
     $movie = createHistoryMovie('Removable Movie');

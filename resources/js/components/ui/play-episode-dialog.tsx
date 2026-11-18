@@ -793,11 +793,20 @@ export function PlayEpisodeDialog({
     }
 
     const video = videoRef.current;
-    let progressUpdateInterval: NodeJS.Timeout | null = null;
+    let progressUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
-    // Function to send progress update to API
-    const updateWatchProgress = async () => {
-      if (!video || video.paused || !video.duration || video.duration <= 0) {
+    // force=true: save even when paused (pause / ended / unmount). Interval ticks stay play-only.
+    const updateWatchProgress = async (options?: { force?: boolean }) => {
+      const force = options?.force === true;
+      if (!video || !video.duration || video.duration <= 0) {
+        return;
+      }
+      if (!force && video.paused) {
+        return;
+      }
+
+      const currentTime = Math.floor(video.currentTime);
+      if (currentTime <= 0) {
         return;
       }
 
@@ -805,7 +814,7 @@ export function PlayEpisodeDialog({
         await axios.post(route('api.views.progress.update'), {
           type: 'episode',
           id: episode.id,
-          current_time: Math.floor(video.currentTime),
+          current_time: currentTime,
           duration: Math.floor(video.duration),
         });
       } catch (error) {
@@ -818,7 +827,9 @@ export function PlayEpisodeDialog({
       if (progressUpdateInterval) {
         clearInterval(progressUpdateInterval);
       }
-      progressUpdateInterval = setInterval(updateWatchProgress, 15000);
+      progressUpdateInterval = setInterval(() => {
+        void updateWatchProgress();
+      }, 15000);
     };
 
     const stopProgressTracking = () => {
@@ -831,18 +842,18 @@ export function PlayEpisodeDialog({
     // Listen for play/pause events
     const handlePlay = () => {
       startProgressTracking();
-      updateWatchProgress(); // Send immediate update on play
+      void updateWatchProgress();
     };
 
     const handlePause = () => {
       stopProgressTracking();
-      updateWatchProgress(); // Send update on pause
+      void updateWatchProgress({ force: true });
     };
 
     const handleEnded = async () => {
       stopProgressTracking();
-      updateWatchProgress(); // Send final update on end
-      
+      await updateWatchProgress({ force: true });
+
       // Record play if 80%+ was watched
       if (video.duration > 0) {
         try {
@@ -862,13 +873,15 @@ export function PlayEpisodeDialog({
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
 
-    // Start tracking if already playing
+    // Start tracking if already playing (e.g. autoplay after loading finishes)
     if (!video.paused) {
       startProgressTracking();
+      void updateWatchProgress();
     }
 
     return () => {
       stopProgressTracking();
+      void updateWatchProgress({ force: true });
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
