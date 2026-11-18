@@ -22,7 +22,7 @@ import axios from 'axios';
 import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
 import { PlayerOptionsMenu, isPlayerMenuTarget } from '@/components/ui/player-options-menu';
-import { usePreferMobilePlayerMenu, useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
+import { usePlayerMenuPortalTarget, usePreferMobilePlayerMenu, useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
 import { EpisodeRowActions, type EpisodeRowActionTarget } from '@/components/ui/episode-row-actions';
 
 type GestureDirection = 'forward' | 'backward';
@@ -326,10 +326,14 @@ export function PlayEpisodeDialog({
   // Mobile detection state
   const [isMobile, setIsMobile] = useState(false);
   const preferMobileMenu = usePreferMobilePlayerMenu(isMobile);
+  const episodesMenuPortalTarget = usePlayerMenuPortalTarget(
+    containerRef,
+    preferMobileMenu && showEpisodesMenu
+  );
   const episodesMenuViewport = useViewportMenuPosition(
     episodesMenuRef,
     showEpisodesMenu,
-    [preferMobileMenu, activeSeasonNumber, seasonsData.length],
+    [preferMobileMenu, activeSeasonNumber, seasonsData.length, episodesMenuPortalTarget],
     containerRef
   );
   const [mobileSeasonNumber, setMobileSeasonNumber] = useState<number>(episode?.season_number || 1);
@@ -3817,6 +3821,9 @@ export function PlayEpisodeDialog({
                         
                         {/* Episodes Menu */}
                         {showEpisodesMenu && (() => {
+                          const mobileEpisodesFixed =
+                            preferMobileMenu &&
+                            (!episodesMenuPortalTarget || episodesMenuPortalTarget === document.body);
                           const episodesMenuNode = (
                           <div 
                             ref={episodesMenuRef}
@@ -3824,15 +3831,15 @@ export function PlayEpisodeDialog({
                             role="menu"
                             className={
                               preferMobileMenu
-                                ? 'fixed z-[60] overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
+                                ? `${mobileEpisodesFixed ? 'fixed' : 'absolute'} z-[60] w-max max-w-[min(240px,calc(100%-2rem))] overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`
                                 : 'absolute right-10 bottom-14 z-50 rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
                             }
                             style={{
                               ...(preferMobileMenu
                                 ? {
-                                    left: episodesMenuViewport.left,
                                     right: episodesMenuViewport.right,
                                     bottom: episodesMenuViewport.bottom,
+                                    width: episodesMenuViewport.width,
                                     maxHeight: episodesMenuViewport.maxHeight,
                                   }
                                 : { width: '240px', maxHeight: episodesMenuViewport.maxHeight }),
@@ -4077,9 +4084,10 @@ export function PlayEpisodeDialog({
                           </div>
                           );
 
-                          return preferMobileMenu && typeof document !== 'undefined'
-                            ? createPortal(episodesMenuNode, document.body)
-                            : episodesMenuNode;
+                          if (preferMobileMenu && episodesMenuPortalTarget) {
+                            return createPortal(episodesMenuNode, episodesMenuPortalTarget);
+                          }
+                          return episodesMenuNode;
                         })()}
                         
                         {/* PiP button */}
@@ -4384,11 +4392,11 @@ export function PlayEpisodeDialog({
               <DialogHeader className="text-left">
                 <div className="text-lg leading-none font-semibold">
                   <div className="sm:flex justify-between items-start w-full">
-                    <div className="min-w-0 text-left">
-                      <div className="text-xs text-rose-500 dark:text-rose-500 mb-2 italic">
+                    <div className="min-w-0 max-w-full overflow-hidden text-left">
+                      <div className="truncate text-xs text-rose-500 italic dark:text-rose-500 mb-2">
                         {tvshowName}
                       </div>
-                      <div className="text-xl">
+                      <div className="break-words text-xl">
                         {episode.name}
                       </div>
                     </div>

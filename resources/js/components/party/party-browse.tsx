@@ -113,7 +113,8 @@ export function PartyBrowse({ onAdd }: Props) {
       el.scrollTop = 0;
     } else {
       // Mobile: results don't scroll internally — bring the grid top into view in the room scroller
-      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      // inline: 'nearest' avoids horizontal jump when a row's min-content is briefly wide
+      el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
     }
   }, []);
 
@@ -378,15 +379,15 @@ export function PartyBrowse({ onAdd }: Props) {
             <p className="text-xs text-zinc-500">No playable episodes in this season.</p>
           )}
 
-          <ul className="space-y-1">
+          <ul className="min-w-0 max-w-full space-y-1 overflow-x-hidden">
             {episodes.map((episode) => {
               const busy = addingId === `episode-${episode.id}`;
               return (
-                <li key={episode.id}>
+                <li key={episode.id} className="min-w-0">
                   <button
                     type="button"
                     disabled={busy}
-                    className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-800"
+                    className="flex w-full min-w-0 max-w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-800"
                     onClick={() => void addItem('episode', episode.id)}
                   >
                     {!compact && (
@@ -419,7 +420,7 @@ export function PartyBrowse({ onAdd }: Props) {
         <>
           <div
             ref={resultsScrollRef}
-            className="min-h-0 flex-1 lg:overflow-y-auto lg:overscroll-contain"
+            className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain"
           >
             {loading && items.length === 0 && <p className="text-xs text-zinc-500">Loading…</p>}
             {!loading && items.length === 0 && (
@@ -427,16 +428,16 @@ export function PartyBrowse({ onAdd }: Props) {
             )}
 
             {compact ? (
-              <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              <ul className="w-full min-w-0 max-w-full divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
                 {items.map((item) => {
                   const busy = addingId === `movie-${item.id}`;
                   const isMovie = item.type === 'movie';
                   return (
-                    <li key={`${item.type}-${item.id}`} className="flex items-center">
+                    <li key={`${item.type}-${item.id}`} className="flex min-w-0 max-w-full items-center overflow-hidden">
                       <button
                         type="button"
                         disabled={isMovie && busy}
-                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left active:bg-zinc-100 disabled:opacity-60 dark:active:bg-zinc-800"
+                        className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-3 py-2.5 text-left active:bg-zinc-100 disabled:opacity-60 dark:active:bg-zinc-800"
                         onClick={() => {
                           if (isMovie) {
                             void addItem('movie', item.id);
@@ -445,12 +446,12 @@ export function PartyBrowse({ onAdd }: Props) {
                           }
                         }}
                       >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <span className="min-w-0 flex-1 overflow-hidden">
+                          <span className="block w-full truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                             {item.title}
                           </span>
                           {item.caption && (
-                            <span className="block truncate text-xs text-zinc-500">{item.caption}</span>
+                            <span className="block w-full truncate text-xs text-zinc-500">{item.caption}</span>
                           )}
                         </span>
                         {isMovie ? (
@@ -484,11 +485,11 @@ export function PartyBrowse({ onAdd }: Props) {
                 })}
               </ul>
             ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              <div className="grid min-w-0 max-w-full grid-cols-3 gap-2 overflow-x-hidden sm:grid-cols-4">
                 {items.map((item) => {
                   const busy = addingId === `movie-${item.id}`;
                   return (
-                    <div key={`${item.type}-${item.id}`} className="group min-w-0">
+                    <div key={`${item.type}-${item.id}`} className="group min-w-0 max-w-full overflow-hidden">
                       <button
                         type="button"
                         disabled={item.type === 'movie' && busy}
@@ -568,19 +569,19 @@ export function PartyBrowse({ onAdd }: Props) {
           </div>
 
           {(page > 1 || hasMore || totalPages > 1) && (
-            <div className="flex shrink-0 flex-col gap-1.5 border-t border-zinc-200 pt-1.5 dark:border-zinc-800">
-              <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 max-w-full shrink-0 flex-col gap-1.5 overflow-x-hidden border-t border-zinc-200 pt-1.5 dark:border-zinc-800">
+              <div className="flex min-w-0 items-center justify-between gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-7 px-2"
+                  className="h-7 shrink-0 px-2"
                   disabled={page <= 1}
                   onClick={() => void loadBrowse(kind, page - 1)}
                 >
                   <ChevronsLeft className="size-3.5" />
                 </Button>
-                <span className="text-[10px] tabular-nums text-zinc-500">
+                <span className="min-w-0 truncate text-center text-[10px] tabular-nums text-zinc-500">
                   Page {page} of {totalPages}
                   {loading ? ' · …' : ''}
                 </span>
@@ -588,7 +589,7 @@ export function PartyBrowse({ onAdd }: Props) {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-7 px-2"
+                  className="h-7 shrink-0 px-2"
                   disabled={!hasMore}
                   onClick={() => void loadBrowse(kind, page + 1)}
                 >
@@ -597,7 +598,7 @@ export function PartyBrowse({ onAdd }: Props) {
               </div>
               {totalPages > 1 && (
                 <form
-                  className="flex items-center gap-1.5"
+                  className="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-hidden"
                   onSubmit={(e) => {
                     e.preventDefault();
                     jumpToPage();

@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 
 export type ViewportMenuPosition = {
-  /** Distance from visual viewport bottom to the menu bottom edge */
+  /** Distance from containing block bottom to the menu bottom edge */
   bottom: number;
   left: number;
   right: number;
+  /** Content-fitting width (not full player / viewport bleed) */
+  width: number;
   maxHeight: number;
   submenuMaxHeight: number;
   openSubmenuUpward: boolean;
@@ -12,6 +14,70 @@ export type ViewportMenuPosition = {
 
 const VIEWPORT_PAD = 8;
 const DEFAULT_ANCHOR_GAP = 56;
+const MENU_WIDTH = 240;
+const MENU_MIN_WIDTH = 180;
+const EDGE_INSET = 16;
+
+function getFullscreenElement(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  const doc = document as Document & {
+    webkitFullscreenElement?: Element | null;
+    mozFullScreenElement?: Element | null;
+  };
+  return (
+    (document.fullscreenElement as HTMLElement | null) ||
+    (doc.webkitFullscreenElement as HTMLElement | null) ||
+    (doc.mozFullScreenElement as HTMLElement | null)
+  );
+}
+
+/**
+ * Native fullscreen only paints descendants of the fullscreen element.
+ * Prefer the player root (or the fullscreen node that contains it) over document.body.
+ */
+export function resolvePlayerMenuPortalTarget(
+  anchor: HTMLElement | null | undefined
+): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+
+  const fs = getFullscreenElement();
+  if (fs && (!anchor || fs === anchor || fs.contains(anchor))) {
+    return fs;
+  }
+
+  return anchor ?? document.body;
+}
+
+/** Resolve (and keep fresh) the DOM node menus should portal into. */
+export function usePlayerMenuPortalTarget(
+  anchorRef?: RefObject<HTMLElement | null>,
+  enabled = true
+): HTMLElement | null {
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (!enabled) {
+      setPortalTarget(null);
+      return;
+    }
+
+    const sync = () => {
+      setPortalTarget(resolvePlayerMenuPortalTarget(anchorRef?.current ?? null));
+    };
+
+    sync();
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      document.removeEventListener('webkitfullscreenchange', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, [anchorRef, enabled]);
+
+  return portalTarget;
+}
 
 /** Prefer the mobile sheet whenever the viewport is narrow, short, or touch-first. */
 export function usePreferMobilePlayerMenu(isMobileFlag = false): boolean {
@@ -38,8 +104,8 @@ export function usePreferMobilePlayerMenu(isMobileFlag = false): boolean {
 }
 
 /**
- * Keeps player context menus fully inside the visual viewport.
- * Pass `anchorRef` (player root / controls) when the menu is portaled to document.body.
+ * Keeps player context menus fully inside the visual viewport / player box.
+ * Menus are width-fit and right-aligned above the controls — not full-bleed sheets.
  */
 export function useViewportMenuPosition(
   menuRef: RefObject<HTMLElement | null>,
@@ -50,7 +116,8 @@ export function useViewportMenuPosition(
   const [position, setPosition] = useState<ViewportMenuPosition>({
     bottom: DEFAULT_ANCHOR_GAP,
     left: VIEWPORT_PAD,
-    right: VIEWPORT_PAD,
+    right: EDGE_INSET,
+    width: MENU_WIDTH,
     maxHeight: 360,
     submenuMaxHeight: 320,
     openSubmenuUpward: false,
@@ -72,6 +139,13 @@ export function useViewportMenuPosition(
       const viewportOffsetLeft = window.visualViewport?.offsetLeft ?? 0;
 
       const anchorRect = anchor?.getBoundingClientRect();
+      const menuParent = menu?.offsetParent as HTMLElement | null;
+      const positionedInsideAnchor =
+        !!anchor &&
+        !!menu &&
+        (anchor === menu.parentElement ||
+          (anchor.contains(menu) &&
+            (menuParent === anchor || (!!menuParent && anchor.contains(menuParent)))));
 
       // Sit just above the player / controls bottom edge.
       const anchorBottomY = anchorRect
@@ -81,17 +155,32 @@ export function useViewportMenuPosition(
       const availableAbove = Math.max(160, anchorBottomY - viewportOffsetTop - VIEWPORT_PAD);
       const maxHeight = Math.min(420, availableAbove);
 
-      const bottom = Math.max(VIEWPORT_PAD, (viewportOffsetTop + viewportHeight) - anchorBottomY);
+      const boxWidth = anchorRect?.width ?? viewportWidth;
+      const width = Math.min(MENU_WIDTH, Math.max(MENU_MIN_WIDTH, boxWidth - EDGE_INSET * 2));
 
-      const left = VIEWPORT_PAD + viewportOffsetLeft;
-      const right = Math.max(
-        VIEWPORT_PAD,
-        window.innerWidth - (viewportOffsetLeft + viewportWidth) + VIEWPORT_PAD
-      );
+      let bottom: number;
+      let right: number;
+      let left: number;
+
+      if (positionedInsideAnchor && anchorRect) {
+        // absolute coords relative to the player / fullscreen root
+        bottom = DEFAULT_ANCHOR_GAP;
+        right = EDGE_INSET;
+        left = Math.max(EDGE_INSET, boxWidth - width - EDGE_INSET);
+      } else {
+        // fixed coords relative to the visual viewport (body fallback)
+        bottom = Math.max(VIEWPORT_PAD, viewportOffsetTop + viewportHeight - anchorBottomY);
+        const viewportRight = viewportOffsetLeft + viewportWidth;
+        right = Math.max(VIEWPORT_PAD, window.innerWidth - viewportRight + EDGE_INSET);
+        left = Math.max(
+          VIEWPORT_PAD + viewportOffsetLeft,
+          viewportRight - width - EDGE_INSET
+        );
+      }
 
       const menuRect = menu?.getBoundingClientRect();
       const spaceBelowMenu = menuRect
-        ? (viewportOffsetTop + viewportHeight) - menuRect.top - VIEWPORT_PAD
+        ? viewportOffsetTop + viewportHeight - menuRect.top - VIEWPORT_PAD
         : maxHeight;
       const spaceAboveMenu = menuRect
         ? menuRect.bottom - viewportOffsetTop - VIEWPORT_PAD
@@ -106,6 +195,7 @@ export function useViewportMenuPosition(
         bottom,
         left,
         right,
+        width,
         maxHeight,
         submenuMaxHeight,
         openSubmenuUpward,
@@ -118,6 +208,8 @@ export function useViewportMenuPosition(
     const viewport = window.visualViewport;
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
+    document.addEventListener('fullscreenchange', update);
+    document.addEventListener('webkitfullscreenchange', update);
     viewport?.addEventListener('resize', update);
     viewport?.addEventListener('scroll', update);
 
@@ -125,6 +217,8 @@ export function useViewportMenuPosition(
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
+      document.removeEventListener('fullscreenchange', update);
+      document.removeEventListener('webkitfullscreenchange', update);
       viewport?.removeEventListener('resize', update);
       viewport?.removeEventListener('scroll', update);
     };

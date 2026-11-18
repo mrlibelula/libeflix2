@@ -2,7 +2,10 @@ import type { CSSProperties, ReactNode, RefObject, TouchEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronLeft } from 'lucide-react';
 import type { AudioMode } from '@/hooks/use-dialogue-audio';
-import { useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
+import {
+  usePlayerMenuPortalTarget,
+  useViewportMenuPosition,
+} from '@/hooks/use-viewport-menu-position';
 
 export type PlayerMenuSection = 'none' | 'subtitles' | 'audio' | 'sound';
 
@@ -101,7 +104,7 @@ function MobilePanel({
 type PlayerOptionsMenuProps = {
   variant: 'mobile' | 'desktop';
   menuRef: RefObject<HTMLDivElement | null>;
-  /** Player root used to anchor portaled mobile menus inside the viewport. */
+  /** Player root used to keep menus visible inside native fullscreen. */
   anchorRef?: RefObject<HTMLElement | null>;
   activeSection: PlayerMenuSection;
   setActiveSection: (section: PlayerMenuSection) => void;
@@ -138,25 +141,27 @@ export function PlayerOptionsMenu({
 }: PlayerOptionsMenuProps) {
   const selectedSubtitle = subtitleTracks.find((track) => track.selected)?.label || 'Off';
   const selectedAudio = audioTracks.find((track) => track.selected)?.label || 'Original';
+  const portalTarget = usePlayerMenuPortalTarget(anchorRef, variant === 'mobile');
   const viewport = useViewportMenuPosition(
     menuRef,
     true,
-    [variant, activeSection, hasSubtitles, audioTracks.length],
+    [variant, activeSection, hasSubtitles, audioTracks.length, portalTarget],
     anchorRef
   );
 
   if (variant === 'mobile') {
+    const useFixed = !portalTarget || portalTarget === document.body;
     const mobileMenu = (
       <div
         ref={menuRef}
         data-player-menu="true"
         role="menu"
-        className="fixed z-[60] overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95"
+        className={`${useFixed ? 'fixed' : 'absolute'} z-[60] w-max max-w-[min(240px,calc(100%-2rem))] overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`}
         style={{
           ...scrollStyle,
-          left: viewport.left,
           right: viewport.right,
           bottom: viewport.bottom,
+          width: viewport.width,
           maxHeight: viewport.maxHeight,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -239,7 +244,11 @@ export function PlayerOptionsMenu({
       </div>
     );
 
-    return typeof document !== 'undefined' ? createPortal(mobileMenu, document.body) : mobileMenu;
+    if (portalTarget) {
+      return createPortal(mobileMenu, portalTarget);
+    }
+
+    return mobileMenu;
   }
 
   const submenuAnchorClass = viewport.openSubmenuUpward ? 'bottom-0 top-auto' : 'top-0';
