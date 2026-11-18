@@ -246,6 +246,8 @@ class PartyService
             'is_host' => $viewer ? $room->isHost($viewer) : false,
             'is_member' => $isMember,
             'is_paused' => $room->isPaused(),
+            'host_only_controls' => (bool) $room->host_only_controls,
+            'can_control' => $viewer ? $room->userCanControl($viewer) : false,
             'status' => $room->status,
             'updated_at' => optional($room->updated_at)->toIso8601String(),
             'now_showing' => $this->serializeLobbyNowShowing($room),

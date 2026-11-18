@@ -574,6 +574,58 @@ test('lobby marks the viewer as a member so full rooms stay enterable for them',
         ]);
 });
 
+test('lobby myRooms exposes host_only_controls and can_control for the viewer', function () {
+    $host = createPartyHost();
+    $member = User::factory()->create();
+
+    $openRoom = createOpenRoom($host, [
+        'name' => 'Open Controls',
+        'host_only_controls' => false,
+        'is_public' => false,
+    ]);
+    $hostOnlyRoom = createOpenRoom($host, [
+        'name' => 'Host Only',
+        'host_only_controls' => true,
+        'is_public' => false,
+    ]);
+
+    foreach ([$openRoom, $hostOnlyRoom] as $room) {
+        PartyRoomMember::create([
+            'party_room_id' => $room->id,
+            'user_id' => $member->id,
+            'role' => 'member',
+            'joined_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+    }
+
+    $this->actingAs($member)
+        ->getJson(route('api.party.lobby'))
+        ->assertOk()
+        ->assertJsonFragment([
+            'code' => $openRoom->code,
+            'host_only_controls' => false,
+            'can_control' => true,
+            'is_member' => true,
+        ])
+        ->assertJsonFragment([
+            'code' => $hostOnlyRoom->code,
+            'host_only_controls' => true,
+            'can_control' => false,
+            'is_member' => true,
+        ]);
+
+    $this->actingAs($host)
+        ->getJson(route('api.party.lobby'))
+        ->assertOk()
+        ->assertJsonFragment([
+            'code' => $hostOnlyRoom->code,
+            'host_only_controls' => true,
+            'can_control' => true,
+            'is_host' => true,
+        ]);
+});
+
 test('episode repeat mode syncs to peers without bumping playback clock', function () {
     $host = createPartyHost();
     $room = createOpenRoom($host, [

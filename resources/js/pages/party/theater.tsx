@@ -225,11 +225,12 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
           {voice.error && <p className="px-3 text-sm text-amber-400 sm:px-0">{voice.error}</p>}
 
           {/*
-            Mobile: PartyPlayer sticks the video surface only (episode meta scrolls away).
-            Full-bleed player on mobile; side panel keeps gutter.
+            Mobile: only the video surface is sticky. Sticky can't outlive its parent box, so
+            the player wrappers use max-lg:contents — the video then sticks against this tall
+            column while episode meta, queue and chat scroll underneath.
           */}
           <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:items-start">
-            <div className="min-w-0 w-full max-w-full">
+            <div className="min-w-0 w-full max-w-full max-lg:contents">
               <PartyPlayer
                 item={snapshot.current_item}
                 queue={snapshot.queue}

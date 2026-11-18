@@ -19,6 +19,8 @@ export type PartyLobbyRoom = {
   is_host?: boolean;
   is_member?: boolean;
   is_paused?: boolean;
+  host_only_controls?: boolean;
+  can_control?: boolean;
   status?: 'open' | 'playing' | 'paused' | 'ended' | string;
   updated_at?: string | null;
   now_showing?: PartyLobbyNowShowing | null;

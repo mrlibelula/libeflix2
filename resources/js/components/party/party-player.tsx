@@ -117,7 +117,7 @@ export function PartyPlayer({
 
   if (item.media.kind === 'movie' && item.media.movie && item.media.encFilePath) {
     return (
-      <div className="w-full min-w-0 max-w-full">
+      <div className="w-full min-w-0 max-w-full max-lg:contents">
         <div className="sticky top-0 z-30 w-full min-w-0 max-w-full overflow-hidden rounded-none bg-black shadow-[0_8px_24px_rgba(0,0,0,0.35)] sm:rounded-lg lg:relative lg:z-auto lg:shadow-none">
           <PlayMoviePlayer
             key={`party-movie-${item.id}-${item.media.encFilePath}`}
@@ -137,7 +137,7 @@ export function PartyPlayer({
 
   if (item.media.kind === 'episode' && item.media.episode) {
     return (
-      <div className="party-episode-player relative w-full min-w-0 max-w-full">
+      <div className="party-episode-player relative w-full min-w-0 max-w-full max-lg:contents">
         <PlayEpisodeDialog
           key={`party-episode-${item.id}`}
           episode={item.media.episode}

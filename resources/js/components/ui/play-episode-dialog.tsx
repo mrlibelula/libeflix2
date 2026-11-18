@@ -23,6 +23,7 @@ import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playba
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
 import { PlayerOptionsMenu, isPlayerMenuTarget } from '@/components/ui/player-options-menu';
 import { usePreferMobilePlayerMenu, useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
+import { EpisodeRowActions, type EpisodeRowActionTarget } from '@/components/ui/episode-row-actions';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -2591,27 +2592,152 @@ export function PlayEpisodeDialog({
     }, 200);
   };
 
+  const patchEpisodeInSeasonsData = useCallback((episodeId: number, patch: Record<string, unknown>) => {
+    setSeasonsData((prev) =>
+      prev.map((season) => ({
+        ...season,
+        episodes: season.episodes.map((ep: any) =>
+          ep.id === episodeId ? { ...ep, ...patch } : ep
+        ),
+      }))
+    );
+  }, []);
+
   // Function to handle sharing the episode
-  const handleShareEpisode = async () => {
-    // Create a shareable URL with episode information
+  const handleShareEpisodeFor = useCallback(async (
+    target: { name?: string; overview?: string; episode_number: number },
+    seasonNumber: number
+  ) => {
     const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('season', episode.season_number.toString());
-    currentUrl.searchParams.set('episode', episode.episode_number.toString());
+    currentUrl.searchParams.set('season', seasonNumber.toString());
+    currentUrl.searchParams.set('episode', target.episode_number.toString());
     currentUrl.searchParams.set('autoplay', 'true');
-    
-    const episodeTitle = `${tvshowName} - S${episode.season_number}E${episode.episode_number}: ${episode.name}`;
-    const episodeDescription = episode.overview 
-      ? `Watch "${episode.name}" from ${tvshowName} - ${episode.overview.slice(0, 150)}${episode.overview.length > 150 ? '...' : ''}` 
-      : `Watch "${episode.name}" from ${tvshowName} - An exciting episode you don't want to miss!`;
-    
-    const shareData = {
+
+    const episodeName = target.name || `Episode ${target.episode_number}`;
+    const episodeTitle = `${tvshowName} - S${seasonNumber}E${target.episode_number}: ${episodeName}`;
+    const episodeDescription = target.overview
+      ? `Watch "${episodeName}" from ${tvshowName} - ${target.overview.slice(0, 150)}${target.overview.length > 150 ? '...' : ''}`
+      : `Watch "${episodeName}" from ${tvshowName} - An exciting episode you don't want to miss!`;
+
+    await share({
       title: episodeTitle,
       text: episodeDescription,
       url: currentUrl.toString(),
-    };
-    
-    await share(shareData);
+    });
+  }, [share, tvshowName]);
+
+  const handleShareEpisode = async () => {
+    await handleShareEpisodeFor(episode, episode.season_number);
   };
+
+  const toggleWatchLaterForEpisode = useCallback(async (episodeId: number): Promise<boolean | void> => {
+    if (!props.auth.user) {
+      return;
+    }
+
+    let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!csrfToken) {
+      try {
+        const tokenResponse = await fetch('/csrf-token', {
+          method: 'GET',
+          credentials: 'same-origin',
+        });
+        if (tokenResponse.ok) {
+          const tokenData = await tokenResponse.json();
+          csrfToken = tokenData.csrf_token;
+          const metaTag = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
+          if (metaTag && csrfToken) {
+            metaTag.setAttribute('content', csrfToken);
+          }
+        }
+      } catch (tokenError) {
+        console.error('Failed to fetch CSRF token:', tokenError);
+      }
+    }
+
+    if (!csrfToken) {
+      console.error('CSRF token not found - please refresh the page');
+      return;
+    }
+
+    const response = await fetch(`/api/episodes/${episodeId}/toggle-watch-later`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken as string,
+        'Accept': 'application/json',
+      },
+      credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.location.href = '/login?redirect=' + encodeURIComponent(currentUrl);
+      }
+      throw new Error(`Watch later toggle failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    return !!data.is_watch_later;
+  }, [props.auth.user]);
+
+  const handleEpisodeRowWatchLater = useCallback(async (
+    target: EpisodeRowActionTarget
+  ): Promise<boolean | void> => {
+    if (!props.auth.user) {
+      return;
+    }
+
+    if (onExternalWatchLaterToggle && target.id === episode?.id) {
+      const next = !currentWatchLaterState.isWatchLater;
+      onExternalWatchLaterToggle(target.id);
+      patchEpisodeInSeasonsData(target.id, { is_watch_later: next });
+      return next;
+    }
+
+    const next = await toggleWatchLaterForEpisode(target.id);
+    if (typeof next === 'boolean') {
+      patchEpisodeInSeasonsData(target.id, { is_watch_later: next });
+      if (target.id === episode?.id && !externalWatchLaterState) {
+        setIsWatchLater(next);
+      }
+    }
+    return next;
+  }, [
+    props.auth.user,
+    onExternalWatchLaterToggle,
+    episode?.id,
+    currentWatchLaterState.isWatchLater,
+    patchEpisodeInSeasonsData,
+    toggleWatchLaterForEpisode,
+    externalWatchLaterState,
+  ]);
+
+  const handleEpisodeRowLike = useCallback(async (
+    target: EpisodeRowActionTarget,
+    currentlyLiked: boolean
+  ) => {
+    if (!props.auth.user) {
+      return;
+    }
+
+    const response = currentlyLiked
+      ? await EpisodesApi.unlike(target.id)
+      : await EpisodesApi.like(target.id);
+
+    patchEpisodeInSeasonsData(target.id, {
+      is_liked: response.is_liked,
+      likes_count: response.likes_count,
+    });
+
+    if (target.id === episode?.id) {
+      setIsLiked(response.is_liked);
+      setLikesCount(response.likes_count);
+    }
+
+    return response;
+  }, [props.auth.user, patchEpisodeInSeasonsData, episode?.id]);
 
   /**
    * Keep the same <video> element across episode/audio changes so PiP stays open.
@@ -2799,10 +2925,9 @@ export function PlayEpisodeDialog({
     loadSeasonEpisodesForMenu(activeSeasonNumber);
   }, [showEpisodesMenu, activeSeasonNumber, loadSeasonEpisodesForMenu]);
 
-  // Mobile: load only the selected season's episodes (not the whole show).
-  // Skip in party/embedded — no mobile episode list there (matches desktop content).
+  // Load selected season episodes for the player episode list (mobile + desktop, non-embedded).
   useEffect(() => {
-    if (!isMobile || embedded || !dialogOpen || !tvshowSlug) return;
+    if (embedded || !dialogOpen || !tvshowSlug) return;
 
     if (seasonsDataRef.current.length === 0) {
       setSeasonsData(buildSeasonList());
@@ -2823,7 +2948,7 @@ export function PlayEpisodeDialog({
     return () => {
       cancelled = true;
     };
-  }, [isMobile, embedded, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
+  }, [embedded, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
 
   // Handle click outside episodes menu
   useEffect(() => {
@@ -3088,7 +3213,7 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-visible rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-visible max-lg:contents rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
             : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
@@ -4223,14 +4348,24 @@ export function PlayEpisodeDialog({
                             )}
                           </div>
                           
-                          {/* Options menu button */}
-                          <button className="flex-shrink-0 p-1 text-neutral-500">
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                              <circle cx="12" cy="5" r="2" />
-                              <circle cx="12" cy="12" r="2" />
-                              <circle cx="12" cy="19" r="2" />
-                            </svg>
-                          </button>
+                          <EpisodeRowActions
+                            episode={{
+                              id: ep.id,
+                              name: ep.name,
+                              episode_number: ep.episode_number,
+                              season_number: mobileSeasonNumber,
+                              overview: ep.overview,
+                              is_watch_later: ep.is_watch_later,
+                              is_liked: ep.is_liked,
+                            }}
+                            seasonNumber={mobileSeasonNumber}
+                            tvshowName={tvshowName}
+                            variant="mobile"
+                            isAuthenticated={isAuthenticated}
+                            onWatchLaterToggle={handleEpisodeRowWatchLater}
+                            onShare={handleShareEpisodeFor}
+                            onLikeToggle={handleEpisodeRowLike}
+                          />
                         </div>
                       );
                     })}
@@ -4463,6 +4598,146 @@ export function PlayEpisodeDialog({
                   </span>
                 </DialogDescription>
               </DialogHeader>
+
+              {!embedded && (
+                <div className="mt-6 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div className="flex-1 min-w-0">
+                      <Select
+                        value={mobileSeasonNumber.toString()}
+                        onValueChange={(val) => setMobileSeasonNumber(parseInt(val))}
+                      >
+                        <SelectTrigger className="w-full bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-700">
+                          <SelectValue placeholder="Select Season" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700">
+                          {seasonsData.length > 0 ? (
+                            seasonsData.map((season) => {
+                              const availableCount = season.loaded
+                                ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
+                                : season.episode_count;
+                              return (
+                                <SelectItem
+                                  key={`desktop-season-${season.season_number}`}
+                                  value={season.season_number.toString()}
+                                >
+                                  Season {season.season_number}
+                                  {availableCount != null ? ` (${availableCount} eps)` : ''}
+                                </SelectItem>
+                              );
+                            })
+                          ) : (
+                            <SelectItem value={episode.season_number.toString()}>
+                              Season {episode.season_number}
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="text-sm text-neutral-500 dark:text-neutral-400 flex-shrink-0">
+                      <span className="text-rose-500 font-medium">
+                        {seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length || '?'}
+                      </span>
+                      <span> / </span>
+                      <span>
+                        {seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes.length || '?'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto -mx-2">
+                    {mobileEpisodeListLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
+                      </div>
+                    ) : (
+                      (seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes || []).map((ep: any) => {
+                        const isCurrentEpisode = episode?.id === ep.id;
+                        const isAvailable = ep.is_in_storage && ep.encFilePath;
+
+                        return (
+                          <div
+                            key={`desktop-${ep.id}`}
+                            onClick={() => {
+                              if (isAvailable && onEpisodeSelect) {
+                                onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
+                              }
+                            }}
+                            className={`flex items-start gap-3 px-2 py-2.5 rounded-md ${
+                              isCurrentEpisode
+                                ? 'bg-neutral-100 dark:bg-neutral-800/60'
+                                : isAvailable
+                                  ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800/40'
+                                  : 'opacity-40'
+                            } ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          >
+                            <div className="relative flex-shrink-0 w-28 h-16 rounded overflow-hidden bg-neutral-200 dark:bg-neutral-800">
+                              {ep.stillUrl || ep.still_path ? (
+                                <img
+                                  src={ep.stillUrl || `https://image.tmdb.org/t/p/w300${ep.still_path}`}
+                                  alt={ep.name}
+                                  className={`w-full h-full object-cover ${!isAvailable ? 'grayscale' : ''}`}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <PlayCircle className="w-8 h-8 text-neutral-400" />
+                                </div>
+                              )}
+                              {isCurrentEpisode && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                  <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center">
+                                    <PlayCircle className="w-5 h-5 text-white fill-white" />
+                                  </div>
+                                </div>
+                              )}
+                              <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white font-medium">
+                                {ep.episode_number}
+                              </div>
+                              {ep.runtime && (
+                                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
+                                  {ep.runtime}m
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0 py-0.5">
+                              <h3 className={`text-sm font-medium truncate ${
+                                isCurrentEpisode ? 'text-rose-500' : ''
+                              }`}>
+                                {ep.name || `Episode ${ep.episode_number}`}
+                              </h3>
+                              {ep.overview && (
+                                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
+                                  {ep.overview}
+                                </p>
+                              )}
+                            </div>
+
+                            <EpisodeRowActions
+                              episode={{
+                                id: ep.id,
+                                name: ep.name,
+                                episode_number: ep.episode_number,
+                                season_number: mobileSeasonNumber,
+                                overview: ep.overview,
+                                is_watch_later: ep.is_watch_later,
+                                is_liked: ep.is_liked,
+                              }}
+                              seasonNumber={mobileSeasonNumber}
+                              tvshowName={tvshowName}
+                              variant="desktop"
+                              isAuthenticated={isAuthenticated}
+                              onWatchLaterToggle={handleEpisodeRowWatchLater}
+                              onShare={handleShareEpisodeFor}
+                              onLikeToggle={handleEpisodeRowLike}
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
