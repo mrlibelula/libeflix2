@@ -450,7 +450,7 @@ class TvshowController extends Controller
     {
         try {
             $query = $request->get('q', '');
-            $limit = $request->get('limit', 10);
+            $limit = $this->resolveSearchLimit($request);
             $shouldLog = $request->get('log', 'true') !== 'false'; // Default to true, false only if explicitly set
             
             if (empty($query) || strlen($query) < 2) {
@@ -465,14 +465,13 @@ class TvshowController extends Controller
             
             $allResults = collect();
             
-            // 1. Search TV shows directly - Remove limit to get all relevant shows
+            // 1. Search TV shows (capped — short queries otherwise match huge overviews)
             $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo')
-                ->with(['seasons' => function($seasonQuery) {
-                    $seasonQuery->select('id', 'tvshow_id', 'name', 'overview');
-                }]);
+                ->withCount('seasons');
 
             $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)
-                ->get(); // Removed limit to get all matching TV shows
+                ->limit($limit)
+                ->get();
 
             // Parse query for better TV show relevance scoring
             $parsedQuery = $this->parseCompoundQuery($query);
@@ -505,31 +504,32 @@ class TvshowController extends Controller
                     'overview' => $tvshow->overview,
                     'tagline' => $tvshow->tagline,
                     'logo_url' => $logoUrl,
-                    'seasons_count' => $tvshow->seasons->count(),
+                    'seasons_count' => (int) ($tvshow->seasons_count ?? 0),
                     'relevance_score' => $relevanceScore,
                 ]);
             }
             
-            // 2. Search episodes (with season and TV show info) - Remove limit to get all episodes
-            $episodeResults = $this->searchEpisodes($query);
+            // 2. Search episodes (with season and TV show info)
+            $episodeResults = $this->searchEpisodes($query, $limit);
             foreach ($episodeResults as $episode) {
                 $allResults->push($episode);
             }
             
-            // 3. Search seasons (with TV show info) - Remove limit to get all seasons
-            $seasonResults = $this->searchSeasons($query);
+            // 3. Search seasons (with TV show info)
+            $seasonResults = $this->searchSeasons($query, $limit);
             foreach ($seasonResults as $season) {
                 $allResults->push($season);
             }
 
-            // Sort by relevance score and type priority - Remove limit to return all results
+            // Sort by relevance score and type priority, then cap response size
             $sortedResults = $allResults
                 ->sortByDesc(function ($item) {
                     // Primary sort by type: tvshow > episode > season
                     $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
                     return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
                 })
-                ->values(); // Removed take($limit) to return all results
+                ->take($limit)
+                ->values();
 
             $searchTime = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -638,68 +638,30 @@ class TvshowController extends Controller
                 return response()->json(['success' => true, 'message' => 'Search not logged (duplicate or noise)']);
             }
 
-            // Get comprehensive search results for summary (same logic as main search)
-            $allResults = collect();
-            
-            // 1. Search TV shows
-            $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo');
-            $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $query)->get(); // Removed limit
-            
-            foreach ($tvshows as $tvshow) {
-                $allResults->push([
+            // Prefer client-provided summary from the already-completed search response.
+            // Re-running full episode/season search here previously exhausted PHP memory.
+            $resultsCount = $request->input('results_count');
+            $resultsSummary = $request->input('results_summary');
+
+            if (! is_numeric($resultsCount) || ! is_array($resultsSummary)) {
+                $tvshows = $this->applyTvshowSearchFilters(
+                    Tvshow::select('id', 'name', 'slug'),
+                    $query
+                )
+                    ->limit(5)
+                    ->get();
+
+                $resultsCount = (int) $this->applyTvshowSearchFilters(Tvshow::query(), $query)->count();
+                $resultsSummary = $tvshows->map(fn ($tvshow) => [
                     'type' => 'tvshow',
                     'id' => $tvshow->id,
                     'name' => $tvshow->name,
                     'slug' => $tvshow->slug,
-                    'relevance_score' => 100,
-                ]);
+                ])->toArray();
+            } else {
+                $resultsCount = (int) $resultsCount;
+                $resultsSummary = array_slice($resultsSummary, 0, 5);
             }
-            
-            // 2. Search episodes - Get all episodes
-            $episodeResults = $this->searchEpisodes($query);
-            foreach ($episodeResults as $episode) {
-                $allResults->push($episode);
-            }
-            
-            // 3. Search seasons - Get all seasons  
-            $seasonResults = $this->searchSeasons($query);
-            foreach ($seasonResults as $season) {
-                $allResults->push($season);
-            }
-
-            // Sort and limit to top 5 for summary
-            $sortedResults = $allResults
-                ->sortByDesc(function ($item) {
-                    $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
-                    return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
-                })
-                ->take(5)
-                ->values();
-
-            $resultsCount = $allResults->count();
-            $resultsSummary = $sortedResults->map(function ($result) {
-                $summary = [
-                    'type' => $result['type'],
-                    'id' => $result['id'],
-                    'name' => $result['name'],
-                ];
-                
-                if ($result['type'] === 'tvshow') {
-                    $summary['slug'] = $result['slug'];
-                } else {
-                    $summary['tvshow_slug'] = $result['tvshow_slug'] ?? null;
-                    $summary['tvshow_name'] = $result['tvshow_name'] ?? null;
-                    
-                    if ($result['type'] === 'season') {
-                        $summary['season_number'] = $result['season_number'] ?? null;
-                    } elseif ($result['type'] === 'episode') {
-                        $summary['season_number'] = $result['season_number'] ?? null;
-                        $summary['episode_number'] = $result['episode_number'] ?? null;
-                    }
-                }
-                
-                return $summary;
-            })->toArray();
 
             SearchQueryTvshow::create([
                 'user_id' => $user->id,
@@ -1199,9 +1161,23 @@ class TvshowController extends Controller
      * @param string $query
      * @return array
      */
-    private function searchEpisodes(string $query): array
+    private function resolveSearchLimit(Request $request): int
+    {
+        $default = (int) config('search.default_limit', 48);
+        $max = (int) config('search.max_limit', 100);
+        $requested = (int) $request->get('limit', $default);
+
+        if ($requested < 1) {
+            $requested = $default;
+        }
+
+        return min($requested, max(1, $max));
+    }
+
+    private function searchEpisodes(string $query, ?int $limit = null): array
     {
         $results = [];
+        $limit = $limit ?? (int) config('search.default_limit', 48);
         
         try {
             // Parse the query to understand context
@@ -1210,7 +1186,7 @@ class TvshowController extends Controller
             $searchTerms = $parsedQuery['search_terms'];
             $originalQuery = $parsedQuery['original_query'];
             
-            // Build the base query
+            // Build the base query (omit heavy JSON columns like credits — they blew memory on short queries)
             $episodesQuery = DB::table('episodes')
                 ->join('seasons', 'episodes.season_id', '=', 'seasons.id')
                 ->join('tvshows', 'seasons.tvshow_id', '=', 'tvshows.id')
@@ -1222,7 +1198,6 @@ class TvshowController extends Controller
                     'episodes.still_path',
                     'episodes.air_date as episode_air_date',
                     'episodes.vote_average as episode_vote_average',
-                    'episodes.credits as episode_credits',
                     'seasons.id as season_id',
                     'seasons.name as season_name',
                     'seasons.season_number',
@@ -1256,13 +1231,6 @@ class TvshowController extends Controller
                                     $q->orWhere('episodes.name', 'LIKE', "%{$term}%")
                                       ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
                                 }
-                                
-                                // Search in episode credits (JSON field)
-                                if (config('database.default') === 'mysql') {
-                                    $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$term}%"]);
-                                } else {
-                                    $q->orWhere('episodes.credits', 'LIKE', "%{$term}%");
-                                }
                             }
                         } else {
                             // No search terms, use original query
@@ -1285,7 +1253,8 @@ class TvshowController extends Controller
                               END, episodes.name",
                         ["%{$originalQuery}%", "%{$originalQuery}%"]
                     )
-                    ->get(); // Removed limit to get all context episodes
+                    ->limit($limit)
+                    ->get();
                 
                 // Process context episodes with higher relevance
                 foreach ($contextEpisodes as $episode) {
@@ -1310,12 +1279,6 @@ class TvshowController extends Controller
                                     $q->orWhere('episodes.name', 'LIKE', "%{$term}%")
                                       ->orWhere('episodes.overview', 'LIKE', "%{$term}%");
                                 }
-                                
-                                if (config('database.default') === 'mysql') {
-                                    $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$term}%"]);
-                                } else {
-                                    $q->orWhere('episodes.credits', 'LIKE', "%{$term}%");
-                                }
                             }
                         } else {
                             // No search terms, use original query
@@ -1338,7 +1301,8 @@ class TvshowController extends Controller
                               END, episodes.name",
                         ["%{$originalQuery}%", "%{$originalQuery}%"]
                     )
-                    ->get(); // Removed limit to get all broad search episodes
+                    ->limit($limit)
+                    ->get();
                 
                 foreach ($broadEpisodes as $episode) {
                     $relevanceScore = $this->calculateEpisodeRelevance($episode, $searchTerms, $originalQuery, false);
@@ -1351,12 +1315,6 @@ class TvshowController extends Controller
                     ->where(function ($q) use ($originalQuery) {
                         $q->where('episodes.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('episodes.overview', 'LIKE', "%{$originalQuery}%");
-                        
-                        if (config('database.default') === 'mysql') {
-                            $q->orWhereRaw("JSON_SEARCH(LOWER(episodes.credits), 'all', LOWER(?)) IS NOT NULL", ["%{$originalQuery}%"]);
-                        } else {
-                            $q->orWhere('episodes.credits', 'LIKE', "%{$originalQuery}%");
-                        }
                     })
                     // Enhanced database-level ordering with better relevance scoring
                     ->orderByRaw(
@@ -1389,7 +1347,8 @@ class TvshowController extends Controller
                             "%{$originalQuery}%"               // Overview contains query
                         ]
                     )
-                    ->get(); // Removed limit to get all matching episodes
+                    ->limit($limit)
+                    ->get();
                 
                 foreach ($episodes as $episode) {
                     $relevanceScore = $this->calculateEpisodeRelevance($episode, [$originalQuery], $originalQuery, false);
@@ -1397,10 +1356,11 @@ class TvshowController extends Controller
                 }
             }
             
-            // Sort results by relevance score (no limit applied)
+            // Sort results by relevance score and cap
             usort($results, function ($a, $b) {
                 return $b['relevance_score'] <=> $a['relevance_score'];
             });
+            $results = array_slice($results, 0, $limit);
             
         } catch (\Exception $e) {
             Log::error('Enhanced episode search error', [
@@ -1450,15 +1410,8 @@ class TvshowController extends Controller
         
         // Check matches in episode overview
         foreach ($searchTerms as $term) {
-            if (stripos($episode->episode_overview, $term) !== false) {
+            if (stripos((string) $episode->episode_overview, $term) !== false) {
                 $relevanceScore += 50;
-            }
-        }
-        
-        // Check matches in episode credits
-        foreach ($searchTerms as $term) {
-            if (stripos($episode->episode_credits, $term) !== false) {
-                $relevanceScore += 30;
             }
         }
         
@@ -1528,9 +1481,10 @@ class TvshowController extends Controller
      * @param string $query
      * @return array
      */
-    private function searchSeasons(string $query): array
+    private function searchSeasons(string $query, ?int $limit = null): array
     {
         $results = [];
+        $limit = $limit ?? (int) config('search.default_limit', 48);
         
         try {
             // Parse the query to understand context
@@ -1577,7 +1531,8 @@ class TvshowController extends Controller
                         $q->orWhere('seasons.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
                     })
-                    ->get(); // Removed limit to get all context seasons
+                    ->limit($limit)
+                    ->get();
                 
                 // Process context seasons with higher relevance
                 foreach ($contextSeasons as $season) {
@@ -1597,7 +1552,8 @@ class TvshowController extends Controller
                         $q->orWhere('seasons.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
                     })
-                    ->get(); // Removed limit to get all broad search seasons
+                    ->limit($limit)
+                    ->get();
                 
                 foreach ($broadSeasons as $season) {
                     $relevanceScore = $this->calculateSeasonRelevance($season, $searchTerms, $originalQuery, false);
@@ -1610,7 +1566,8 @@ class TvshowController extends Controller
                         $q->where('seasons.name', 'LIKE', "%{$originalQuery}%")
                           ->orWhere('seasons.overview', 'LIKE', "%{$originalQuery}%");
                     })
-                    ->get(); // Removed limit to get all matching seasons
+                    ->limit($limit)
+                    ->get();
                 
                 foreach ($seasons as $season) {
                     $relevanceScore = $this->calculateSeasonRelevance($season, [$originalQuery], $originalQuery, false);
@@ -1618,10 +1575,11 @@ class TvshowController extends Controller
                 }
             }
             
-            // Sort results by relevance score (no limit applied)
+            // Sort results by relevance score and cap
             usort($results, function ($a, $b) {
                 return $b['relevance_score'] <=> $a['relevance_score'];
             });
+            $results = array_slice($results, 0, $limit);
             
         } catch (\Exception $e) {
             Log::error('Enhanced season search error', [
@@ -1880,18 +1838,18 @@ class TvshowController extends Controller
 
         $startTime = microtime(true);
         $allResults = collect();
+        $limit = $this->resolveSearchLimit($request);
         
         // Parse query for better TV show relevance scoring
         $parsedQuery = $this->parseCompoundQuery($searchQuery);
         
         // 1. Search TV shows directly
         $tvshowsQuery = Tvshow::select('id', 'name', 'original_name', 'slug', 'poster_path', 'first_air_date', 'vote_average', 'overview', 'tagline', 'images', 'selected_logo')
-            ->with(['seasons' => function($seasonQuery) {
-                $seasonQuery->select('id', 'tvshow_id', 'name', 'overview');
-            }]);
+            ->withCount('seasons');
 
         $tvshows = $this->applyTvshowSearchFilters($tvshowsQuery, $searchQuery)
-            ->get(); // Removed limit to get all matching TV shows
+            ->limit($limit)
+            ->get();
 
         // Add TV show results with enhanced relevance scoring
         foreach ($tvshows as $tvshow) {
@@ -1921,7 +1879,7 @@ class TvshowController extends Controller
                 'overview' => $tvshow->overview,
                 'tagline' => $tvshow->tagline,
                 'logo_url' => $logoUrl,
-                'seasons_count' => $tvshow->seasons->count(),
+                'seasons_count' => (int) ($tvshow->seasons_count ?? 0),
                 'relevance_score' => $relevanceScore,
                 // Add likes and watch later information
                 'likes_count' => $tvshow->likesCount(),
@@ -1930,26 +1888,27 @@ class TvshowController extends Controller
             ]);
         }
         
-        // 2. Search episodes (with season and TV show info) - Get all episodes
-        $episodeResults = $this->searchEpisodes($searchQuery);
+        // 2. Search episodes (with season and TV show info)
+        $episodeResults = $this->searchEpisodes($searchQuery, $limit);
         foreach ($episodeResults as $episode) {
             $allResults->push($episode);
         }
         
-        // 3. Search seasons (with TV show info) - Get all seasons
-        $seasonResults = $this->searchSeasons($searchQuery);
+        // 3. Search seasons (with TV show info)
+        $seasonResults = $this->searchSeasons($searchQuery, $limit);
         foreach ($seasonResults as $season) {
             $allResults->push($season);
         }
 
-        // Sort by relevance score and type priority - Return all results
+        // Sort by relevance score and type priority, then cap
         $sortedResults = $allResults
             ->sortByDesc(function ($item) {
                 // Primary sort by type: tvshow > episode > season
                 $typePriority = ['tvshow' => 300, 'episode' => 200, 'season' => 100];
                 return ($typePriority[$item['type']] ?? 0) + ($item['relevance_score'] ?? 0);
             })
-            ->values(); // Return all results without limiting
+            ->take($limit)
+            ->values();
 
         $searchTime = round((microtime(true) - $startTime) * 1000, 2);
 

@@ -651,7 +651,13 @@ class MovieController extends Controller
     {
         try {
             $query = $request->get('q', '');
-            $limit = $request->get('limit', 10);
+            $defaultLimit = (int) config('search.default_limit', 48);
+            $maxLimit = (int) config('search.max_limit', 100);
+            $limit = (int) $request->get('limit', $defaultLimit);
+            if ($limit < 1) {
+                $limit = $defaultLimit;
+            }
+            $limit = min($limit, max(1, $maxLimit));
             $shouldLog = $request->get('log', 'true') !== 'false'; // Default to true, false only if explicitly set
 
             if (empty($query) || strlen($query) < 2) {
@@ -664,7 +670,7 @@ class MovieController extends Controller
             $user = Auth::user();
             $startTime = microtime(true);
 
-            // Search movies with comprehensive criteria - Remove limit to get all relevant movies
+            // Search movies with comprehensive criteria (capped to avoid loading huge result sets)
             $movies = Movie::select('id', 'title', 'original_name', 'slug', 'poster_path', 'release_date', 'vote_average', 'overview', 'tagline', 'subtitles')
                 ->where(function ($q) use ($query) {
                     // Search in title
@@ -678,9 +684,7 @@ class MovieController extends Controller
                         // Search in alternative_titles JSON (convert to string and search)
                         ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
                         // Search in keywords JSON (convert to string and search)
-                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                        // Search in credits JSON (convert to string and search)
-                        ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
+                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"]);
                 })
                 ->orderByRaw("CASE 
                     WHEN title LIKE ? THEN 1
@@ -689,7 +693,8 @@ class MovieController extends Controller
                     WHEN overview LIKE ? THEN 4
                     ELSE 5
                 END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
-                ->get(); // Removed limit to get all matching movies
+                ->limit($limit)
+                ->get();
 
             // Process results
             $results = $movies->map(function ($movie) use ($user) {
@@ -917,46 +922,45 @@ class MovieController extends Controller
                 return response()->json(['success' => true, 'logged' => false, 'reason' => 'duplicate']);
             }
 
-            // First get the total count of matching movies
-            $resultsCount = Movie::where(function ($q) use ($query) {
-                $q->where('title', 'LIKE', "%{$query}%")
-                    ->orWhere('original_name', 'LIKE', "%{$query}%")
-                    ->orWhere('tagline', 'LIKE', "%{$query}%")
-                    ->orWhere('overview', 'LIKE', "%{$query}%")
-                    ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
-                    ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                    ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
-            })->count();
+            // Prefer client-provided summary from the already-completed search.
+            $resultsCount = $request->input('results_count');
+            $resultsSummary = $request->input('results_summary');
 
-            // Then get top 5 results for summary
-            $movies = Movie::select('id', 'title', 'slug')
-                ->where(function ($q) use ($query) {
+            if (! is_numeric($resultsCount) || ! is_array($resultsSummary)) {
+                $movieMatch = function ($q) use ($query) {
                     $q->where('title', 'LIKE', "%{$query}%")
                         ->orWhere('original_name', 'LIKE', "%{$query}%")
                         ->orWhere('tagline', 'LIKE', "%{$query}%")
                         ->orWhere('overview', 'LIKE', "%{$query}%")
                         ->orWhereRaw('CAST(alternative_titles AS CHAR) LIKE ?', ["%{$query}%"])
-                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"])
-                        ->orWhereRaw('CAST(credits AS CHAR) LIKE ?', ["%{$query}%"]);
-                })
-                ->orderByRaw("CASE 
-                    WHEN title LIKE ? THEN 1
-                    WHEN original_name LIKE ? THEN 2
-                    WHEN tagline LIKE ? THEN 3
-                    WHEN overview LIKE ? THEN 4
-                    ELSE 5
-                END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
-                ->limit(5) // Get top 5 for summary
-                ->get();
+                        ->orWhereRaw('CAST(keywords AS CHAR) LIKE ?', ["%{$query}%"]);
+                };
 
-            $resultsSummary = $movies->map(function ($movie) {
-                return [
-                    'id' => $movie->id,
-                    'title' => $movie->title,
-                    'slug' => $movie->slug
-                ];
-            })->toArray();
+                $resultsCount = Movie::where($movieMatch)->count();
 
+                $movies = Movie::select('id', 'title', 'slug')
+                    ->where($movieMatch)
+                    ->orderByRaw("CASE 
+                        WHEN title LIKE ? THEN 1
+                        WHEN original_name LIKE ? THEN 2
+                        WHEN tagline LIKE ? THEN 3
+                        WHEN overview LIKE ? THEN 4
+                        ELSE 5
+                    END", ["{$query}%", "{$query}%", "{$query}%", "{$query}%"])
+                    ->limit(5)
+                    ->get();
+
+                $resultsSummary = $movies->map(function ($movie) {
+                    return [
+                        'id' => $movie->id,
+                        'title' => $movie->title,
+                        'slug' => $movie->slug
+                    ];
+                })->toArray();
+            } else {
+                $resultsCount = (int) $resultsCount;
+                $resultsSummary = array_slice($resultsSummary, 0, 5);
+            }
             SearchQuery::create([
                 'user_id' => $user->id,
                 'query' => $query,

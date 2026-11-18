@@ -29,11 +29,28 @@ class ApiClient {
     }
   }
 
+  private getXsrfTokenFromCookie(): string | null {
+    const match = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('XSRF-TOKEN='));
+
+    if (!match) {
+      return null;
+    }
+
+    // Laravel stores the cookie URL-encoded; Axios decodes it, fetch must too.
+    return decodeURIComponent(match.slice('XSRF-TOKEN='.length));
+  }
+
   private async fetchNewCSRFToken(): Promise<string | null> {
     try {
       const response = await fetch('/csrf-token', {
         method: 'GET',
         credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
       });
       
       if (response.ok) {
@@ -56,10 +73,16 @@ class ApiClient {
   }
 
   private getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+    // Prefer a fresh meta/session token; also send decoded XSRF cookie (Laravel's fetch-friendly path).
+    this.refreshCSRFToken();
+    const xsrfToken = this.getXsrfTokenFromCookie();
+
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
       'X-CSRF-TOKEN': this.csrfToken || '',
+      ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       ...customHeaders,
     };
   }

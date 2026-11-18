@@ -216,7 +216,35 @@ export default function Search() {
         // Log the search immediately with the same timestamp used for click tracking
         // This ensures search records exist when users click quickly
         if (query.length >= 3) {
-          logSearch(query, searchTimestamp);
+          logSearch(query, searchTimestamp, {
+            movieCount: movies.length,
+            movieSummary: movies.slice(0, 5).map((movie: any) => ({
+              id: movie.id,
+              title: movie.title,
+              slug: movie.slug,
+            })),
+            tvshowCount: tvshowResults.length,
+            tvshowSummary: tvshowResults.slice(0, 5).map((result: any) => {
+              const summary: Record<string, unknown> = {
+                type: result.type,
+                id: result.id,
+                name: result.name,
+              };
+              if (result.type === 'tvshow') {
+                summary.slug = result.slug;
+              } else {
+                summary.tvshow_slug = result.tvshow_slug;
+                summary.tvshow_name = result.tvshow_name;
+                if (result.type === 'season' || result.type === 'episode') {
+                  summary.season_number = result.season_number;
+                }
+                if (result.type === 'episode') {
+                  summary.episode_number = result.episode_number;
+                }
+              }
+              return summary;
+            }),
+          });
         }
 
         // Update URL without causing a page reload
@@ -243,21 +271,35 @@ export default function Search() {
     }
   }, []);
 
-  const logSearch = useCallback(async (query: string, timestamp?: string) => {
+  const logSearch = useCallback(async (
+    query: string,
+    timestamp?: string,
+    summary?: {
+      movieCount: number;
+      movieSummary: Array<Record<string, unknown>>;
+      tvshowCount: number;
+      tvshowSummary: Array<Record<string, unknown>>;
+    }
+  ) => {
     if (query.length < 3) return;
 
     const searchTimestamp = timestamp || new Date().toISOString();
 
     try {
-      // Log searches for both movies and tvshows with the same timestamp
+      // Log searches for both movies and tvshows with the same timestamp.
+      // Pass result summaries so the server does not re-run expensive search queries.
       await Promise.all([
         api.post('/api/movies/search/log', {
           query,
-          timestamp: searchTimestamp
+          timestamp: searchTimestamp,
+          results_count: summary?.movieCount,
+          results_summary: summary?.movieSummary,
         }),
         api.post('/api/tvshows/search/log', {
           query,
-          timestamp: searchTimestamp
+          timestamp: searchTimestamp,
+          results_count: summary?.tvshowCount,
+          results_summary: summary?.tvshowSummary,
         })
       ]);
     } catch (error) {
