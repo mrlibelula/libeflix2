@@ -108,6 +108,8 @@ type PlayEpisodeDialogProps = {
   /** Embed player inline (Party Theater) instead of a modal dialog */
   embedded?: boolean;
   partySync?: PartyPlayerSync | null;
+  /** When set (party mobile), episode details render here instead of under the video */
+  detailsContainer?: HTMLElement | null;
 };
 
 export function PlayEpisodeDialog({
@@ -148,6 +150,7 @@ export function PlayEpisodeDialog({
   onEpisodeSelect,
   embedded = false,
   partySync = null,
+  detailsContainer = null,
 }: PlayEpisodeDialogProps) {
   const { props } = usePage<{
     auth: {
@@ -194,6 +197,8 @@ export function PlayEpisodeDialog({
   });
   const controlsLockedByParty = partyBridge.enabled && !partyBridge.canControl;
   const preserveNativeAspect = Boolean(embedded || partySync?.enabled);
+  const renderDetails = (node: React.ReactNode) =>
+    detailsContainer ? createPortal(node, detailsContainer) : node;
   /** Native MP4 aspect (width/height); used in party theater so we don't force 16:9 */
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
@@ -3213,7 +3218,7 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-visible max-lg:contents rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-hidden rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
             : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
@@ -3250,17 +3255,11 @@ export function PlayEpisodeDialog({
         </div>
         
         <div className={`w-full h-full flex flex-col ${isMobile && !embedded ? 'overflow-hidden' : ''}`}>
-          {/* Video only sticks — episode meta below scrolls away (party embedded + regular mobile) */}
+          {/* Video player area - sticky on mobile when scrolling (regular dialog only; party pins via theater layout) */}
           <div 
             ref={containerRef}
             data-player-root="true"
-            className={`relative w-full overflow-hidden bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${
-              embedded
-                ? 'sticky top-0 z-30 flex-shrink-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] lg:relative lg:z-auto lg:shadow-none'
-                : isMobile
-                  ? 'sticky top-0 z-40 flex-shrink-0'
-                  : ''
-            }`}
+            className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile && !embedded ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
             tabIndex={0}
             style={{
               cursor: userActive || !isFullscreen || !isPlaying ? 'default' : 'none', // Hide cursor when inactive, in fullscreen, and playing
@@ -4379,9 +4378,9 @@ export function PlayEpisodeDialog({
                 )}
               </div>
             </div>
-          ) : (
-            /* Desktop / party-embedded episode details (not sticky — scrolls under the video) */
-            <div className={`p-6 ${embedded ? 'px-3 py-4 sm:p-6' : ''}`}>
+          ) : renderDetails(
+            /* Desktop / party-embedded episode details */
+            <div className={embedded ? 'px-3 py-1 text-left sm:px-0 lg:p-6' : 'p-6'}>
               <DialogHeader className="text-left">
                 <div className="text-lg leading-none font-semibold">
                   <div className="sm:flex justify-between items-start w-full">

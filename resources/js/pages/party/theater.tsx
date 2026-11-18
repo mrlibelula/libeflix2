@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Copy, LogOut, Mic, MicOff } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
@@ -15,6 +15,9 @@ import { usePartyActivityToast } from '@/hooks/use-party-activity-toast';
 import type { PartySnapshot, PartyVoiceSignal } from '@/types/party';
 import type { BreadcrumbItem } from '@/types';
 
+/** Matches Tailwind's `lg` breakpoint — below it the theater uses the pinned-video layout. */
+const COMPACT_QUERY = '(max-width: 1023.98px)';
+
 type Props = {
   code: string;
   initialSnapshot: PartySnapshot;
@@ -26,6 +29,18 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
   const voiceHandlerRef = useRef<(signals: PartyVoiceSignal[]) => void>(() => undefined);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
+  const [detailsEl, setDetailsEl] = useState<HTMLDivElement | null>(null);
+  const [isCompact, setIsCompact] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(COMPACT_QUERY).matches
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(COMPACT_QUERY);
+    const onChange = () => setIsCompact(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
   const {
     snapshot,
@@ -206,11 +221,11 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
       />
 
       {/*
-        Mobile: fixed-height scrollport (not min-height) so overflow-y actually scrolls and
-        position:sticky on the player can pin under the app header while queue/chat move.
-        Desktop (lg+): grow with content; player is relative again.
+        Mobile (< lg): fixed-height column — video pinned on top (never scrolls), everything
+        else (episode details, playlist, settings, chat) scrolls in its own area below.
+        Desktop (lg+): page grows with content; scroll area collapses via lg:contents.
       */}
-      <div className="relative flex h-[calc(100svh-4rem)] max-h-[calc(100svh-4rem)] w-full min-w-0 max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain scroll-pt-[min(56.25vw,40vh)] sidebar-scrollbar lg:h-auto lg:max-h-none lg:min-h-[calc(100vh-4rem)] lg:overflow-y-visible lg:overscroll-y-auto lg:scroll-pt-0">
+      <div className="relative flex h-[calc(100svh-4rem)] w-full min-w-0 max-w-full flex-col overflow-hidden lg:h-auto lg:min-h-[calc(100vh-4rem)] lg:overflow-visible">
         <div
           style={{
             backgroundImage: `url(${backdropUrl})`,
@@ -221,16 +236,11 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
         />
         <div className="pointer-events-none absolute inset-0 h-full w-full bg-gradient-to-b from-white/40 via-white/55 to-white/75 dark:from-transparent dark:via-transparent dark:to-transparent dark:dark-gradient-hero lg:min-h-[calc(100vh-4rem)]" />
 
-        <div className="relative z-10 flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 sm:p-4 md:p-6">
-          {voice.error && <p className="px-3 text-sm text-amber-400 sm:px-0">{voice.error}</p>}
+        <div className="relative z-10 flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col sm:p-4 md:p-6 lg:flex-none lg:gap-4">
+          {voice.error && <p className="shrink-0 px-3 py-2 text-sm text-amber-400 sm:px-0 sm:pt-0">{voice.error}</p>}
 
-          {/*
-            Mobile: only the video surface is sticky. Sticky can't outlive its parent box, so
-            the player wrappers use max-lg:contents — the video then sticks against this tall
-            column while episode meta, queue and chat scroll underneath.
-          */}
-          <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:items-start">
-            <div className="min-w-0 w-full max-w-full max-lg:contents">
+          <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col lg:flex-none lg:gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:items-start">
+            <div className="w-full min-w-0 max-w-full shrink-0">
               <PartyPlayer
                 item={snapshot.current_item}
                 queue={snapshot.queue}
@@ -244,29 +254,34 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
                 onPlayQueueItem={async (id) => {
                   await postPlayback({ queue_item_id: id, is_playing: true, position_seconds: 0 });
                 }}
+                detailsContainer={isCompact ? detailsEl : null}
               />
             </div>
 
-            {!snapshot.viewer.can_control && snapshot.current_item?.can_play && snapshot.current_item.media ? (
-              <p className="mx-3 min-w-0 rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-400 sm:mx-0 xl:col-start-1">
-                Only the host can control playback in this theater.
-              </p>
-            ) : null}
+            <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-y-contain py-3 sidebar-scrollbar sm:gap-4 sm:pb-0 lg:contents">
+              <div ref={setDetailsEl} className="min-w-0 shrink-0 empty:hidden lg:hidden" />
 
-            <div className="min-w-0 w-full max-w-full overflow-x-hidden px-3 sm:px-0 xl:col-start-2 xl:row-start-1 xl:row-span-2">
-              <PartySidePanel
-                snapshot={snapshot}
-                chatMessages={chatMessages}
-                absoluteMaxMembers={absoluteMaxMembers}
-                onSaveSettings={updateSettings}
-                onDeleteRoom={deleteRoom}
-                onAddToQueue={addToQueue}
-                onRemoveFromQueue={removeFromQueue}
-                onPlayQueueItem={async (id) => {
-                  await postPlayback({ queue_item_id: id, is_playing: true, position_seconds: 0 });
-                }}
-                onSendChat={sendChat}
-              />
+              {!snapshot.viewer.can_control && snapshot.current_item?.can_play && snapshot.current_item.media ? (
+                <p className="mx-3 min-w-0 shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-400 sm:mx-0 xl:col-start-1">
+                  Only the host can control playback in this theater.
+                </p>
+              ) : null}
+
+              <div className="min-w-0 w-full max-w-full shrink-0 overflow-x-hidden px-3 sm:px-0 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+                <PartySidePanel
+                  snapshot={snapshot}
+                  chatMessages={chatMessages}
+                  absoluteMaxMembers={absoluteMaxMembers}
+                  onSaveSettings={updateSettings}
+                  onDeleteRoom={deleteRoom}
+                  onAddToQueue={addToQueue}
+                  onRemoveFromQueue={removeFromQueue}
+                  onPlayQueueItem={async (id) => {
+                    await postPlayback({ queue_item_id: id, is_playing: true, position_seconds: 0 });
+                  }}
+                  onSendChat={sendChat}
+                />
+              </div>
             </div>
           </div>
         </div>

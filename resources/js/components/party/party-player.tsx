@@ -19,6 +19,8 @@ type Props = {
   /** Switch the room to a playlist item (controllers only). */
   onPlayQueueItem: (id: number) => void | Promise<void>;
   imgBaseUrl?: string;
+  /** Episode details portal target (mobile theater scroll area) */
+  detailsContainer?: HTMLElement | null;
 };
 
 export function PartyPlayer({
@@ -33,6 +35,7 @@ export function PartyPlayer({
   onEpisodeRepeatMode,
   onPlayQueueItem,
   imgBaseUrl = '',
+  detailsContainer = null,
 }: Props) {
   const playlistNav = useMemo(() => {
     const currentId = playback.current_queue_item_id;
@@ -117,19 +120,17 @@ export function PartyPlayer({
 
   if (item.media.kind === 'movie' && item.media.movie && item.media.encFilePath) {
     return (
-      <div className="w-full min-w-0 max-w-full max-lg:contents">
-        <div className="sticky top-0 z-30 w-full min-w-0 max-w-full overflow-hidden rounded-none bg-black shadow-[0_8px_24px_rgba(0,0,0,0.35)] sm:rounded-lg lg:relative lg:z-auto lg:shadow-none">
-          <PlayMoviePlayer
-            key={`party-movie-${item.id}-${item.media.encFilePath}`}
-            movie={item.media.movie}
-            encFilePath={item.media.encFilePath}
-            imgBaseUrl={imgBaseUrl}
-            autoPlay={false}
-            partySync={partySync}
-            className="max-w-full"
-            onComplete={playNextInPlaylist}
-          />
-        </div>
+      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-none bg-black sm:rounded-lg">
+        <PlayMoviePlayer
+          key={`party-movie-${item.id}-${item.media.encFilePath}`}
+          movie={item.media.movie}
+          encFilePath={item.media.encFilePath}
+          imgBaseUrl={imgBaseUrl}
+          autoPlay={false}
+          partySync={partySync}
+          className="max-w-full"
+          onComplete={playNextInPlaylist}
+        />
         {hostNotice}
       </div>
     );
@@ -137,7 +138,7 @@ export function PartyPlayer({
 
   if (item.media.kind === 'episode' && item.media.episode) {
     return (
-      <div className="party-episode-player relative w-full min-w-0 max-w-full max-lg:contents">
+      <div className="party-episode-player relative w-full min-w-0 max-w-full overflow-hidden">
         <PlayEpisodeDialog
           key={`party-episode-${item.id}`}
           episode={item.media.episode}
@@ -158,6 +159,7 @@ export function PartyPlayer({
           onFirstEpisodeOfSeason={loopPlaylistFromStart}
           onFirstEpisodeOfTVShow={loopPlaylistFromStart}
           onComplete={playNextInPlaylist}
+          detailsContainer={detailsContainer}
         />
         {hostNotice}
       </div>

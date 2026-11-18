@@ -164,7 +164,6 @@ export function PartyQueue({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search movies or TV shows…"
-                className="scroll-mt-[min(56.25vw,40vh)] lg:scroll-mt-0"
               />
               {searching && <p className="text-xs text-zinc-500">Searching…</p>}
               {!searching && query.trim().length >= 2 && results.length === 0 && (
