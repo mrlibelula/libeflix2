@@ -7,6 +7,9 @@ import axios from 'axios';
 import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
 import { Button } from '@/components/ui/button';
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { PlayerOptionsMenu, isPlayerMenuTarget } from '@/components/ui/player-options-menu';
+import { usePreferMobilePlayerMenu } from '@/hooks/use-viewport-menu-position';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -104,6 +107,8 @@ export function PlayMoviePlayer({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio' | 'sound'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const preferMobileMenu = usePreferMobilePlayerMenu(isMobile);
 
   // Mobile gesture state & refs
   const [gestureFeedback, setGestureFeedback] = useState<GestureFeedbackState | null>(null);
@@ -891,6 +896,7 @@ export function PlayMoviePlayer({
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessMovie) return;
+    if (isPlayerMenuTarget(e.target)) return;
 
     const touch = e.touches[0];
     if (!touch) return;
@@ -904,6 +910,7 @@ export function PlayMoviePlayer({
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessMovie) return;
+    if (isPlayerMenuTarget(e.target)) return;
     if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
       return;
     }
@@ -911,6 +918,7 @@ export function PlayMoviePlayer({
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessMovie) return;
+    if (isPlayerMenuTarget(e.target)) return;
 
     const targetNode = e.target as Node | null;
 
@@ -1391,7 +1399,8 @@ export function PlayMoviePlayer({
 
   return (
     <div 
-      ref={containerRef} 
+      ref={containerRef}
+      data-player-root="true"
       className={`relative w-full bg-black outline-none ${useNativeAspect ? '' : 'aspect-video'} ${className}`}
       tabIndex={0}
       style={{
@@ -1424,6 +1433,7 @@ export function PlayMoviePlayer({
                                       target.closest('[role="slider"]') ||
                                       target.closest('[role="menu"]') ||
                                       target.closest('[role="menuitem"]') ||
+                                      target.closest('[data-player-menu]') ||
                                       target.closest('[role="dialog"]') ||
                                       target.closest('[data-radix-popper-content-wrapper]') ||
                                       target.hasAttribute('data-radix-popper-content-wrapper');
@@ -1831,154 +1841,24 @@ export function PlayMoviePlayer({
                   
                   {/* Context Menu for Subtitles and Audio */}
                   {showContextMenu && (
-                    <div 
-                      ref={contextMenuRef}
-                      className="absolute right-10 bottom-14 z-50 bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
-                      style={{ width: '240px' }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="py-1">
-                        {/* Audio Language Selection */}
-                        {audioTracks.length > 1 && (
-                          <div 
-                            className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                              activeSection === 'audio' 
-                                ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                            }`}
-                            onMouseEnter={() => setActiveSection('audio')}
-                          >
-                            <span className="text-sm font-medium">Audio</span>
-                            <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                              {audioTracks.find(track => track.selected)?.label || 'Default'}
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                          </div>
-                        )}
-                        
-                        {hasSubtitles && (
-                          <div 
-                            className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                              activeSection === 'subtitles' 
-                                ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                            }`}
-                            onMouseEnter={() => setActiveSection('subtitles')}
-                          >
-                            <span className="text-sm font-medium">Subtitles</span>
-                            <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                              {subtitleTracks.find(track => track.selected)?.label || 'Off'}
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                          </div>
-                        )}
-
-                        <div
-                          className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                            activeSection === 'sound'
-                              ? 'bg-neutral-100 dark:bg-neutral-800'
-                              : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                          }`}
-                          onMouseEnter={() => setActiveSection('sound')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
-                          }}
-                        >
-                          <span className="text-sm font-medium">Sound</span>
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                            {audioModeLabel}
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Audio Tracks Submenu */}
-                      {activeSection === 'audio' && (
-                        <div 
-                          className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                          style={{ width: '180px' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {audioTracks.map((track) => (
-                            <div 
-                              key={track.id}
-                              className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectAudio(track.id);
-                              }}
-                            >
-                              <span className="flex-1 text-sm">{track.label}</span>
-                              {track.selected && <Check className="w-4 h-4 text-rose-500" />}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Subtitles Submenu */}
-                      {activeSection === 'subtitles' && (
-                        <div 
-                          className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                          style={{ width: '180px' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {subtitleTracks.map((track) => (
-                            <div 
-                              key={track.id}
-                              className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectSubtitle(track.id);
-                              }}
-                            >
-                              <span className="flex-1 text-sm">{track.label}</span>
-                              {track.selected && <Check className="w-4 h-4 text-rose-500" />}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Sound mode submenu */}
-                      {activeSection === 'sound' && (
-                        <div
-                          className="absolute top-0 right-full bg-white dark:bg-neutral-900 rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1"
-                          style={{ width: '180px' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div
-                            className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNormalizeVolume(!normalizeVolume);
-                            }}
-                          >
-                            <span className="flex-1 text-sm">Normalize volume</span>
-                            {normalizeVolume && <Check className="w-4 h-4 text-rose-500" />}
-                          </div>
-                          <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
-                          {audioModeOptions.map((option) => (
-                            <div
-                              key={option.id}
-                              className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAudioMode(option.id);
-                              }}
-                            >
-                              <span className="flex-1 text-sm">{option.label}</span>
-                              {audioMode === option.id && <Check className="w-4 h-4 text-rose-500" />}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <PlayerOptionsMenu
+                      variant={preferMobileMenu ? 'mobile' : 'desktop'}
+                      menuRef={contextMenuRef}
+                      anchorRef={containerRef}
+                      activeSection={activeSection}
+                      setActiveSection={setActiveSection}
+                      hasSubtitles={hasSubtitles}
+                      subtitleTracks={subtitleTracks}
+                      audioTracks={audioTracks}
+                      onSelectSubtitle={handleSelectSubtitle}
+                      onSelectAudio={handleSelectAudio}
+                      normalizeVolume={normalizeVolume}
+                      setNormalizeVolume={setNormalizeVolume}
+                      audioMode={audioMode}
+                      setAudioMode={setAudioMode}
+                      audioModeOptions={audioModeOptions}
+                      audioModeLabel={audioModeLabel}
+                    />
                   )}
 
                   {/* Picture in Picture */}

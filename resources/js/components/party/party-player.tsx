@@ -117,7 +117,7 @@ export function PartyPlayer({
 
   if (item.media.kind === 'movie' && item.media.movie && item.media.encFilePath) {
     return (
-      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg">
+      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-none sm:rounded-lg">
         <PlayMoviePlayer
           key={`party-movie-${item.id}-${item.media.encFilePath}`}
           movie={item.media.movie}

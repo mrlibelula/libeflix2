@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart, Eye, Play, PlayCircle, ThumbsUp, ThumbsDown, MessageCircle, ChevronDown } from 'lucide-react';
+import { LoaderCircle, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, XIcon, Repeat, Repeat1, Repeat2, StepBack, StepForward, PictureInPicture2, MessageSquareText, SquareStack, Check, LockIcon, UserIcon, CreditCardIcon, Share2, Heart, Eye, Play, PlayCircle, ThumbsUp, ThumbsDown, MessageCircle, ChevronDown, ChevronLeft } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { route } from 'ziggy-js';
 import { Tooltip } from "@/components/ui/tooltip";
@@ -20,7 +21,8 @@ import { EpisodesApi } from "@/services/episodes-api";
 import axios from 'axios';
 import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playback-sync';
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
-import { useMenuTouchTap } from '@/hooks/use-menu-touch-tap';
+import { PlayerOptionsMenu, isPlayerMenuTarget } from '@/components/ui/player-options-menu';
+import { usePreferMobilePlayerMenu, useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -210,7 +212,6 @@ export function PlayEpisodeDialog({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<'none' | 'subtitles' | 'audio' | 'sound'>('none');
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  const { onMenuTouchStart, onMenuTouchEnd } = useMenuTouchTap();
 
   // Seasons & Episodes menu state — season list is cheap; episodes load per season on demand
   const [showEpisodesMenu, setShowEpisodesMenu] = useState(false);
@@ -318,6 +319,13 @@ export function PlayEpisodeDialog({
   
   // Mobile detection state
   const [isMobile, setIsMobile] = useState(false);
+  const preferMobileMenu = usePreferMobilePlayerMenu(isMobile);
+  const episodesMenuViewport = useViewportMenuPosition(
+    episodesMenuRef,
+    showEpisodesMenu,
+    [preferMobileMenu, activeSeasonNumber, seasonsData.length],
+    containerRef
+  );
   const [mobileSeasonNumber, setMobileSeasonNumber] = useState<number>(episode?.season_number || 1);
   const [mobileEpisodeListLoading, setMobileEpisodeListLoading] = useState(false);
   const mobileScrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1515,6 +1523,7 @@ export function PlayEpisodeDialog({
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessEpisode) return;
+    if (isPlayerMenuTarget(e.target)) return;
 
     const touch = e.touches[0];
     if (!touch) return;
@@ -1528,6 +1537,7 @@ export function PlayEpisodeDialog({
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessEpisode) return;
+    if (isPlayerMenuTarget(e.target)) return;
     if (controlsRef.current && controlsRef.current.contains(e.target as Node)) {
       return;
     }
@@ -1535,6 +1545,7 @@ export function PlayEpisodeDialog({
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!canAccessEpisode) return;
+    if (isPlayerMenuTarget(e.target)) return;
 
     const targetNode = e.target as Node | null;
 
@@ -3077,7 +3088,7 @@ export function PlayEpisodeDialog({
         hideClose={embedded}
         className={
           embedded
-            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-hidden rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
+            ? 'relative inset-auto !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none w-full min-w-0 max-w-full !gap-0 p-0 overflow-hidden rounded-none sm:rounded-lg !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0'
             : `p-0 overflow-hidden !border-0 shadow-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isMobile ? 'fixed inset-0 !max-w-none !w-full !h-full !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none' : 'sm:max-w-[800px] rounded-lg'}`
         }
         onOpenAutoFocus={(e) => {
@@ -3112,7 +3123,8 @@ export function PlayEpisodeDialog({
         <div className={`w-full h-full flex flex-col ${isMobile && !embedded ? 'overflow-hidden' : ''}`}>
           {/* Video player area - sticky on mobile when scrolling (regular dialog only; party uses theater sticky) */}
           <div 
-            ref={containerRef} 
+            ref={containerRef}
+            data-player-root="true"
             className={`relative w-full bg-black outline-none ${preserveNativeAspect && videoAspectRatio != null && !isFullscreen ? '' : 'aspect-video'} ${isMobile && !embedded ? 'sticky top-0 z-40 flex-shrink-0' : ''}`}
             tabIndex={0}
             style={{
@@ -3147,6 +3159,7 @@ export function PlayEpisodeDialog({
                                             target.closest('[role="slider"]') ||
                                             target.closest('[role="menu"]') ||
                                             target.closest('[role="menuitem"]') ||
+                                            target.closest('[data-player-menu]') ||
                                             target.closest('[role="dialog"]') ||
                                             target.closest('[data-radix-popper-content-wrapper]') ||
                                             target.hasAttribute('data-radix-popper-content-wrapper');
@@ -3627,7 +3640,7 @@ export function PlayEpisodeDialog({
                         <Tooltip text="Seasons & Episodes" position="bottom">
                           <button 
                             onClick={handleToggleEpisodesMenu}
-                            className={`focus:outline-none relative cursor-pointer hidden sm:block ${!tvshowSlug ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`focus:outline-none relative cursor-pointer ${!tvshowSlug ? 'opacity-50 cursor-not-allowed' : ''}`}
                             aria-label="Seasons and Episodes"
                             disabled={!tvshowSlug}
                           >
@@ -3648,219 +3661,173 @@ export function PlayEpisodeDialog({
                         
                         {/* Context Menu for Subtitles and Audio */}
                         {showContextMenu && (
-                          <div 
-                            ref={contextMenuRef}
-                            className="absolute right-10 bottom-14 z-50 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
-                            style={{ width: '240px' }}
-                            onClick={(e) => e.stopPropagation()}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            onTouchEnd={(e) => e.stopPropagation()}
-                          >
-                            {/* Main menu items */}
-                            <div className="py-1">
-                              {/* Subtitles option - only show if subtitles are available */}
-                              {hasSubtitles && (
-                                <div 
-                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
-                                    activeSection === 'subtitles' 
-                                      ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                  }`}
-                                  onMouseEnter={() => setActiveSection('subtitles')}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
-                                  }}
-                                  onTouchStart={onMenuTouchStart}
-                                  onTouchEnd={(e) => {
-                                    onMenuTouchEnd(e, () => {
-                                      setActiveSection(activeSection === 'subtitles' ? 'none' : 'subtitles');
-                                    });
-                                  }}
-                                >
-                                  <span className="text-sm font-medium">Subtitles</span>
-                                  <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                                    {subtitleTracks.find(track => track.selected)?.label || 'Off'}
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                  </span>
-                                </div>
-                              )}
-                              
-                              {/* Audio option - only show if multiple audio tracks available */}
-                              {audioTracks.length > 1 && (
-                                <div 
-                                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
-                                    activeSection === 'audio' 
-                                      ? 'bg-neutral-100 dark:bg-neutral-800' 
-                                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                  }`}
-                                  onMouseEnter={() => setActiveSection('audio')}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
-                                  }}
-                                  onTouchStart={onMenuTouchStart}
-                                  onTouchEnd={(e) => {
-                                    onMenuTouchEnd(e, () => {
-                                      setActiveSection(activeSection === 'audio' ? 'none' : 'audio');
-                                    });
-                                  }}
-                                >
-                                  <span className="text-sm font-medium">Audio</span>
-                                  <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                                    {audioTracks.find(track => track.selected)?.label || 'Original'}
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                  </span>
-                                </div>
-                              )}
-
-                              <div
-                                className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
-                                  activeSection === 'sound'
-                                    ? 'bg-neutral-100 dark:bg-neutral-800'
-                                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                }`}
-                                onMouseEnter={() => setActiveSection('sound')}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
-                                }}
-                                onTouchStart={onMenuTouchStart}
-                                onTouchEnd={(e) => {
-                                  onMenuTouchEnd(e, () => {
-                                    setActiveSection(activeSection === 'sound' ? 'none' : 'sound');
-                                  });
-                                }}
-                              >
-                                <span className="text-sm font-medium">Sound</span>
-                                <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-                                  {audioModeLabel}
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {/* Subtitles submenu */}
-                            {activeSection === 'subtitles' && (
-                              <div 
-                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                                style={{ width: '180px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
-                                onClick={(e) => e.stopPropagation()}
-                                onTouchStart={(e) => e.stopPropagation()}
-                              >
-                                {subtitleTracks.map((track) => (
-                                  <div 
-                                    key={track.id}
-                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleSelectSubtitle(track.id);
-                                    }}
-                                    onTouchStart={onMenuTouchStart}
-                                    onTouchEnd={(e) => {
-                                      onMenuTouchEnd(e, () => handleSelectSubtitle(track.id));
-                                    }}
-                                  >
-                                    <span className="flex-1 text-sm">{track.label}</span>
-                                    {track.selected && <Check className="w-4 h-4 text-rose-500" />}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {/* Audio submenu */}
-                            {activeSection === 'audio' && (
-                              <div 
-                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1" 
-                                style={{ width: '180px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
-                                onClick={(e) => e.stopPropagation()}
-                                onTouchStart={(e) => e.stopPropagation()}
-                              >
-                                {audioTracks.map((track) => (
-                                  <div 
-                                    key={track.id}
-                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleSelectAudio(track.id);
-                                    }}
-                                    onTouchStart={onMenuTouchStart}
-                                    onTouchEnd={(e) => {
-                                      onMenuTouchEnd(e, () => handleSelectAudio(track.id));
-                                    }}
-                                  >
-                                    <span className="flex-1 text-sm">{track.label}</span>
-                                    {track.selected && <Check className="w-4 h-4 text-rose-500" />}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Sound mode submenu */}
-                            {activeSection === 'sound' && (
-                              <div
-                                className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1"
-                                style={{ width: '180px' }}
-                                onClick={(e) => e.stopPropagation()}
-                                onTouchStart={(e) => e.stopPropagation()}
-                              >
-                                <div
-                                  className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setNormalizeVolume(!normalizeVolume);
-                                  }}
-                                  onTouchStart={onMenuTouchStart}
-                                  onTouchEnd={(e) => {
-                                    onMenuTouchEnd(e, () => setNormalizeVolume(!normalizeVolume));
-                                  }}
-                                >
-                                  <span className="flex-1 text-sm">Normalize volume</span>
-                                  {normalizeVolume && <Check className="w-4 h-4 text-rose-500" />}
-                                </div>
-                                <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
-                                {audioModeOptions.map((option) => (
-                                  <div
-                                    key={option.id}
-                                    className="flex items-center px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAudioMode(option.id);
-                                    }}
-                                    onTouchStart={onMenuTouchStart}
-                                    onTouchEnd={(e) => {
-                                      onMenuTouchEnd(e, () => setAudioMode(option.id));
-                                    }}
-                                  >
-                                    <span className="flex-1 text-sm">{option.label}</span>
-                                    {audioMode === option.id && <Check className="w-4 h-4 text-rose-500" />}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                          <PlayerOptionsMenu
+                            variant={preferMobileMenu ? 'mobile' : 'desktop'}
+                            menuRef={contextMenuRef}
+                            anchorRef={containerRef}
+                            activeSection={activeSection}
+                            setActiveSection={setActiveSection}
+                            hasSubtitles={hasSubtitles}
+                            subtitleTracks={subtitleTracks}
+                            audioTracks={audioTracks}
+                            onSelectSubtitle={handleSelectSubtitle}
+                            onSelectAudio={handleSelectAudio}
+                            normalizeVolume={normalizeVolume}
+                            setNormalizeVolume={setNormalizeVolume}
+                            audioMode={audioMode}
+                            setAudioMode={setAudioMode}
+                            audioModeOptions={audioModeOptions}
+                            audioModeLabel={audioModeLabel}
+                          />
                         )}
                         
                         {/* Episodes Menu */}
-                        {showEpisodesMenu && (
+                        {showEpisodesMenu && (() => {
+                          const episodesMenuNode = (
                           <div 
                             ref={episodesMenuRef}
-                            className="absolute right-10 bottom-14 z-50 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800"
-                            style={{ width: '240px', maxHeight: 'min(350px, 50vh)' }}
+                            data-player-menu="true"
+                            role="menu"
+                            className={
+                              preferMobileMenu
+                                ? 'fixed z-[60] overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
+                                : 'absolute right-10 bottom-14 z-50 rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
+                            }
+                            style={{
+                              ...(preferMobileMenu
+                                ? {
+                                    left: episodesMenuViewport.left,
+                                    right: episodesMenuViewport.right,
+                                    bottom: episodesMenuViewport.bottom,
+                                    maxHeight: episodesMenuViewport.maxHeight,
+                                  }
+                                : { width: '240px', maxHeight: episodesMenuViewport.maxHeight }),
+                              touchAction: 'pan-y',
+                              WebkitOverflowScrolling: 'touch',
+                            }}
                             onClick={(e) => e.stopPropagation()}
                             onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
                             onTouchEnd={(e) => e.stopPropagation()}
                           >
                             {seasonsData.length > 0 ? (
+                              preferMobileMenu ? (
+                                activeSeasonNumber == null ? (
+                                  <div
+                                    className="overflow-y-auto overscroll-contain py-1"
+                                    style={{ maxHeight: episodesMenuViewport.maxHeight, touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+                                  >
+                                    {seasonsData.map((season) => {
+                                      const currentSeasonEpisodeCount = season.loaded
+                                        ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
+                                        : season.episode_count;
+                                      const isCurrentSeason = season.season_number === episode?.season_number;
+
+                                      return (
+                                        <button
+                                          key={season.season_number}
+                                          type="button"
+                                          role="menuitem"
+                                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-neutral-100 active:bg-neutral-200 dark:hover:bg-neutral-800 dark:active:bg-neutral-700"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveSeasonNumber(season.season_number);
+                                          }}
+                                        >
+                                          <span className="text-sm font-medium">Season {season.season_number}</span>
+                                          <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                                            {isCurrentSeason && <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />}
+                                            {currentSeasonEpisodeCount != null ? `${currentSeasonEpisodeCount} eps` : '…'}
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="ml-1 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="flex min-h-0 flex-col"
+                                    style={{ maxHeight: episodesMenuViewport.maxHeight }}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="flex w-full flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 text-left dark:border-neutral-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveSeasonNumber(null);
+                                      }}
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                      <span className="text-sm font-medium">Season {activeSeasonNumber}</span>
+                                    </button>
+                                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}>
+                                      {loadingSeasonNumber === activeSeasonNumber ||
+                                      !seasonsData.find((s) => s.season_number === activeSeasonNumber)?.loaded ? (
+                                        <div className="flex items-center justify-center py-8">
+                                          <LoaderCircle className="h-6 w-6 animate-spin text-rose-500" />
+                                        </div>
+                                      ) : (
+                                        seasonsData
+                                          .find((s) => s.season_number === activeSeasonNumber)
+                                          ?.episodes.map((ep: any) => {
+                                            const isCurrentEpisode = episode?.id === ep.id;
+                                            const isAvailable = ep.is_in_storage && ep.encFilePath;
+
+                                            return (
+                                              <button
+                                                key={`mobile-menu-${activeSeasonNumber}-${ep.episode_number}-${ep.id}`}
+                                                type="button"
+                                                role="menuitem"
+                                                disabled={!isAvailable}
+                                                className={`flex w-full items-center gap-2 px-4 py-2 text-left transition-colors ${
+                                                  isCurrentEpisode
+                                                    ? 'bg-rose-50 dark:bg-rose-900/20'
+                                                    : isAvailable
+                                                      ? 'hover:bg-neutral-100 active:bg-neutral-200 dark:hover:bg-neutral-800 dark:active:bg-neutral-700'
+                                                      : 'cursor-not-allowed opacity-40'
+                                                }`}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
+                                                }}
+                                              >
+                                                <div
+                                                  className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold ${
+                                                    isCurrentEpisode
+                                                      ? 'bg-rose-500 text-white'
+                                                      : isAvailable
+                                                        ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300'
+                                                        : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
+                                                  }`}
+                                                >
+                                                  {ep.episode_number}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                  <div className={`truncate text-xs font-medium ${isCurrentEpisode ? 'text-rose-600 dark:text-rose-400' : ''}`}>
+                                                    {ep.name || `Episode ${ep.episode_number}`}
+                                                  </div>
+                                                  {ep.runtime && (
+                                                    <div className="mt-0.5 text-[10px] text-neutral-500 dark:text-neutral-400">
+                                                      {ep.runtime} min
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                {isCurrentEpisode && <Check className="h-4 w-4 flex-shrink-0 text-rose-500" />}
+                                              </button>
+                                            );
+                                          })
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              ) : (
                               <>
-                                {/* Main menu items — season list only; episodes load on demand */}
-                                <div className="py-1 overflow-y-auto overscroll-contain" style={{ maxHeight: 'min(350px, 50vh)', touchAction: 'pan-y' }}>
+                                <div
+                                  className="overflow-y-auto overscroll-contain py-1"
+                                  style={{ maxHeight: episodesMenuViewport.maxHeight, touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+                                >
                                   {seasonsData.map((season) => {
                                     const currentSeasonEpisodeCount = season.loaded
                                       ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
@@ -3868,9 +3835,11 @@ export function PlayEpisodeDialog({
                                     const isCurrentSeason = season.season_number === episode?.season_number;
                                     
                                     return (
-                                      <div
+                                      <button
                                         key={season.season_number}
-                                        className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 relative ${
+                                        type="button"
+                                        role="menuitem"
+                                        className={`relative flex w-full items-center justify-between px-4 py-3 text-left transition-colors ${
                                           activeSeasonNumber === season.season_number 
                                             ? 'bg-neutral-100 dark:bg-neutral-800' 
                                             : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
@@ -3880,38 +3849,36 @@ export function PlayEpisodeDialog({
                                           e.stopPropagation();
                                           setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
                                         }}
-                                        onTouchStart={onMenuTouchStart}
-                                        onTouchEnd={(e) => {
-                                          onMenuTouchEnd(e, () => {
-                                            setActiveSeasonNumber(activeSeasonNumber === season.season_number ? null : season.season_number);
-                                          });
-                                        }}
                                       >
                                         <span className="text-sm font-medium">Season {season.season_number}</span>
-                                        <span className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
-                                          {isCurrentSeason && <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>}
+                                        <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                                          {isCurrentSeason && <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />}
                                           {currentSeasonEpisodeCount != null ? `${currentSeasonEpisodeCount} eps` : '…'}
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="ml-1 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                                           </svg>
                                         </span>
-                                      </div>
+                                      </button>
                                     );
                                   })}
                                 </div>
                                 
-                                {/* Episodes submenu — loads when a season is hovered/selected */}
                                 {activeSeasonNumber !== null && seasonsData.find(s => s.season_number === activeSeasonNumber) && (
                                   <div 
-                                    className="absolute top-0 right-full bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-md shadow-lg border border-neutral-200 dark:border-neutral-800 py-1 overscroll-contain"
-                                    style={{ width: '260px', maxHeight: 'min(350px, 50vh)', overflowY: 'auto', touchAction: 'pan-y' }}
+                                    data-player-menu="true"
+                                    className={`absolute right-full overflow-y-auto overscroll-contain rounded-md border border-neutral-200 bg-white/95 py-1 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95 ${
+                                      episodesMenuViewport.openSubmenuUpward ? 'bottom-0 top-auto' : 'top-0'
+                                    }`}
+                                    style={{ width: '260px', maxHeight: episodesMenuViewport.submenuMaxHeight, touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
                                     onClick={(e) => e.stopPropagation()}
                                     onTouchStart={(e) => e.stopPropagation()}
+                                    onTouchMove={(e) => e.stopPropagation()}
+                                    onTouchEnd={(e) => e.stopPropagation()}
                                   >
                                     {loadingSeasonNumber === activeSeasonNumber ||
                                     !seasonsData.find(s => s.season_number === activeSeasonNumber)?.loaded ? (
                                       <div className="flex items-center justify-center py-8">
-                                        <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
+                                        <LoaderCircle className="h-6 w-6 animate-spin text-rose-500" />
                                       </div>
                                     ) : (
                                       seasonsData.find(s => s.season_number === activeSeasonNumber)?.episodes.map((ep: any) => {
@@ -3919,55 +3886,53 @@ export function PlayEpisodeDialog({
                                       const isAvailable = ep.is_in_storage && ep.encFilePath;
                                       
                                       return (
-                                        <div
+                                        <button
                                           key={`${activeSeasonNumber}-${ep.episode_number}-${ep.id}`}
-                                          className={`flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors active:bg-neutral-200 dark:active:bg-neutral-700 ${
+                                          type="button"
+                                          role="menuitem"
+                                          disabled={!isAvailable}
+                                          className={`flex w-full items-center gap-2 px-4 py-2 text-left transition-colors ${
                                             isCurrentEpisode 
                                               ? 'bg-rose-50 dark:bg-rose-900/20' 
                                               : isAvailable
                                                 ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                                : 'opacity-40 cursor-not-allowed'
+                                                : 'cursor-not-allowed opacity-40'
                                           }`}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
                                           }}
-                                          onTouchStart={onMenuTouchStart}
-                                          onTouchEnd={(e) => {
-                                            onMenuTouchEnd(e, () => {
-                                              if (isAvailable) handleEpisodeClick(activeSeasonNumber, ep.episode_number);
-                                            });
-                                          }}
                                         >
-                                          <div className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${
+                                          <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold ${
                                             isCurrentEpisode 
                                               ? 'bg-rose-500 text-white' 
                                               : isAvailable
-                                                ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
-                                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+                                                ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300'
+                                                : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
                                           }`}>
                                             {ep.episode_number}
                                           </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className={`text-xs font-medium truncate ${
+                                          <div className="min-w-0 flex-1">
+                                            <div className={`truncate text-xs font-medium ${
                                               isCurrentEpisode ? 'text-rose-600 dark:text-rose-400' : ''
                                             }`}>
                                               {ep.name || `Episode ${ep.episode_number}`}
                                             </div>
                                             {ep.runtime && (
-                                              <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                              <div className="mt-0.5 text-[10px] text-neutral-500 dark:text-neutral-400">
                                                 {ep.runtime} min
                                               </div>
                                             )}
                                           </div>
-                                          {isCurrentEpisode && <Check className="w-4 h-4 text-rose-500 flex-shrink-0" />}
-                                        </div>
+                                          {isCurrentEpisode && <Check className="h-4 w-4 flex-shrink-0 text-rose-500" />}
+                                        </button>
                                       );
                                     })
                                     )}
                                   </div>
                                 )}
                               </>
+                              )
                             ) : (
                               <div className="px-4 py-8 text-center">
                                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
@@ -3976,7 +3941,12 @@ export function PlayEpisodeDialog({
                               </div>
                             )}
                           </div>
-                        )}
+                          );
+
+                          return preferMobileMenu && typeof document !== 'undefined'
+                            ? createPortal(episodesMenuNode, document.body)
+                            : episodesMenuNode;
+                        })()}
                         
                         {/* PiP button */}
                         {isPipSupported && (

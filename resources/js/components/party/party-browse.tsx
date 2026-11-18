@@ -317,8 +317,8 @@ export function PartyBrowse({ onAdd }: Props) {
       </div>
 
       {selectedShow ? (
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-          <div className="flex items-center gap-2">
+        <div className="min-h-0 min-w-0 max-w-full flex-1 space-y-2 overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <div className="flex min-w-0 items-center gap-2">
             <Button type="button" size="icon" variant="ghost" className="size-7" onClick={backToGrid}>
               <ArrowLeft className="size-3.5" />
             </Button>
@@ -344,8 +344,8 @@ export function PartyBrowse({ onAdd }: Props) {
           </div>
 
           {seasons.length > 0 && (
-            <div className="max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]">
-              <div className="flex w-max min-w-0 gap-1">
+            <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
+              <div className="flex w-max gap-1" role="tablist" aria-label="Seasons">
                 {seasons.map((season) => (
                   <button
                     key={season.id}

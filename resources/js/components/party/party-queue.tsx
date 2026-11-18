@@ -130,7 +130,7 @@ export function PartyQueue({
       </ul>
 
       {canControl && (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-2 overflow-hidden">
           <div className="flex shrink-0 items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
             <button
               type="button"
@@ -203,7 +203,7 @@ export function PartyQueue({
               )}
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
               <PartyBrowse onAdd={onAdd} />
             </div>
           )}

@@ -205,27 +205,33 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
         shareUrl={shareUrl}
       />
 
-      <div className="relative flex min-h-[calc(100vh-4rem)] w-full min-w-0 max-w-full flex-col overflow-x-hidden overflow-y-auto scroll-pt-[min(56.25vw,40vh)] sidebar-scrollbar lg:scroll-pt-0">
+      {/*
+        Mobile: fixed-height scrollport (not min-height) so overflow-y actually scrolls and
+        position:sticky on the player can pin under the app header while queue/chat move.
+        Desktop (lg+): grow with content; player is relative again.
+      */}
+      <div className="relative flex h-[calc(100svh-4rem)] max-h-[calc(100svh-4rem)] w-full min-w-0 max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain scroll-pt-[min(56.25vw,40vh)] sidebar-scrollbar lg:h-auto lg:max-h-none lg:min-h-[calc(100vh-4rem)] lg:overflow-y-visible lg:overscroll-y-auto lg:scroll-pt-0">
         <div
           style={{
             backgroundImage: `url(${backdropUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
-          className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-4rem)] w-full bg-scroll opacity-30 lg:bg-fixed dark:opacity-20"
+          className="pointer-events-none absolute inset-0 h-full w-full bg-scroll opacity-30 lg:min-h-[calc(100vh-4rem)] lg:bg-fixed dark:opacity-20"
         />
-        <div className="pointer-events-none absolute inset-0 h-full min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-white/40 via-white/55 to-white/75 dark:from-transparent dark:via-transparent dark:to-transparent dark:dark-gradient-hero" />
+        <div className="pointer-events-none absolute inset-0 h-full w-full bg-gradient-to-b from-white/40 via-white/55 to-white/75 dark:from-transparent dark:via-transparent dark:to-transparent dark:dark-gradient-hero lg:min-h-[calc(100vh-4rem)]" />
 
-        <div className="relative z-10 flex w-full min-w-0 max-w-full flex-col gap-3 p-3 sm:gap-4 sm:p-4 md:p-6">
-          {voice.error && <p className="text-sm text-amber-400">{voice.error}</p>}
+        <div className="relative z-10 flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 sm:p-4 md:p-6">
+          {voice.error && <p className="px-3 text-sm text-amber-400 sm:px-0">{voice.error}</p>}
 
           {/*
             Mobile: sticky video is a sibling of the side panel inside one tall column so it
             stays pinned while queue/search scrolls underneath (same idea as movie.tsx).
             Sticky wraps only the video — host notice scrolls away with the page.
+            Player is full-bleed on mobile (no horizontal padding); side panel keeps gutter.
           */}
           <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:items-start">
-            <div className="sticky top-0 z-30 min-w-0 w-full max-w-full bg-black lg:relative lg:z-auto">
+            <div className="sticky top-0 z-30 min-w-0 w-full max-w-full bg-black shadow-[0_8px_24px_rgba(0,0,0,0.35)] lg:relative lg:z-auto lg:shadow-none">
               <PartyPlayer
                 item={snapshot.current_item}
                 queue={snapshot.queue}
@@ -243,12 +249,12 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
             </div>
 
             {!snapshot.viewer.can_control && snapshot.current_item?.can_play && snapshot.current_item.media ? (
-              <p className="min-w-0 rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-400 xl:col-start-1">
+              <p className="mx-3 min-w-0 rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-400 sm:mx-0 xl:col-start-1">
                 Only the host can control playback in this theater.
               </p>
             ) : null}
 
-            <div className="min-w-0 w-full max-w-full overflow-x-hidden xl:col-start-2 xl:row-start-1 xl:row-span-2">
+            <div className="min-w-0 w-full max-w-full overflow-x-hidden px-3 sm:px-0 xl:col-start-2 xl:row-start-1 xl:row-span-2">
               <PartySidePanel
                 snapshot={snapshot}
                 chatMessages={chatMessages}
