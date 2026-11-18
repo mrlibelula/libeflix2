@@ -29,6 +29,8 @@ interface Movie {
     languageName: string;
     path: string;
   }[];
+  has_subtitles?: boolean;
+  subtitle_languages?: string[];
 }
 
 interface MoviePosterProps {
@@ -190,6 +192,11 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onMovieClic
   const relativeWatched = formatRelativeTime(movie.last_watched_at);
   const absoluteWatched = formatAbsoluteDateTime(movie.last_watched_at);
   const playsCount = Number(movie.plays_count) || 0;
+  // Carousel movies send `subtitles`; search results send `subtitle_languages`.
+  const subtitleCodes = Array.isArray(movie.subtitles) && movie.subtitles.length > 0
+    ? movie.subtitles.map((subtitle) => subtitle.languageCode).filter(Boolean)
+    : (Array.isArray(movie.subtitle_languages) ? movie.subtitle_languages.filter(Boolean) : []);
+  const hasSubtitles = subtitleCodes.length > 0 || Boolean(movie.has_subtitles);
 
   const handlePosterClick = (e: React.MouseEvent) => {
     if (onMovieClick) {
@@ -399,16 +406,16 @@ export function MoviePoster({ movie, imgBaseUrl, isPriority = false, onMovieClic
           </div>
         </div>
         {/* subtitles - Only show for local movies */}
-        {isLocalMovie && (
+        {isLocalMovie && hasSubtitles && (
           <div className="w-full h-full flex items-end justify-start gap-x-0.5 pt-1">
-            {movie.subtitles && movie.subtitles.length > 0 && (
+            {subtitleCodes.length > 0 && (
               <div className="dark:text-zinc-900 text-zinc-100 text-[0.55rem] px-0.5 bg-zinc-400 font-bold border border-zinc-400">
                 CC
               </div>
             )}
-            {Array.isArray(movie.subtitles) && movie.subtitles.map((subtitle) => (
-              <div key={subtitle.languageCode} className="text-zinc-500 dark:text-zinc-300 text-[0.55rem] px-0.5 border border-zinc-400 font-bold">
-                {subtitle.languageCode}
+            {subtitleCodes.map((languageCode) => (
+              <div key={languageCode} className="text-zinc-500 dark:text-zinc-300 text-[0.55rem] px-0.5 border border-zinc-400 font-bold">
+                {languageCode}
               </div>
             ))}
           </div>
