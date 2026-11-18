@@ -111,10 +111,19 @@ export function PartyBrowse({ onAdd }: Props) {
     if (!el) return;
     if (el.scrollHeight > el.clientHeight) {
       el.scrollTop = 0;
-    } else {
-      // Mobile: results don't scroll internally — bring the grid top into view in the room scroller
-      // inline: 'nearest' avoids horizontal jump when a row's min-content is briefly wide
-      el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
+      return;
+    }
+    // Mobile: results don't scroll internally. Scroll only the nearest vertical scroller —
+    // scrollIntoView would also scroll overflow-hidden ancestors and the window, shoving the
+    // pinned video out of view and shifting the page sideways.
+    let scroller = el.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) return;
+    const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    if (offset < 0) {
+      scroller.scrollTo({ top: scroller.scrollTop + offset, behavior: 'smooth' });
     }
   }, []);
 

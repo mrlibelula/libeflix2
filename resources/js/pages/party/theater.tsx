@@ -213,7 +213,7 @@ export default function PartyTheater({ code, initialSnapshot, absoluteMaxMembers
         else (episode details, playlist, settings, chat) scrolls in its own area below.
         Desktop (lg+): page grows with content; scroll area collapses via lg:contents.
       */}
-      <div className="relative flex h-[calc(100svh-4rem)] w-full min-w-0 max-w-full flex-col overflow-hidden lg:h-auto lg:min-h-[calc(100vh-4rem)] lg:overflow-visible">
+      <div className="relative flex h-[calc(100svh-4rem)] w-full min-w-0 max-w-full flex-col overflow-clip lg:h-auto lg:min-h-[calc(100vh-4rem)] lg:overflow-visible">
         <div
           style={{
             backgroundImage: `url(${backdropUrl})`,
