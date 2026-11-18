@@ -1697,11 +1697,15 @@ export function PlayMoviePlayer({
               </h2>
             </div>
 
-            <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
+            <div
+              data-player-bottom-controls="true"
+              className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto"
+            >
               <div className="mb-3 relative">
                 {/* Progress bar */}
                 <div 
                   ref={progressBarRef}
+                  data-player-progress="true"
                   className="w-full h-2 bg-neutral-600 rounded-full relative"
                   onMouseMove={handleProgressBarMouseMove}
                   onMouseEnter={handleProgressBarMouseEnter}

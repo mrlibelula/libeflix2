@@ -3,6 +3,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 import { MovieSearchModal } from '@/components/movie-search-modal';
 import { TvshowSearchModal } from '@/components/tvshow-search-modal';
+import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
 import { type ReactNode } from 'react';
 
@@ -16,15 +17,24 @@ export function AppSidebarHeader({
     headerActions?: ReactNode;
 }) {
     const page = usePage();
+    const path = page.url.split('?')[0];
     
     // Check if we should show movie search (on movies, movie pages, popular-top, and watch-later pages)
     const shouldShowMovieSearch = page.url.startsWith('/movies') || page.url.startsWith('/movie/') || page.url.startsWith('/popular-top') || page.url.startsWith('/watch-later');
     
     // Check if we should show TV show search (on tvshows and tvshow pages)
     const shouldShowTvshowSearch = page.url.startsWith('/tvshows') || page.url.startsWith('/tvshow/');
+
+    // Party theater: tighter top bar on mobile so the player gets more vertical space
+    const isPartyRoom = /^\/party\/.+/.test(path);
     
     return (
-        <header className="border-sidebar-border/50 flex h-16 min-w-0 shrink-0 items-center gap-2 overflow-x-hidden border-b px-3 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 sm:px-4 md:px-4">
+        <header
+            className={cn(
+                'border-sidebar-border/50 flex min-w-0 shrink-0 items-center gap-2 overflow-x-hidden border-b px-3 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 sm:px-4 md:px-4',
+                isPartyRoom ? 'h-11 lg:h-16' : 'h-16',
+            )}
+        >
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                 <SidebarTrigger className="-ml-1 shrink-0" />
                 <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

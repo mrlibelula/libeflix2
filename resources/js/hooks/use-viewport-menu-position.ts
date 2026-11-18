@@ -13,9 +13,13 @@ export type ViewportMenuPosition = {
 };
 
 const VIEWPORT_PAD = 8;
+/** Same as desktop `bottom-14` — docks menus just above the transport row / tracker */
 const DEFAULT_ANCHOR_GAP = 56;
+const TRACKER_GAP = 4;
 const MENU_WIDTH = 240;
 const MENU_MIN_WIDTH = 180;
+const MENU_MIN_HEIGHT = 120;
+const MENU_MAX_HEIGHT = 420;
 const EDGE_INSET = 16;
 
 function getFullscreenElement(): HTMLElement | null {
@@ -104,6 +108,25 @@ export function usePreferMobilePlayerMenu(isMobileFlag = false): boolean {
 }
 
 /**
+ * Distance from the player bottom to just above the progress tracker.
+ * Matches desktop menus that sit flush over the scrubber instead of clearing the whole chrome.
+ */
+function measureTrackerAnchorGap(anchor: HTMLElement | null | undefined, fallback: number): number {
+  if (!anchor) return fallback;
+
+  const tracker = anchor.querySelector<HTMLElement>('[data-player-progress]');
+  if (!tracker) return fallback;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const trackerRect = tracker.getBoundingClientRect();
+  if (trackerRect.height <= 0) return fallback;
+
+  // Dock just above the scrubber (desktop uses bottom-14 for the same feel).
+  const gap = Math.round(anchorRect.bottom - trackerRect.top + TRACKER_GAP);
+  return Math.max(fallback, gap);
+}
+
+/**
  * Keeps player context menus fully inside the visual viewport / player box.
  * Menus are width-fit and right-aligned above the controls — not full-bleed sheets.
  */
@@ -147,13 +170,18 @@ export function useViewportMenuPosition(
           (anchor.contains(menu) &&
             (menuParent === anchor || (!!menuParent && anchor.contains(menuParent)))));
 
-      // Sit just above the player / controls bottom edge.
-      const anchorBottomY = anchorRect
-        ? Math.min(anchorRect.bottom - 12, viewportOffsetTop + viewportHeight - VIEWPORT_PAD)
-        : viewportOffsetTop + viewportHeight - DEFAULT_ANCHOR_GAP;
+      const anchorGap = measureTrackerAnchorGap(anchor, DEFAULT_ANCHOR_GAP);
 
-      const availableAbove = Math.max(160, anchorBottomY - viewportOffsetTop - VIEWPORT_PAD);
-      const maxHeight = Math.min(420, availableAbove);
+      // Intersection of the player box and the visual viewport — menus must stay inside this.
+      const safeTop = Math.max(
+        viewportOffsetTop + VIEWPORT_PAD,
+        (anchorRect?.top ?? viewportOffsetTop) + VIEWPORT_PAD
+      );
+      const safeBottom = Math.min(
+        viewportOffsetTop + viewportHeight - VIEWPORT_PAD,
+        (anchorRect?.bottom ?? viewportOffsetTop + viewportHeight) - VIEWPORT_PAD
+      );
+      const safeHeight = Math.max(MENU_MIN_HEIGHT, safeBottom - safeTop);
 
       const boxWidth = anchorRect?.width ?? viewportWidth;
       const width = Math.min(MENU_WIDTH, Math.max(MENU_MIN_WIDTH, boxWidth - EDGE_INSET * 2));
@@ -161,15 +189,21 @@ export function useViewportMenuPosition(
       let bottom: number;
       let right: number;
       let left: number;
+      let menuBottomY: number;
 
       if (positionedInsideAnchor && anchorRect) {
         // absolute coords relative to the player / fullscreen root
-        bottom = DEFAULT_ANCHOR_GAP;
+        bottom = Math.min(anchorGap, Math.max(VIEWPORT_PAD, anchorRect.height - MENU_MIN_HEIGHT));
         right = EDGE_INSET;
         left = Math.max(EDGE_INSET, boxWidth - width - EDGE_INSET);
+        menuBottomY = anchorRect.bottom - bottom;
       } else {
         // fixed coords relative to the visual viewport (body fallback)
-        bottom = Math.max(VIEWPORT_PAD, viewportOffsetTop + viewportHeight - anchorBottomY);
+        menuBottomY = Math.min(
+          safeBottom,
+          anchorRect ? anchorRect.bottom - anchorGap : safeBottom
+        );
+        bottom = Math.max(VIEWPORT_PAD, window.innerHeight - menuBottomY);
         const viewportRight = viewportOffsetLeft + viewportWidth;
         right = Math.max(VIEWPORT_PAD, window.innerWidth - viewportRight + EDGE_INSET);
         left = Math.max(
@@ -178,17 +212,25 @@ export function useViewportMenuPosition(
         );
       }
 
+      // Fit entirely between the safe top and the menu bottom — prevents overflow:hidden
+      // ancestors (party wrappers, dialog shells) from clipping options off-screen.
+      const maxHeight = Math.min(
+        MENU_MAX_HEIGHT,
+        safeHeight,
+        Math.max(MENU_MIN_HEIGHT, menuBottomY - safeTop)
+      );
+
       const menuRect = menu?.getBoundingClientRect();
       const spaceBelowMenu = menuRect
-        ? viewportOffsetTop + viewportHeight - menuRect.top - VIEWPORT_PAD
+        ? Math.min(safeBottom, viewportOffsetTop + viewportHeight) - menuRect.top - VIEWPORT_PAD
         : maxHeight;
       const spaceAboveMenu = menuRect
-        ? menuRect.bottom - viewportOffsetTop - VIEWPORT_PAD
+        ? menuRect.bottom - safeTop
         : maxHeight;
       const openSubmenuUpward = spaceBelowMenu < 200;
       const submenuMaxHeight = Math.max(
         140,
-        Math.min(350, openSubmenuUpward ? spaceAboveMenu : spaceBelowMenu)
+        Math.min(350, openSubmenuUpward ? spaceAboveMenu : spaceBelowMenu, maxHeight)
       );
 
       setPosition({

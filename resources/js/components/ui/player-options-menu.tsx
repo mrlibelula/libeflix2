@@ -74,15 +74,13 @@ function MobilePanel({
   title,
   onBack,
   children,
-  maxHeight,
 }: {
   title: string;
   onBack: () => void;
   children: ReactNode;
-  maxHeight: number;
 }) {
   return (
-    <div className="flex min-h-0 flex-col" style={{ maxHeight }}>
+    <div className="flex min-h-0 flex-1 flex-col">
       <button
         type="button"
         className="flex w-full flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 text-left dark:border-neutral-700"
@@ -156,7 +154,7 @@ export function PlayerOptionsMenu({
         ref={menuRef}
         data-player-menu="true"
         role="menu"
-        className={`${useFixed ? 'fixed' : 'absolute'} z-[60] w-max max-w-[min(240px,calc(100%-2rem))] overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`}
+        className={`${useFixed ? 'fixed' : 'absolute'} z-[60] flex w-max max-w-[min(240px,calc(100%-2rem))] flex-col overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`}
         style={{
           ...scrollStyle,
           right: viewport.right,
@@ -169,8 +167,8 @@ export function PlayerOptionsMenu({
       >
         {activeSection === 'none' && (
           <div
-            className="overflow-y-auto overscroll-contain py-1"
-            style={{ ...scrollStyle, maxHeight: viewport.maxHeight }}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
+            style={scrollStyle}
           >
             {hasSubtitles && (
               <MenuRow
@@ -198,7 +196,7 @@ export function PlayerOptionsMenu({
         )}
 
         {activeSection === 'subtitles' && (
-          <MobilePanel title="Subtitles" onBack={() => setActiveSection('none')} maxHeight={viewport.maxHeight}>
+          <MobilePanel title="Subtitles" onBack={() => setActiveSection('none')}>
             {subtitleTracks.map((track) => (
               <MenuRow
                 key={track.id}
@@ -211,7 +209,7 @@ export function PlayerOptionsMenu({
         )}
 
         {activeSection === 'audio' && (
-          <MobilePanel title="Audio" onBack={() => setActiveSection('none')} maxHeight={viewport.maxHeight}>
+          <MobilePanel title="Audio" onBack={() => setActiveSection('none')}>
             {audioTracks.map((track) => (
               <MenuRow
                 key={track.id}
@@ -224,7 +222,7 @@ export function PlayerOptionsMenu({
         )}
 
         {activeSection === 'sound' && (
-          <MobilePanel title="Sound" onBack={() => setActiveSection('none')} maxHeight={viewport.maxHeight}>
+          <MobilePanel title="Sound" onBack={() => setActiveSection('none')}>
             <MenuRow
               label="Normalize volume"
               selected={normalizeVolume}
@@ -258,12 +256,17 @@ export function PlayerOptionsMenu({
       ref={menuRef}
       data-player-menu="true"
       role="menu"
-      className="absolute bottom-14 right-10 z-50 rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95"
+      // No overflow-hidden here — desktop Audio/Sound/Subtitles flyouts use
+      // absolute right-full and must paint outside this box.
+      className="absolute bottom-14 right-10 z-50 flex flex-col rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95"
       style={{ width: '240px', maxHeight: viewport.maxHeight, ...scrollStyle }}
       onClick={(e) => e.stopPropagation()}
       {...menuTouchHandlers}
     >
-      <div className="overflow-y-auto overscroll-contain py-1" style={{ maxHeight: viewport.maxHeight, ...scrollStyle }}>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md py-1"
+        style={{ maxHeight: viewport.maxHeight, ...scrollStyle }}
+      >
         {hasSubtitles && (
           <div
             role="menuitem"

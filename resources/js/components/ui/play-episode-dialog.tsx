@@ -23,7 +23,11 @@ import { type PartyPlayerSync, usePartyPlaybackBridge } from '@/lib/party-playba
 import { useDialogueAudio } from '@/hooks/use-dialogue-audio';
 import { PlayerOptionsMenu, isPlayerMenuTarget } from '@/components/ui/player-options-menu';
 import { usePlayerMenuPortalTarget, usePreferMobilePlayerMenu, useViewportMenuPosition } from '@/hooks/use-viewport-menu-position';
-import { EpisodeRowActions, type EpisodeRowActionTarget } from '@/components/ui/episode-row-actions';
+import {
+  EpisodeRowActions,
+  isEpisodeSelectSuppressed,
+  type EpisodeRowActionTarget,
+} from '@/components/ui/episode-row-actions';
 
 type GestureDirection = 'forward' | 'backward';
 type GestureFeedbackState = {
@@ -378,13 +382,16 @@ export function PlayEpisodeDialog({
     }
   }, [episode?.season_number]);
   
-  // Reset season menu cache when switching TV shows
+  // Reset season menu cache only when switching TV shows.
+  // Do not depend on buildSeasonList — parent often passes a fresh seasonsMeta
+  // array each render, which would wipe loaded episodes (empty mobile list).
   useEffect(() => {
     loadingSeasonRequestsRef.current = new Set();
     setSeasonsData(buildSeasonList());
     setActiveSeasonNumber(null);
     setLoadingSeasonNumber(null);
-  }, [tvshowSlug, buildSeasonList]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally tvshowSlug only
+  }, [tvshowSlug]);
 
   // Ensure season list exists when the modal opens (no episode payloads yet)
   useEffect(() => {
@@ -2934,15 +2941,20 @@ export function PlayEpisodeDialog({
     loadSeasonEpisodesForMenu(activeSeasonNumber);
   }, [showEpisodesMenu, activeSeasonNumber, loadSeasonEpisodesForMenu]);
 
-  // Load selected season episodes for the player episode list (mobile + desktop, non-embedded).
+  // Mobile: load only the selected season's episodes (not the whole show).
+  // Skip in party/embedded — no mobile episode list there (matches desktop content).
   useEffect(() => {
-    if (embedded || !dialogOpen || !tvshowSlug) return;
+    if (!isMobile || embedded || !dialogOpen || !tvshowSlug) return;
 
-    if (seasonsDataRef.current.length === 0) {
-      setSeasonsData(buildSeasonList());
+    if (seasonsData.length === 0) {
+      const next = buildSeasonList();
+      if (next.length > 0) {
+        setSeasonsData(next);
+      }
+      return;
     }
 
-    const season = seasonsDataRef.current.find((s) => s.season_number === mobileSeasonNumber);
+    const season = seasonsData.find((s) => s.season_number === mobileSeasonNumber);
     if (season?.loaded) {
       setMobileEpisodeListLoading(false);
       return;
@@ -2957,7 +2969,16 @@ export function PlayEpisodeDialog({
     return () => {
       cancelled = true;
     };
-  }, [embedded, dialogOpen, tvshowSlug, mobileSeasonNumber, loadSeasonEpisodesForMenu, buildSeasonList]);
+  }, [
+    isMobile,
+    embedded,
+    dialogOpen,
+    tvshowSlug,
+    mobileSeasonNumber,
+    seasonsData,
+    loadSeasonEpisodesForMenu,
+    buildSeasonList,
+  ]);
 
   // Handle click outside episodes menu
   useEffect(() => {
@@ -3621,11 +3642,15 @@ export function PlayEpisodeDialog({
                     </h2>
                   </div>
 
-                  <div className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto">
+                  <div
+                    data-player-bottom-controls="true"
+                    className="p-4 text-neutral-900 dark:text-neutral-100 z-30 pointer-events-auto"
+                  >
                     <div className="mb-3 relative">
                       {/* Progress bar with track and indicator */}
                       <div 
                         ref={progressBarRef}
+                        data-player-progress="true"
                         className="w-full h-2 bg-neutral-600 rounded-full relative"
                         onMouseMove={handleProgressBarMouseMove}
                         onMouseEnter={handleProgressBarMouseEnter}
@@ -3831,8 +3856,9 @@ export function PlayEpisodeDialog({
                             role="menu"
                             className={
                               preferMobileMenu
-                                ? `${mobileEpisodesFixed ? 'fixed' : 'absolute'} z-[60] w-max max-w-[min(240px,calc(100%-2rem))] overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`
-                                : 'absolute right-10 bottom-14 z-50 rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
+                                ? `${mobileEpisodesFixed ? 'fixed' : 'absolute'} z-[60] flex w-max max-w-[min(240px,calc(100%-2rem))] flex-col overflow-hidden rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95`
+                                // Desktop: no overflow-hidden — season→episode flyout uses absolute right-full
+                                : 'absolute right-10 bottom-14 z-50 flex flex-col rounded-md border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/95'
                             }
                             style={{
                               ...(preferMobileMenu
@@ -3855,8 +3881,8 @@ export function PlayEpisodeDialog({
                               preferMobileMenu ? (
                                 activeSeasonNumber == null ? (
                                   <div
-                                    className="overflow-y-auto overscroll-contain py-1"
-                                    style={{ maxHeight: episodesMenuViewport.maxHeight, touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+                                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
+                                    style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
                                   >
                                     {seasonsData.map((season) => {
                                       const currentSeasonEpisodeCount = season.loaded
@@ -3888,10 +3914,7 @@ export function PlayEpisodeDialog({
                                     })}
                                   </div>
                                 ) : (
-                                  <div
-                                    className="flex min-h-0 flex-col"
-                                    style={{ maxHeight: episodesMenuViewport.maxHeight }}
-                                  >
+                                  <div className="flex min-h-0 flex-1 flex-col">
                                     <button
                                       type="button"
                                       className="flex w-full flex-shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-3 text-left dark:border-neutral-700"
@@ -3966,8 +3989,12 @@ export function PlayEpisodeDialog({
                               ) : (
                               <>
                                 <div
-                                  className="overflow-y-auto overscroll-contain py-1"
-                                  style={{ maxHeight: episodesMenuViewport.maxHeight, touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+                                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md py-1"
+                                  style={{
+                                    maxHeight: episodesMenuViewport.maxHeight,
+                                    touchAction: 'pan-y',
+                                    WebkitOverflowScrolling: 'touch',
+                                  }}
                                 >
                                   {seasonsData.map((season) => {
                                     const currentSeasonEpisodeCount = season.loaded
@@ -4291,88 +4318,114 @@ export function PlayEpisodeDialog({
                     {(seasonsData.find(s => s.season_number === mobileSeasonNumber)?.episodes || []).map((ep: any) => {
                       const isCurrentEpisode = episode?.id === ep.id;
                       const isAvailable = ep.is_in_storage && ep.encFilePath;
+
+                      const playEpisode = () => {
+                        // Ellipsis / sheet open+close must never change the playing episode.
+                        if (isEpisodeSelectSuppressed()) return;
+                        if (isAvailable && onEpisodeSelect) {
+                          onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
+                        }
+                      };
                       
                       return (
                         <div
                           key={`mobile-${ep.id}`}
-                          onClick={() => {
-                            if (isAvailable && onEpisodeSelect) {
-                              onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
-                            }
-                          }}
                           className={`flex items-start gap-3 px-4 py-3 ${
                             isCurrentEpisode 
                               ? 'bg-neutral-800/50' 
                               : isAvailable 
-                                ? 'active:bg-neutral-800' 
+                                ? '' 
                                 : 'opacity-40'
-                          } ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          }`}
                         >
-                          {/* Episode thumbnail */}
-                          <div className="relative flex-shrink-0 w-28 h-16 rounded overflow-hidden bg-neutral-800">
-                            {ep.stillUrl || ep.still_path ? (
-                              <img 
-                                src={ep.stillUrl || `https://image.tmdb.org/t/p/w300${ep.still_path}`}
-                                alt={ep.name}
-                                className={`w-full h-full object-cover ${!isAvailable ? 'grayscale' : ''}`}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <PlayCircle className="w-8 h-8 text-neutral-600" />
-                              </div>
-                            )}
-                            {/* Play indicator for current episode */}
-                            {isCurrentEpisode && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center">
-                                  <PlayCircle className="w-5 h-5 text-white fill-white" />
-                                </div>
-                              </div>
-                            )}
-                            {/* Episode number badge */}
-                            <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white font-medium">
-                              {ep.episode_number}
-                            </div>
-                            {/* Runtime badge */}
-                            {ep.runtime && (
-                              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
-                                {ep.runtime}m
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Episode info */}
-                          <div className="flex-1 min-w-0 py-0.5">
-                            <h3 className={`text-sm font-medium truncate ${
-                              isCurrentEpisode ? 'text-rose-400' : 'text-white'
-                            }`}>
-                              {ep.name || `Episode ${ep.episode_number}`}
-                            </h3>
-                            {ep.overview && (
-                              <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
-                                {ep.overview}
-                              </p>
-                            )}
-                          </div>
-                          
-                          <EpisodeRowActions
-                            episode={{
-                              id: ep.id,
-                              name: ep.name,
-                              episode_number: ep.episode_number,
-                              season_number: mobileSeasonNumber,
-                              overview: ep.overview,
-                              is_watch_later: ep.is_watch_later,
-                              is_liked: ep.is_liked,
+                          {/* Play target: thumbnail + title only — not the ellipsis */}
+                          <div
+                            role={isAvailable ? 'button' : undefined}
+                            tabIndex={isAvailable ? 0 : undefined}
+                            onClick={playEpisode}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                playEpisode();
+                              }
                             }}
-                            seasonNumber={mobileSeasonNumber}
-                            tvshowName={tvshowName}
-                            variant="mobile"
-                            isAuthenticated={isAuthenticated}
-                            onWatchLaterToggle={handleEpisodeRowWatchLater}
-                            onShare={handleShareEpisodeFor}
-                            onLikeToggle={handleEpisodeRowLike}
-                          />
+                            className={`flex min-w-0 flex-1 items-start gap-3 ${
+                              isAvailable ? 'cursor-pointer active:opacity-80' : 'cursor-not-allowed'
+                            }`}
+                          >
+                            {/* Episode thumbnail */}
+                            <div className="relative flex-shrink-0 w-28 h-16 rounded overflow-hidden bg-neutral-800">
+                              {ep.stillUrl || ep.still_path ? (
+                                <img 
+                                  src={ep.stillUrl || `https://image.tmdb.org/t/p/w300${ep.still_path}`}
+                                  alt={ep.name}
+                                  className={`w-full h-full object-cover ${!isAvailable ? 'grayscale' : ''}`}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <PlayCircle className="w-8 h-8 text-neutral-600" />
+                                </div>
+                              )}
+                              {/* Play indicator for current episode */}
+                              {isCurrentEpisode && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                  <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center">
+                                    <PlayCircle className="w-5 h-5 text-white fill-white" />
+                                  </div>
+                                </div>
+                              )}
+                              {/* Episode number badge */}
+                              <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white font-medium">
+                                {ep.episode_number}
+                              </div>
+                              {/* Runtime badge */}
+                              {ep.runtime && (
+                                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
+                                  {ep.runtime}m
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Episode info */}
+                            <div className="flex-1 min-w-0 py-0.5">
+                              <h3 className={`text-sm font-medium truncate ${
+                                isCurrentEpisode ? 'text-rose-400' : 'text-white'
+                              }`}>
+                                {ep.name || `Episode ${ep.episode_number}`}
+                              </h3>
+                              {ep.overview && (
+                                <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
+                                  {ep.overview}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div
+                            className="flex-shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                          >
+                            <EpisodeRowActions
+                              episode={{
+                                id: ep.id,
+                                name: ep.name,
+                                episode_number: ep.episode_number,
+                                season_number: mobileSeasonNumber,
+                                overview: ep.overview,
+                                is_watch_later: ep.is_watch_later,
+                                is_liked: ep.is_liked,
+                              }}
+                              seasonNumber={mobileSeasonNumber}
+                              tvshowName={tvshowName}
+                              variant="mobile"
+                              isAuthenticated={isAuthenticated}
+                              onWatchLaterToggle={handleEpisodeRowWatchLater}
+                              onShare={handleShareEpisodeFor}
+                              onLikeToggle={handleEpisodeRowLike}
+                            />
+                          </div>
                         </div>
                       );
                     })}
@@ -4605,146 +4658,6 @@ export function PlayEpisodeDialog({
                   </span>
                 </DialogDescription>
               </DialogHeader>
-
-              {!embedded && (
-                <div className="mt-6 border-t border-neutral-200 dark:border-neutral-800 pt-4">
-                  <div className="flex items-center justify-between gap-4 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <Select
-                        value={mobileSeasonNumber.toString()}
-                        onValueChange={(val) => setMobileSeasonNumber(parseInt(val))}
-                      >
-                        <SelectTrigger className="w-full bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-700">
-                          <SelectValue placeholder="Select Season" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700">
-                          {seasonsData.length > 0 ? (
-                            seasonsData.map((season) => {
-                              const availableCount = season.loaded
-                                ? season.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length
-                                : season.episode_count;
-                              return (
-                                <SelectItem
-                                  key={`desktop-season-${season.season_number}`}
-                                  value={season.season_number.toString()}
-                                >
-                                  Season {season.season_number}
-                                  {availableCount != null ? ` (${availableCount} eps)` : ''}
-                                </SelectItem>
-                              );
-                            })
-                          ) : (
-                            <SelectItem value={episode.season_number.toString()}>
-                              Season {episode.season_number}
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="text-sm text-neutral-500 dark:text-neutral-400 flex-shrink-0">
-                      <span className="text-rose-500 font-medium">
-                        {seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes.filter((ep: any) => ep.is_in_storage && ep.encFilePath).length || '?'}
-                      </span>
-                      <span> / </span>
-                      <span>
-                        {seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes.length || '?'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="max-h-80 overflow-y-auto -mx-2">
-                    {mobileEpisodeListLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <LoaderCircle className="w-6 h-6 animate-spin text-rose-500" />
-                      </div>
-                    ) : (
-                      (seasonsData.find((s) => s.season_number === mobileSeasonNumber)?.episodes || []).map((ep: any) => {
-                        const isCurrentEpisode = episode?.id === ep.id;
-                        const isAvailable = ep.is_in_storage && ep.encFilePath;
-
-                        return (
-                          <div
-                            key={`desktop-${ep.id}`}
-                            onClick={() => {
-                              if (isAvailable && onEpisodeSelect) {
-                                onEpisodeSelect(mobileSeasonNumber, ep.episode_number);
-                              }
-                            }}
-                            className={`flex items-start gap-3 px-2 py-2.5 rounded-md ${
-                              isCurrentEpisode
-                                ? 'bg-neutral-100 dark:bg-neutral-800/60'
-                                : isAvailable
-                                  ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800/40'
-                                  : 'opacity-40'
-                            } ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                          >
-                            <div className="relative flex-shrink-0 w-28 h-16 rounded overflow-hidden bg-neutral-200 dark:bg-neutral-800">
-                              {ep.stillUrl || ep.still_path ? (
-                                <img
-                                  src={ep.stillUrl || `https://image.tmdb.org/t/p/w300${ep.still_path}`}
-                                  alt={ep.name}
-                                  className={`w-full h-full object-cover ${!isAvailable ? 'grayscale' : ''}`}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <PlayCircle className="w-8 h-8 text-neutral-400" />
-                                </div>
-                              )}
-                              {isCurrentEpisode && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                  <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center">
-                                    <PlayCircle className="w-5 h-5 text-white fill-white" />
-                                  </div>
-                                </div>
-                              )}
-                              <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white font-medium">
-                                {ep.episode_number}
-                              </div>
-                              {ep.runtime && (
-                                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
-                                  {ep.runtime}m
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex-1 min-w-0 py-0.5">
-                              <h3 className={`text-sm font-medium truncate ${
-                                isCurrentEpisode ? 'text-rose-500' : ''
-                              }`}>
-                                {ep.name || `Episode ${ep.episode_number}`}
-                              </h3>
-                              {ep.overview && (
-                                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
-                                  {ep.overview}
-                                </p>
-                              )}
-                            </div>
-
-                            <EpisodeRowActions
-                              episode={{
-                                id: ep.id,
-                                name: ep.name,
-                                episode_number: ep.episode_number,
-                                season_number: mobileSeasonNumber,
-                                overview: ep.overview,
-                                is_watch_later: ep.is_watch_later,
-                                is_liked: ep.is_liked,
-                              }}
-                              seasonNumber={mobileSeasonNumber}
-                              tvshowName={tvshowName}
-                              variant="desktop"
-                              isAuthenticated={isAuthenticated}
-                              onWatchLaterToggle={handleEpisodeRowWatchLater}
-                              onShare={handleShareEpisodeFor}
-                              onLikeToggle={handleEpisodeRowLike}
-                            />
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -33,6 +33,17 @@ export type EpisodeRowActionTarget = {
   is_liked?: boolean;
 };
 
+/** Blocks episode-row play clicks while a mobile actions sheet is open / just closed. */
+let suppressEpisodeSelectUntil = 0;
+
+export function markEpisodeSelectSuppressed(ms = 600) {
+  suppressEpisodeSelectUntil = Math.max(suppressEpisodeSelectUntil, Date.now() + ms);
+}
+
+export function isEpisodeSelectSuppressed() {
+  return Date.now() < suppressEpisodeSelectUntil;
+}
+
 type Props = {
   episode: EpisodeRowActionTarget;
   seasonNumber: number;
@@ -101,10 +112,45 @@ export function EpisodeRowActions({
   };
 
   const handleOpenMobile = async () => {
+    // Opening the menu must never count as "play this episode".
+    markEpisodeSelectSuppressed(800);
     setSheetOpen(true);
     if (isAuthenticated) {
       await ensureLikeState();
     }
+  };
+
+  /** Close sheet without letting the same gesture "click through" to the episode row underneath. */
+  const handleSheetOpenChange = (open: boolean) => {
+    if (open) {
+      markEpisodeSelectSuppressed(800);
+      setSheetOpen(true);
+      return;
+    }
+
+    if (sheetOpen) {
+      markEpisodeSelectSuppressed(800);
+      const shield = document.createElement('div');
+      shield.setAttribute('aria-hidden', 'true');
+      shield.style.cssText =
+        'position:fixed;inset:0;z-index:2147483647;touch-action:none;cursor:default;';
+      document.body.appendChild(shield);
+
+      // Swallow the ghost click that fires after the overlay unmounts, then drop the shield.
+      const swallowClick = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanup();
+      };
+      const cleanup = () => {
+        shield.remove();
+        document.removeEventListener('click', swallowClick, true);
+      };
+
+      document.addEventListener('click', swallowClick, true);
+      window.setTimeout(cleanup, 800);
+    }
+    setSheetOpen(false);
   };
 
   const handleDesktopOpenChange = async (open: boolean) => {
@@ -121,7 +167,7 @@ export function EpisodeRowActions({
       if (typeof next === 'boolean') {
         setIsWatchLater(next);
       }
-      setSheetOpen(false);
+      handleSheetOpenChange(false);
     } catch (error) {
       console.error('Failed to toggle watch later:', error);
     } finally {
@@ -134,7 +180,7 @@ export function EpisodeRowActions({
     setBusy(true);
     try {
       await onShare(episode, seasonNumber);
-      setSheetOpen(false);
+      handleSheetOpenChange(false);
     } catch (error) {
       console.error('Failed to share episode:', error);
     } finally {
@@ -152,7 +198,7 @@ export function EpisodeRowActions({
         setIsLiked(result.is_liked);
         setLikeKnown(true);
       }
-      setSheetOpen(false);
+      handleSheetOpenChange(false);
     } catch (error) {
       console.error('Failed to toggle like:', error);
     } finally {
@@ -166,7 +212,7 @@ export function EpisodeRowActions({
       window.location.href = '/login?redirect=' + encodeURIComponent(currentUrl);
       return;
     }
-    setSheetOpen(false);
+    handleSheetOpenChange(false);
     setPartyOpen(true);
   };
 
@@ -226,7 +272,14 @@ export function EpisodeRowActions({
         }
       }}
       onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        markEpisodeSelectSuppressed(800);
+      }}
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        markEpisodeSelectSuppressed(800);
+      }}
       className="flex-shrink-0 p-1 text-neutral-500 hover:text-neutral-300"
     >
       <MoreVertical className="w-5 h-5" />
@@ -238,11 +291,22 @@ export function EpisodeRowActions({
       {variant === 'mobile' ? (
         <>
           {triggerButton}
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <Sheet open={sheetOpen} onOpenChange={handleSheetOpenChange}>
             <SheetContent
               side="bottom"
               className="bg-neutral-900 border-neutral-700 text-white rounded-t-xl z-[70]"
+              overlayClassName="z-[70]"
               onClick={(e) => e.stopPropagation()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onPointerDownOutside={(e) => {
+                // Prevent Radix from dismissing on pointerdown so the trailing
+                // click/tap cannot hit the episode row under the overlay.
+                e.preventDefault();
+                handleSheetOpenChange(false);
+              }}
+              onInteractOutside={(e) => {
+                e.preventDefault();
+              }}
             >
               <SheetHeader className="text-left">
                 <SheetTitle className="text-white truncate pr-8">

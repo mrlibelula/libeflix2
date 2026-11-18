@@ -8,7 +8,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { LoaderCircle, Play, Share2 } from 'lucide-react';
 import { Ribbon, RibbonItem } from "@/components/ui/ribbon"
 import { PaginatedRibbon } from "@/components/ui/paginated-ribbon"
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { CarouselApi } from "@/components/ui/carousel";
 import { CreditPoster } from '@/components/ui/credit-poster';
 import { LazyImage } from '@/components/ui/lazy-image';
@@ -82,6 +82,18 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
   // Get current season's episodes (moved here to ensure it's always available)
   const currentSeasonEpisodes = selectedSeason ? (seasonEpisodes[selectedSeason.season_number] || []) : [];
   const isLoadingCurrentSeason = selectedSeason ? isLoading(selectedSeason.season_number) : false;
+
+  // Stable reference so PlayEpisodeDialog does not treat every parent render as new season meta
+  const playerSeasonsMeta = useMemo(
+    () =>
+      tvshow.seasons
+        ?.filter((s: any) => s.season_number > 0)
+        .map((s: any) => ({
+          season_number: s.season_number,
+          episode_count: s.episode_count,
+        })) ?? [],
+    [tvshow.seasons]
+  );
 
   // Sync like and watch later state with tvshow prop
   useEffect(() => {
@@ -1699,12 +1711,7 @@ export default function Tvshow({ tvshow, backdropUrl, selectedSeasonNumber = 0, 
                     initialRepeatMode="tvshow"
                     tvshowSlug={tvshow.slug}
                     totalSeasons={tvshow.seasons?.length || 0}
-                    seasonsMeta={tvshow.seasons
-                      ?.filter((s: any) => s.season_number > 0)
-                      .map((s: any) => ({
-                        season_number: s.season_number,
-                        episode_count: s.episode_count,
-                      }))}
+                    seasonsMeta={playerSeasonsMeta}
                     onEpisodeSelect={(seasonNumber, episodeNumber) => {
                       // Find the season
                       const targetSeason = tvshow.seasons.find((s: any) => s.season_number === seasonNumber);
